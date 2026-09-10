@@ -1,5 +1,5 @@
 import {corners,overlaps,inside,walls,wallRects} from './model.js';
-import {EPS,signedDistance,roomAt} from './geometry.js';
+import {EPS,signedDistance,roomAt,sameRoom} from './geometry.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel} from './geometry.js';
 export const leafWidth=d=>d.width-.13;
 export function doorRects(d,amount=1,maxAngle=d.maxAngle??90){
@@ -60,4 +60,15 @@ export function constrainMove(f,target,items){
  const dx=target.x-f.x,dz=target.z-f.z,n=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.01));let previous=0;
  for(let i=1;i<=n;i++){const t=i/n,p={...f,x:f.x+dx*t,z:f.z+dz*t};if(!clear(p)){let lo=previous,hi=t;for(let j=0;j<35;j++){const mid=(lo+hi)/2;if(clear({...f,x:f.x+dx*mid,z:f.z+dz*mid}))lo=mid;else hi=mid;}return{item:{...f,x:f.x+dx*lo,z:f.z+dz*lo},blocked:true};}previous=t;}
  return{item:{...f,x:target.x,z:target.z},blocked:false};
+}
+
+// Editor drags represent lifting an item and setting it down. Only the destination
+// must be clear, so a valid target can be reached across intervening obstacles.
+export function placeAtTarget(f,target,items){
+ const item={...f,x:target.x,z:target.z};
+ if(corners(item).some(([x,z])=>!inside(x,z)))return{item:f,blocked:true};
+ if(item.type==='rug')return{item,blocked:false};
+ if(wallRects().some(w=>signedDistance(item,w)<-EPS))return{item:f,blocked:true};
+ if(items.some(o=>o.id!==item.id&&o.type!=='rug'&&sameRoom(item,o)&&signedDistance(item,o)<-EPS))return{item:f,blocked:true};
+ return{item,blocked:false};
 }
