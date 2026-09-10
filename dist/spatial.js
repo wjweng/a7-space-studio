@@ -32,12 +32,25 @@ export function findRoute(start,goal,clear){
 
 // Low tables/chairs can be viewed from above; tall furniture always protects the camera.
 export const blocksCamera=(f,eye=1.6)=>f.type!=='rug'&&f.h>.15&&(!['table','chair','desk'].includes(f.type)||f.h>=eye-.2);
-export function cabinetLeaves(f){
- const style=f.doorStyle||'double',n=style==='double'?2:1,pw=(f.w-.015)/n;
- return Array.from({length:n},(_,i)=>{const right=style==='right'||style==='double'&&i===1;return{hinge:right?f.w/2-.015:-f.w/2,sign:right?-1:1,width:pw};});
+export function cabinetLayout(f){
+ const style=f.doorStyle||'double',edge=.015;
+ if(style==='drawers'){const n=f.type==='console'?Math.max(1,Math.ceil(f.w/.6)):Math.max(1,Math.ceil(f.w/.8)),pw=(f.w-edge*2)/n;return{doors:[],drawers:Array.from({length:n},(_,i)=>({x:-f.w/2+edge+pw*(i+.5),width:pw-edge,rows:f.type==='console'?1:3})),slides:[]};}
+ if(style==='sliding')return{doors:[],drawers:[],slides:[{x:-f.w*.245,width:f.w*.51,sign:1},{x:f.w*.245,width:f.w*.51,sign:-1}]};
+ if(style==='mixed'){
+  const module=f.w/3;
+  if(f.type==='kitchen')return{doors:[{hinge:f.w/2-edge,sign:-1,width:module/2-edge},{hinge:f.w/2-module/2,sign:1,width:module/2-edge}],drawers:[{x:-module,width:module-edge,rows:3},{x:0,width:module-edge,rows:3}],slides:[]};
+  return{doors:[{hinge:-f.w/2+edge,sign:1,width:module-edge},{hinge:f.w/2-edge,sign:-1,width:module-edge}],drawers:[{x:0,width:module-edge,rows:1}],slides:[]};
+ }
+ const n=style==='multi'?Math.max(2,Math.ceil(f.w/.6)):style==='double'?2:1,pw=(f.w-edge)/n;
+ const doors=Array.from({length:n},(_,i)=>{const left=-f.w/2+edge+i*pw,right=style==='right'||style==='double'&&i===1||style==='multi'&&i%2===1;return{hinge:right?left+pw:left,sign:right?-1:1,width:pw};});
+ return{doors,drawers:[],slides:[]};
 }
+export const cabinetLeaves=f=>cabinetLayout(f).doors;
 export function cabinetRects(f,amount){
- return cabinetLeaves(f).map(leaf=>{const a=-leaf.sign*amount*Math.PI/2,x=leaf.hinge+leaf.sign*Math.cos(a)*leaf.width/2,z=f.d/2-leaf.sign*Math.sin(a)*leaf.width/2,rot=f.rot*Math.PI/180;return{x:f.x+x*Math.cos(rot)+z*Math.sin(rot),z:f.z-x*Math.sin(rot)+z*Math.cos(rot),w:leaf.width,d:.08,rot:f.rot+a*180/Math.PI};});
+ const layout=cabinetLayout(f),rot=f.rot*Math.PI/180,world=(x,z)=>({x:f.x+x*Math.cos(rot)+z*Math.sin(rot),z:f.z-x*Math.sin(rot)+z*Math.cos(rot)});
+ const doors=layout.doors.map(leaf=>{const a=-leaf.sign*amount*Math.PI/2,x=leaf.hinge+leaf.sign*Math.cos(a)*leaf.width/2,z=f.d/2-leaf.sign*Math.sin(a)*leaf.width/2,p=world(x,z);return{...p,w:leaf.width,d:.08,rot:f.rot+a*180/Math.PI};});
+ const travel=f.d*.55,drawers=layout.drawers.filter(()=>amount>0).map(drawer=>{const p=world(drawer.x,f.d/2+amount*travel/2);return{...p,w:drawer.width,d:amount*travel,rot:f.rot};});
+ return [...doors,...drawers];
 }
 // Stop at first contact, including a fractional final centimetre. Sampling prevents tunnelling.
 export function constrainMove(f,target,items){

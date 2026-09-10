@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {initialFurniture,structuralBlocks,wallRects,validateFurniture,issues,migrateLayout} from '../dist/model.js';
-import {constrainMove,signedDistance,distanceLabel,blocksCamera,cabinetLeaves,cabinetRects} from '../dist/spatial.js';
+import {initialFurniture,structuralBlocks,wallRects,validateFurniture,issues,migrateLayout,inside,corners} from '../dist/model.js';
+import {constrainMove,signedDistance,distanceLabel,blocksCamera,cabinetLeaves,cabinetLayout,cabinetRects,EPS,sameRoom} from '../dist/spatial.js';
 test('last half-centimetre nudge reaches contact and repeated moves cannot penetrate',()=>{
  let f={id:'test',name:'test',type:'chair',x:.315,z:3,w:.5,d:.5,h:.8,rot:0};
  const result=constrainMove(f,{x:f.x-.01,z:f.z},[f]);assert(result.blocked);f=result.item;assert(Math.abs(f.x-.31)<1e-6);assert.match(distanceLabel(Math.min(...wallRects().map(w=>signedDistance(f,w)))),/接觸/);
@@ -27,4 +27,15 @@ test('wet area solid blocks are collision obstacles and shower A fits the reduce
 test('cabinet styles persist and open outwards with opposing hinges for double doors',()=>{
  const f=initialFurniture.find(f=>f.id==='wardB');for(const style of ['left','right','double']){const item=validateFurniture([{...f,doorStyle:style}])[0];assert.equal(item.doorStyle,style);const leaves=cabinetLeaves(item);assert.equal(leaves.length,style==='double'?2:1);for(const r of cabinetRects(item,1))assert(r.z>f.z+f.d/2);}
  assert.deepEqual(cabinetLeaves({...f,doorStyle:'double'}).map(l=>l.sign),[1,-1]);
+});
+test('wide cabinet layouts use modular fronts and default opening envelopes stay clear',()=>{
+ const tv=initialFurniture.find(f=>f.id==='tv'),kitchen=initialFurniture.find(f=>f.id==='kitchen'),master=initialFurniture.find(f=>f.id==='wardM');
+ assert.equal(tv.doorStyle,'drawers');assert.equal(cabinetLayout(tv).drawers.length,3);assert(cabinetLayout(tv).drawers.every(d=>d.width<.6));
+ assert.equal(kitchen.doorStyle,'mixed');assert.deepEqual([cabinetLayout(kitchen).doors.length,cabinetLayout(kitchen).drawers.length],[2,2]);
+ assert.equal(master.doorStyle,'sliding');assert.equal(cabinetLayout(master).slides.length,2);
+ for(const f of initialFurniture.filter(f=>['wardrobe','console','kitchen','fridge'].includes(f.type)))for(let step=1;step<=20;step++)for(const rect of cabinetRects(f,step/20)){
+  assert(corners(rect).every(([x,z])=>inside(x,z)),f.name+' exceeds shell');
+  assert(wallRects().every(w=>signedDistance(rect,w)>=-EPS),f.name+' hits wall');
+  for(const other of initialFurniture)if(other.id!==f.id&&other.type!=='rug'&&sameRoom(f,other))assert(signedDistance(rect,other)>=-EPS,f.name+' hits '+other.name);
+ }
 });
