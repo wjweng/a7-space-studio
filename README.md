@@ -15,4 +15,3 @@ A7 raster plan is the source of wall layout; A8 is furniture reference only. Dim
 Procedural furniture uses locally generated material textures and geometric details. There are no exact-brand assets. Bed, sofa and chair resizing defaults to locked proportions. Cabinet parts rebuild from dimensions. Collision checks use 2D oriented rectangles and discrete samples of opening sweeps; they are conservative approximations and do not resolve collisions automatically. Curtain animation is a simplified pleated opening, not cloth physics. Lighting is illustrative.
 
 User states and up to 30 named scenarios are stored in localStorage with JSON import/export. No account, cloud synchronisation or collaboration is implemented. Optional WebMCP tools are feature-detected.
-
