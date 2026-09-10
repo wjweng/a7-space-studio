@@ -32,6 +32,7 @@ test('wide cabinet layouts use modular fronts and default opening envelopes stay
  const tv=initialFurniture.find(f=>f.id==='tv'),kitchen=initialFurniture.find(f=>f.id==='kitchen'),master=initialFurniture.find(f=>f.id==='wardM');
  assert.equal(tv.doorStyle,'drawers');assert.equal(cabinetLayout(tv).drawers.length,3);assert(cabinetLayout(tv).drawers.every(d=>d.width<.6));
  assert.equal(kitchen.doorStyle,'mixed');assert.deepEqual([cabinetLayout(kitchen).doors.length,cabinetLayout(kitchen).drawers.length],[2,2]);
+ const kitchenDoors=cabinetLayout(kitchen).doors,closedKitchen=cabinetRects(kitchen,0);assert(kitchenDoors[0].hinge<kitchenDoors[1].hinge);assert.equal(closedKitchen.length,2);assert(signedDistance(closedKitchen[0],closedKitchen[1])>=-EPS);
  assert.equal(master.doorStyle,'sliding');assert.equal(cabinetLayout(master).slides.length,2);
  for(const f of initialFurniture.filter(f=>['wardrobe','console','kitchen','fridge'].includes(f.type)))for(let step=1;step<=20;step++)for(const rect of cabinetRects(f,step/20)){
   assert(corners(rect).every(([x,z])=>inside(x,z)),f.name+' exceeds shell');

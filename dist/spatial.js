@@ -37,8 +37,8 @@ export function cabinetLayout(f){
  if(style==='drawers'){const n=f.type==='console'?Math.max(1,Math.ceil(f.w/.6)):Math.max(1,Math.ceil(f.w/.8)),pw=(f.w-edge*2)/n;return{doors:[],drawers:Array.from({length:n},(_,i)=>({x:-f.w/2+edge+pw*(i+.5),width:pw-edge,rows:f.type==='console'?1:3})),slides:[]};}
  if(style==='sliding')return{doors:[],drawers:[],slides:[{x:-f.w*.245,width:f.w*.51,sign:1},{x:f.w*.245,width:f.w*.51,sign:-1}]};
  if(style==='mixed'){
-  const module=f.w/3;
-  if(f.type==='kitchen')return{doors:[{hinge:f.w/2-edge,sign:-1,width:module/2-edge},{hinge:f.w/2-module/2,sign:1,width:module/2-edge}],drawers:[{x:-module,width:module-edge,rows:3},{x:0,width:module-edge,rows:3}],slides:[]};
+ const module=f.w/3;
+  if(f.type==='kitchen')return{doors:[{hinge:f.w/2-module+edge,sign:1,width:module/2-edge},{hinge:f.w/2-edge,sign:-1,width:module/2-edge}],drawers:[{x:-module,width:module-edge,rows:3},{x:0,width:module-edge,rows:3}],slides:[]};
   return{doors:[{hinge:-f.w/2+edge,sign:1,width:module-edge},{hinge:f.w/2-edge,sign:-1,width:module-edge}],drawers:[{x:0,width:module-edge,rows:1}],slides:[]};
  }
  const n=style==='multi'?Math.max(2,Math.ceil(f.w/.6)):style==='double'?2:1,pw=(f.w-edge)/n;

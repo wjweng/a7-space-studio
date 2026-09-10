@@ -2,7 +2,7 @@ import {corners,overlaps,signedDistance,sameRoom,EPS} from './geometry.js';
 export {corners,overlaps} from './geometry.js';
 export const VERSION=1;
 export const LAYOUT_REVISION=6;
-export const columns=[[.02,.1],[.05,6.7],[8.1,.1]].map(([x,z])=>({x,z,w:.32,d:.35,rot:0}));
+export const columns=[[.02,.1],[.05,6.7]].map(([x,z])=>({x,z,w:.32,d:.35,rot:0}));
 // Hatched solid areas in A7: bath-A stepped wall and balcony corner blocks.
 export const structuralBlocks=[
  {id:'bath-A-block',x:1.64,z:6.55,w:.48,d:.70,rot:0},
