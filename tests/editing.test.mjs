@@ -13,11 +13,12 @@ test('drag cannot tunnel through a wall or another piece of furniture',()=>{
  const r=constrainMove(f,{x:3.5,z:3},[f,other]);assert(r.blocked);assert(Math.abs(r.item.x-2.3)<1e-6);
  const across=constrainMove({...f,x:2,z:1},{x:4,z:1},[]);assert(across.blocked);assert(across.item.x<2.57);
 });
-test('lift-and-place drag crosses obstacles but rejects an occupied destination',()=>{
+test('draft placement follows the pointer across interior conflicts and only rejects the exterior',()=>{
  const f={id:'test',name:'test',type:'chair',x:1,z:1,w:.4,d:.4,h:.8,rot:0},other={...f,id:'other',x:1.6};
  const acrossFurniture=placeAtTarget(f,{x:2.2,z:1},[f,other]);assert.equal(acrossFurniture.blocked,false);assert.equal(acrossFurniture.item.x,2.2);
- assert.equal(placeAtTarget(f,{x:1.6,z:1},[f,other]).blocked,true);
+ assert.equal(placeAtTarget(f,{x:1.6,z:1},[f,other]).blocked,false);
  const acrossWall=placeAtTarget({...f,x:2,z:1},{x:4,z:1},[f]);assert.equal(acrossWall.blocked,false);assert.equal(acrossWall.item.x,4);
+ assert.equal(placeAtTarget(f,{x:-1,z:1},[f]).blocked,true);
 });
 test('legacy overlaps can move outward but cannot get worse',()=>{
  const f={id:'test',type:'chair',x:.25,z:3,w:.5,d:.5,h:.8,rot:0};assert(constrainMove(f,{x:.24,z:3},[]).blocked);assert(!constrainMove(f,{x:.32,z:3},[]).blocked);

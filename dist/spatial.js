@@ -62,13 +62,10 @@ export function constrainMove(f,target,items){
  return{item:{...f,x:target.x,z:target.z},blocked:false};
 }
 
-// Editor drags represent lifting an item and setting it down. Only the destination
-// must be clear, so a valid target can be reached across intervening obstacles.
+// Editor drags represent lifting an item. Interior conflicts remain editable drafts;
+// only crossing the apartment's exterior outline blocks the pointer position.
 export function placeAtTarget(f,target,items){
  const item={...f,x:target.x,z:target.z};
  if(corners(item).some(([x,z])=>!inside(x,z)))return{item:f,blocked:true};
- if(item.type==='rug')return{item,blocked:false};
- if(wallRects().some(w=>signedDistance(item,w)<-EPS))return{item:f,blocked:true};
- if(items.some(o=>o.id!==item.id&&o.type!=='rug'&&sameRoom(item,o)&&signedDistance(item,o)<-EPS))return{item:f,blocked:true};
  return{item,blocked:false};
 }
