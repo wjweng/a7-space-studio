@@ -65,7 +65,7 @@ export function constrainMove(f,target,items){
 // Editor drags represent lifting an item. Interior conflicts remain editable drafts;
 // only crossing the apartment's exterior outline blocks the pointer position.
 export function placeAtTarget(f,target,items){
- const item={...f,x:target.x,z:target.z};
+ const item={...f,...target};
  if(corners(item).some(([x,z])=>!inside(x,z)))return{item:f,blocked:true};
  return{item,blocked:false};
 }

@@ -20,6 +20,11 @@ test('draft placement follows the pointer across interior conflicts and only rej
  const acrossWall=placeAtTarget({...f,x:2,z:1},{x:4,z:1},[f]);assert.equal(acrossWall.blocked,false);assert.equal(acrossWall.item.x,4);
  assert.equal(placeAtTarget(f,{x:-1,z:1},[f]).blocked,true);
 });
+test('property edits survive placement validation',()=>{
+ const f={id:'test',name:'test',type:'chair',x:1,z:1,w:.4,d:.4,h:.8,rot:0};
+ const result=placeAtTarget(f,{...f,w:.6,d:.5,h:1,rot:90},[f]);
+ assert.equal(result.blocked,false);assert.deepEqual(result.item,{...f,w:.6,d:.5,h:1,rot:90});
+});
 test('legacy overlaps can move outward but cannot get worse',()=>{
  const f={id:'test',type:'chair',x:.25,z:3,w:.5,d:.5,h:.8,rot:0};assert(constrainMove(f,{x:.24,z:3},[]).blocked);assert(!constrainMove(f,{x:.32,z:3},[]).blocked);
 });
