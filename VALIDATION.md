@@ -22,3 +22,9 @@ Twenty-three automated checks pass. Signed clearances distinguish contact from s
 ## Contact-constrained editing and cabinet opening styles
 
 Thirty checks pass. Added fractional final-step wall contact, repeated-boundary nudges, swept dragging against walls/furniture, outward recovery from legacy overlaps, low-table/chair camera passage, wet-area structural blocks, and persisted left/right/double cabinet hinges. Height-dependent passage applies to tables/chairs/desks only; other furniture remains solid. Bath-A shower reduced to 108 cm width around the traced stepped solid wall. Balcony upper/lower solid areas are traced approximations. No browser visual QA was performed.
+
+## Plan joints, outside columns and draft selection
+
+Wall intersections now include shared 12 cm joint solids, so rendering and collision use the same continuous footprint instead of leaving half-wall notches at corners. Outside columns follow the A7 dimensions and wall-face offsets: the entry column is 80 × 84 cm and the lower-right column is 85 × 85 cm. The entry opening is 104 cm and the untouched default TV cabinet migrates clear of the enlarged upper-left column without changing custom placements.
+
+All seven automated test files pass, including highlighted wall-junction coverage, exact outside-column dimensions, default furniture clearance, full door sweeps, strong draft markers and foreground-draft pick priority. Headless Chrome with software WebGL was checked at 1440 × 1000 and 390 × 844. A chair was moved into the dining table: the chair rendered above the table with a red translucent fill and border, and after deselection a click on the overlap selected the chair again. Orbit/top rendering and top-view geometry were visually reviewed; final subjective comparison on the user's display remains appropriate.
