@@ -1,25 +1,24 @@
 import {corners,overlaps,signedDistance,sameRoom,EPS} from './geometry.js';
 export {corners,overlaps} from './geometry.js';
 export const VERSION=1;
-export const LAYOUT_REVISION=7;
+export const LAYOUT_REVISION=8;
 export const WALL_THICKNESS=.12;
 // Structural columns follow the outside-wall faces and dimensions printed on A7.
 export const columns=[
- {id:'living-north-column',x:.20,z:.30,w:.52,d:.72,rot:0},
+ {id:'living-north-column',x:.20,z:.245,w:.52,d:.61,rot:0},
  {id:'entry-column',x:.01,z:7.07,w:.80,d:.84,rot:0},
- {id:'balcony-south-column',x:7.875,z:6.825,w:.85,d:.85,rot:0}
+ {id:'balcony-south-column',x:8.525,z:6.885,w:.85,d:.85,rot:0}
 ];
-// Hatched solid areas in A7: bath-A stepped wall and balcony corner blocks.
+// Hatched solid areas in A7: bath-A column and balcony corner blocks.
 export const structuralBlocks=[
- {id:'bath-A-block',x:1.64,z:6.55,w:.48,d:.70,rot:0},
- {id:'bath-A-step',x:1.82,z:7.075,w:.12,d:.35,rot:0},
+ {id:'bath-A-block',x:1.64,z:6.725,w:.48,d:1.05,rot:0},
  {id:'balcony-north-block',x:7.975,z:4.625,w:.65,d:.45,rot:0}
 ];
 export const structuralSolids=[...columns,...structuralBlocks];
 export const HEIGHT=2.79;
 // Metres. A7 raster tracing calibrated against 2.24 / 2.62 / 2.61 m room dimensions.
 // Unclosed drawing chains are approximations, not survey coordinates.
-export const outline=[[0,0],[8.3,0],[8.3,2.7],[8.85,2.7],[8.85,4.4],[8.3,4.4],[8.3,7.25],[1.85,7.25],[1.85,8.53],[-.45,8.53],[-.45,6.65],[0,6.65]];
+export const outline=[[0,0],[8.3,0],[8.3,2.7],[8.85,2.7],[8.85,4.4],[8.3,4.4],[8.3,6.46],[8.95,6.46],[8.95,7.31],[8.1,7.31],[8.1,7.25],[1.85,7.25],[1.85,8.53],[-.45,8.53],[-.45,6.65],[0,6.65]];
 export const rooms=[{name:'客餐廳',x:1.3,z:3.15},{name:'臥室 A',x:3.98,z:1.35},{name:'主臥室',x:6.8,z:1.3},{name:'臥室 B',x:5.25,z:4.75},{name:'廚房',x:4.9,z:6.45},{name:'衛浴 A',x:2.25,z:5.8},{name:'衛浴 B',x:7.75,z:3.55},{name:'工作陽台',x:7.45,z:5.85},{name:'玄關',x:.75,z:7.7}];
 // Wall endpoints, optional opening: distance from first endpoint, width, sill, height.
 export const walls=[
@@ -28,8 +27,8 @@ export const walls=[
  {id:'window-master',a:[5.18,0],b:[8.3,0],opening:[1.27,1.63,.9,1.5]},
  {a:[0,0],b:[0,6.65]}, {a:[8.3,0],b:[8.3,2.7]},
  {a:[8.3,2.7],b:[8.85,2.7]},{id:'window-bathB',a:[8.85,2.7],b:[8.85,4.4],opening:[.85,.72,1.5,.7]},
- {a:[8.85,4.4],b:[8.3,4.4]},{id:'balcony-railing',a:[8.3,4.4],b:[8.3,7.25],opening:[.67,1.34,.1,2.69],openingType:'railing'},
- {a:[8.3,7.25],b:[1.85,7.25]}, {a:[1.85,7.25],b:[1.85,8.53]},
+ {a:[8.85,4.4],b:[8.3,4.4]},{id:'balcony-railing',a:[8.3,4.4],b:[8.3,6.46],opening:[.67,1.34,.1,2.69],openingType:'railing'},
+ {a:[8.1,7.25],b:[1.85,7.25]}, {a:[1.85,7.25],b:[1.85,8.53]},
  {a:[1.85,8.53],b:[-.45,8.53]}, {a:[-.45,8.53],b:[-.45,6.65],opening:[0,1.04,0,2.1]},
  {a:[-.45,6.65],b:[0,6.65]},
  {a:[2.82,0],b:[2.82,2.78]}, {a:[5.18,0],b:[5.18,2.78]},
