@@ -1,7 +1,7 @@
 import {corners,overlaps,signedDistance,sameRoom,EPS} from './geometry.js';
 export {corners,overlaps} from './geometry.js';
 export const VERSION=1;
-export const LAYOUT_REVISION=8;
+export const LAYOUT_REVISION=9;
 export const WALL_THICKNESS=.12;
 // Structural columns follow the outside-wall faces and dimensions printed on A7.
 export const columns=[
@@ -25,12 +25,12 @@ export const walls=[
  {id:'window-living',a:[0,0],b:[2.82,0],opening:[.42,1.88,.9,1.5]},
  {id:'window-A',a:[2.82,0],b:[5.18,0],opening:[.55,1.64,.9,1.5]},
  {id:'window-master',a:[5.18,0],b:[8.3,0],opening:[1.27,1.63,.9,1.5]},
- {a:[0,0],b:[0,6.65]}, {a:[8.3,0],b:[8.3,2.7]},
+ {a:[0,0],b:[0,6.71]}, {a:[8.3,0],b:[8.3,2.7]},
  {a:[8.3,2.7],b:[8.85,2.7]},{id:'window-bathB',a:[8.85,2.7],b:[8.85,4.4],opening:[.85,.72,1.5,.7]},
  {a:[8.85,4.4],b:[8.3,4.4]},{id:'balcony-railing',a:[8.3,4.4],b:[8.3,6.46],opening:[.67,1.34,.1,2.69],openingType:'railing'},
  {a:[8.1,7.25],b:[1.85,7.25]}, {a:[1.85,7.25],b:[1.85,8.53]},
- {a:[1.85,8.53],b:[-.45,8.53]}, {a:[-.45,8.53],b:[-.45,6.65],opening:[0,1.04,0,2.1]},
- {a:[-.45,6.65],b:[0,6.65]},
+ {a:[1.85,8.53],b:[-.45,8.53]}, {a:[-.45,6.71],b:[-.45,8.53],opening:[.78,1.04,0,2.1]},
+ {a:[-.45,6.71],b:[0,6.71]},
  {a:[2.82,0],b:[2.82,2.78]}, {a:[5.18,0],b:[5.18,2.78]},
  {a:[2.82,2.78],b:[5.18,2.78],opening:[.09,.9,0,2.1]},
  {a:[3.83,2.78],b:[3.83,3.72],opening:[.02,.9,0,2.1]},
@@ -43,10 +43,12 @@ export const walls=[
  {id:'window-B',a:[6.57,4.4],b:[6.57,5.78],opening:[.12,1.06,.9,1.5]},
  {id:'balcony-door-wall',a:[6.57,5.78],b:[6.57,7.25],opening:[.03,.9,0,2.1]},
  {a:[1.4,4.75],b:[3.08,4.75]}, {a:[1.4,4.75],b:[1.4,7.25]},
- {a:[3.08,4.75],b:[3.08,7.25],opening:[.2,.74,0,2.1]},
+ {a:[3.08,4.75],b:[3.08,7.25],opening:[0,.74,0,2.1]},
  {a:[1.4,7.25],b:[3.08,7.25]}
 ];
-export const doors=walls.filter(w=>w.opening&&w.opening[2]===0).map((w,i)=>{let [s,width]=w.opening,dx=w.b[0]-w.a[0],dz=w.b[1]-w.a[1],len=Math.hypot(dx,dz);return{id:'door-'+i,swing:[-1,1,1,1,1,1,-1][i],name:['臥室 A 房門','主臥通道門','臥室 B 房門','衛浴 B 房門','陽台門','衛浴 A 房門'][i-1]||'玄關大門',x:w.a[0]+dx/len*s,z:w.a[1]+dz/len*s,angle:-Math.atan2(dz,dx),width,height:2.1};});
+export const doors=walls.filter(w=>w.opening&&w.opening[2]===0).map((w,i)=>{let [s,width]=w.opening,dx=w.b[0]-w.a[0],dz=w.b[1]-w.a[1],len=Math.hypot(dx,dz);return{id:'door-'+i,swing:[1,1,1,1,1,1,-1][i],name:['臥室 A 房門','主臥通道門','臥室 B 房門','衛浴 B 房門','陽台門','衛浴 A 房門'][i-1]||'玄關大門',x:w.a[0]+dx/len*s,z:w.a[1]+dz/len*s,angle:-Math.atan2(dz,dx),width,height:2.1};});
+const curtainNames=['客廳窗簾','臥室 A 窗簾','主臥窗簾'];
+export const curtains=walls.filter(w=>['window-living','window-A','window-master'].includes(w.id)).map((wall,i)=>{const openingStart=wall.a[0]+wall.opening[0],openingEnd=openingStart+wall.opening[1],columnEdge=columns[0].x+columns[0].w/2,start=wall.id==='window-living'?Math.max(openingStart-.06,columnEdge):openingStart-.06,end=openingEnd+.06;return{id:'curtain-'+i,name:curtainNames[i],x:(start+end)/2,z:.15,w:end-start};});
 const onWall=([x,z],wall)=>Math.abs((wall.b[0]-wall.a[0])*(z-wall.a[1])-(wall.b[1]-wall.a[1])*(x-wall.a[0]))<EPS&&x>=Math.min(wall.a[0],wall.b[0])-EPS&&x<=Math.max(wall.a[0],wall.b[0])+EPS&&z>=Math.min(wall.a[1],wall.b[1])-EPS&&z<=Math.max(wall.a[1],wall.b[1])+EPS;
 const endpoints=[...new Map(walls.flatMap(w=>[w.a,w.b]).map(point=>[point.join(','),point])).values()];
 export const wallJoints=endpoints.filter(point=>walls.filter(wall=>onWall(point,wall)).length>1).map(([x,z],i)=>({id:'wall-joint-'+i,x,z,w:WALL_THICKNESS,d:WALL_THICKNESS,rot:0}));
@@ -74,11 +76,11 @@ export const initialFurniture=[
  f('kitchen','kitchen','廚具：左水槽・右爐台',5.43,6.87,2.0,.62,.9,180,'mixed'),
  f('fridge','fridge','冰箱（原圖左側設備位）',4.13,6.86,.55,.63,1.78,180,'right'),
  f('wash','washer','洗衣機',7.03,4.83,.61,.62,.87),
- f('bathSink1','sink','衛浴 A 洗手台',1.77,5.17,.55,.43,.83,90),
- f('toilet1','toilet','衛浴 A 馬桶',1.91,5.84,.4,.67,.75,90),
+ f('bathSink1','sink','衛浴 A 洗手台',1.675,5.22,.82,.43,.83,90),
+ f('toilet1','toilet','衛浴 A 馬桶',1.795,5.84,.4,.67,.75,90),
  f('showerA','shower','衛浴 A 乾濕分離淋浴區',2.46,6.70,1.08,.96,2.1),
- f('bathSink2','sink','衛浴 B 洗手台',8.49,3.12,.52,.42,.83,-90),
- f('toilet2','toilet','衛浴 B 馬桶',7.02,3.87,.4,.67,.75,180),
+ f('bathSink2','sink','衛浴 B 洗手台',8.58,3.17,.82,.42,.83,-90),
+ f('toilet2','toilet','衛浴 B 馬桶',7.02,4.005,.4,.67,.75,180),
  f('showerB','shower','衛浴 B 轉角淋浴區',8.08,3.96,1.36,.76,2.1),
  f('plant','plant','落地植栽',.36,4.35,.43,.43,1.2)
 ];
@@ -101,5 +103,6 @@ export function migrateLayout(items,revision){
  const shower=result.find(f=>f.id==='showerA');if(shower&&Math.abs(shower.x-2.24)<1e-6&&Math.abs(shower.w-1.48)<1e-6){shower.x=2.46;shower.w=1.08;}
  if(revision<6)for(const id of ['tv','wardA','wardM','kitchen','fridge']){const item=result.find(f=>f.id===id),fresh=initialFurniture.find(f=>f.id===id);if(item&&fresh)item.doorStyle=fresh.doorStyle;}
  const tv=result.find(f=>f.id==='tv');if(revision<7&&tv&&Math.abs(tv.x-.32)<1e-6&&Math.abs(tv.z-1.3)<1e-6&&Math.abs(tv.w-1.8)<1e-6&&Math.abs(tv.d-.4)<1e-6&&tv.rot===90)tv.z=1.57;
+ if(revision<9){const updates={bathSink1:{old:[1.77,5.17,.55,.43,90],next:initialFurniture.find(f=>f.id==='bathSink1')},toilet1:{old:[1.91,5.84,.4,.67,90],next:initialFurniture.find(f=>f.id==='toilet1')},bathSink2:{old:[8.49,3.12,.52,.42,-90],next:initialFurniture.find(f=>f.id==='bathSink2')},toilet2:{old:[7.02,3.87,.4,.67,180],next:initialFurniture.find(f=>f.id==='toilet2')}};for(const [id,{old,next}]of Object.entries(updates)){const item=result.find(f=>f.id===id);if(item&&['x','z','w','d','rot'].every((key,index)=>Math.abs(item[key]-old[index])<1e-6))Object.assign(item,clone(next));}}
  return result;
 }

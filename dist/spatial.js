@@ -1,9 +1,10 @@
 import {corners,overlaps,inside,walls,wallRects} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom} from './geometry.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel} from './geometry.js';
-export const leafWidth=d=>d.width-.13;
+export const leafWidth=d=>d.width-(d.id==='door-0'?.18:.13);
+export const doorInset=d=>d.id==='door-0'?.10:.085;
 export function doorRects(d,amount=1,maxAngle=d.maxAngle??90){
- const inset=.085,offset=-d.swing*.055,ca=Math.cos(d.angle),sa=Math.sin(d.angle),hx=d.x+inset*ca+offset*sa,hz=d.z-inset*sa+offset*ca,angle=d.angle+d.swing*amount*maxAngle*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),w=leafWidth(d);
+ const inset=doorInset(d),offset=-d.swing*.055,ca=Math.cos(d.angle),sa=Math.sin(d.angle),hx=d.x+inset*ca+offset*sa,hz=d.z-inset*sa+offset*ca,angle=d.angle+d.swing*amount*maxAngle*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),w=leafWidth(d);
  const rect=(x,z,width,depth)=>({x:hx+x*c+z*s,z:hz-x*s+z*c,w:width,d:depth,rot:angle*180/Math.PI});
  return [rect(w/2,0,w,.045),rect(w-.12,.055,.105,.07),rect(w-.12,-.055,.105,.07)];
 }
@@ -51,6 +52,15 @@ export function cabinetRects(f,amount){
  const doors=layout.doors.map(leaf=>{const a=-leaf.sign*amount*Math.PI/2,x=leaf.hinge+leaf.sign*Math.cos(a)*leaf.width/2,z=f.d/2-leaf.sign*Math.sin(a)*leaf.width/2,p=world(x,z);return{...p,w:leaf.width,d:.08,rot:f.rot+a*180/Math.PI};});
  const travel=f.d*.55,drawers=layout.drawers.filter(()=>amount>0).map(drawer=>{const p=world(drawer.x,f.d/2+amount*travel/2);return{...p,w:drawer.width,d:amount*travel,rot:f.rot};});
  return [...doors,...drawers];
+}
+export function showerDoorLayout(f){
+ if(f.id==='showerA'){const width=Math.min(.68,f.w-.12);return{hingeX:f.w/2,hingeZ:-f.d/2,endX:f.w/2-width,endZ:-f.d/2,width,swing:1};}
+ const cut=Math.min(.3,f.w*.25,f.d*.45),hingeX=-f.w/2+cut,hingeZ=-f.d/2,endX=-f.w/2,endZ=-f.d/2+cut;
+ return{hingeX,hingeZ,endX,endZ,width:Math.hypot(endX-hingeX,endZ-hingeZ),swing:1};
+}
+export function showerDoorRects(f,amount){
+ const door=showerDoorLayout(f),base=Math.atan2(-(door.endZ-door.hingeZ),door.endX-door.hingeX),angle=base+door.swing*amount*Math.PI/2,localX=door.hingeX+Math.cos(angle)*door.width/2,localZ=door.hingeZ-Math.sin(angle)*door.width/2,rot=f.rot*Math.PI/180,c=Math.cos(rot),s=Math.sin(rot);
+ return[{x:f.x+localX*c+localZ*s,z:f.z-localX*s+localZ*c,w:door.width,d:.035,rot:f.rot+angle*180/Math.PI}];
 }
 // Stop at first contact, including a fractional final centimetre. Sampling prevents tunnelling.
 export function constrainMove(f,target,items){

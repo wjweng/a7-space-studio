@@ -32,3 +32,9 @@ All seven automated test files pass, including highlighted wall-junction coverag
 ## Column placement follow-up
 
 The living-room north-west column now exposes the plan's 40 × 49 cm dimensions inside the wall faces. Bath A uses one continuous lower-left structural column, with no tiled notch inside its footprint. The work-balcony south-east 85 × 85 cm column projects to the drawing's right side; its left face terminates the 147 cm balcony clearance, and the railing, south wall and shell follow that projection. All seven automated test files pass, `git diff --check` is clean, and a fresh 1440 × 1000 top-view browser capture was compared with the source plan at the three corrected locations.
+
+## Exterior finish, curtains and bathroom operations
+
+The entry bridge now shares the entry-column face, and the 104 cm entrance door begins below that column and opens inward to 89°. The exposed edge of the floor slab uses the wall finish, removing the brown strip outside the master-bedroom wall. Curtain geometry is bounded by the window and adjacent column; the living-room curtain starts at the column face in both closed and gathered states. Bath A's fixed door begins at the wall edge and opens to 80.5°.
+
+Both shower enclosures now have hinged glass doors derived from the same geometry used for their swept collision checks. Default bathroom sinks and toilets touch their intended wall faces; the Bath B sink fills the 82 cm remaining run and Bath A uses the same width. Revision-nine migration updates only untouched old bathroom defaults. All seven automated test files pass. Headless Chrome checks at 1440 × 1000 and 390 × 844 opened both shower doors; the selected Bath B shower reported no planar interference.
