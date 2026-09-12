@@ -85,6 +85,10 @@ export function placeAtTarget(f,target,items){
  const clear=item=>corners(item).every(([x,z])=>insideOrOutline(x,z))&&exterior.every(w=>signedDistance(item,w)>=-EPS);
  const desired={...f,...target};
  if(clear(desired))return{item:desired,blocked:false};
+ // New catalogue items start at a neutral template coordinate outside the
+ // apartment. Find the nearest viable point around a boundary click instead
+ // of persisting that off-canvas template position.
+ if(!clear(f)){for(let radius=.01;radius<=4;radius+=.01)for(let step=0;step<24;step++){const angle=step*Math.PI/12,candidate={...desired,x:desired.x+Math.cos(angle)*radius,z:desired.z+Math.sin(angle)*radius};if(clear(candidate))return{item:candidate,blocked:true};}return{item:null,blocked:true};}
  // Resolve axes independently when the pointer also pushes into a wall. This
  // preserves the tangent component, so an item already at the shell can slide
  // along it instead of appearing stuck.

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {initialFurniture,structuralBlocks,wallRects,validateFurniture,issues,migrateLayout,inside,corners} from '../dist/model.js';
+import {initialFurniture,structuralBlocks,wallRects,exteriorWallRects,validateFurniture,issues,migrateLayout,inside,corners} from '../dist/model.js';
 import {constrainMove,placeAtTarget,signedDistance,distanceLabel,blocksCamera,cabinetLeaves,cabinetLayout,cabinetRects,EPS,sameRoom} from '../dist/spatial.js';
 test('last half-centimetre nudge reaches contact and repeated moves cannot penetrate',()=>{
  let f={id:'test',name:'test',type:'chair',x:.315,z:3,w:.5,d:.5,h:.8,rot:0};
@@ -20,6 +20,7 @@ test('draft placement follows the pointer across interior conflicts and only rej
  const acrossWall=placeAtTarget({...f,x:2,z:1},{x:4,z:1},[f]);assert.equal(acrossWall.blocked,false);assert.equal(acrossWall.item.x,4);
  const shell=placeAtTarget(f,{x:-1,z:1},[f]);assert.equal(shell.blocked,true);assert(shell.item.x>=.26-EPS);
  const slide=placeAtTarget({...f,x:.26,z:1},{x:-.1,z:2},[f]);assert.equal(slide.blocked,true);assert(Math.abs(slide.item.z-2)<EPS);assert(slide.item.x>=.26-EPS);
+ const newAtEdge=placeAtTarget({...f,x:0,z:0},{x:.02,z:1},[]);assert(newAtEdge.item);assert(corners(newAtEdge.item).every(([x,z])=>inside(x,z)));assert(exteriorWallRects().every(w=>signedDistance(newAtEdge.item,w)>=-EPS));
 });
 test('property edits survive placement validation',()=>{
  const f={id:'test',name:'test',type:'chair',x:1,z:1,w:.4,d:.4,h:.8,rot:0};
