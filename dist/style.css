@@ -24,4 +24,4 @@
   #walkHud label{justify-content:space-between}
   #miniMap,#touchPad{bottom:252px}
 }
-.sidehint{margin:-2px 0 10px;color:#667d75;font-size:12px}.sidehint summary{cursor:pointer;list-style-position:inside}.shortcutTipText{margin:7px 0 0;padding:8px 10px;background:#f6f8f6;border-radius:6px;font-size:12px;line-height:1.75}
+.sidehint{margin:-2px 0 10px;color:#667d75;font-size:12px}.sidehint summary{cursor:pointer;list-style-position:inside}.shortcutTipText{margin:7px 0 0;padding:8px 10px;background:#f6f8f6;border-radius:6px;font-size:12px;line-height:1.75}.shortcutTip{margin-left:auto;position:relative;font-weight:400}.shortcutTip summary{cursor:pointer;list-style:none;border:1px solid var(--line);border-radius:50%;width:20px;height:20px;text-align:center;line-height:18px;color:#617671;font-size:11px}.shortcutTipText{position:absolute;z-index:4;right:0;top:23px;width:245px;box-shadow:0 5px 18px #20383d1c}
