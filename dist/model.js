@@ -1,7 +1,7 @@
 import {corners,overlaps,signedDistance,sameRoom,EPS} from './geometry.js';
 export {corners,overlaps} from './geometry.js';
 export const VERSION=1;
-export const LAYOUT_REVISION=9;
+export const LAYOUT_REVISION=10;
 export const WALL_THICKNESS=.12;
 // Structural columns follow the outside-wall faces and dimensions printed on A7.
 export const columns=[
@@ -73,11 +73,11 @@ export const initialFurniture=[
  f('deskB','desk','臥室 B 書桌',4.47,5.37,1.0,.55,.75,180),
  f('wardB','wardrobe','臥室 B 衣櫃',4.77,4.08,.9,.55,2.2),
  f('shoe','wardrobe','玄關收納櫃',.29,6.10,.8,.42,2.3,90),
- f('kitchen','kitchen','廚具：左水槽・右爐台',5.43,6.87,2.0,.62,.9,180,'mixed'),
+ f('kitchen','kitchen','廚具：左水槽・右爐台',5.47,6.90,2.08,.58,.9,180,'mixed'),
  f('fridge','fridge','冰箱（原圖左側設備位）',4.13,6.86,.55,.63,1.78,180,'right'),
  f('wash','washer','洗衣機',7.03,4.83,.61,.62,.87),
  f('bathSink1','sink','衛浴 A 洗手台',1.675,5.22,.82,.43,.83,90),
- f('toilet1','toilet','衛浴 A 馬桶',1.795,5.84,.4,.67,.75,90),
+ f('toilet1','toilet','衛浴 A 馬桶',1.795,6.00,.4,.67,.75,90),
  f('showerA','shower','衛浴 A 乾濕分離淋浴區',2.46,6.70,1.08,.96,2.1),
  f('bathSink2','sink','衛浴 B 洗手台',8.58,3.17,.82,.42,.83,-90),
  f('toilet2','toilet','衛浴 B 馬桶',7.02,4.005,.4,.67,.75,180),
@@ -104,5 +104,6 @@ export function migrateLayout(items,revision){
  if(revision<6)for(const id of ['tv','wardA','wardM','kitchen','fridge']){const item=result.find(f=>f.id===id),fresh=initialFurniture.find(f=>f.id===id);if(item&&fresh)item.doorStyle=fresh.doorStyle;}
  const tv=result.find(f=>f.id==='tv');if(revision<7&&tv&&Math.abs(tv.x-.32)<1e-6&&Math.abs(tv.z-1.3)<1e-6&&Math.abs(tv.w-1.8)<1e-6&&Math.abs(tv.d-.4)<1e-6&&tv.rot===90)tv.z=1.57;
  if(revision<9){const updates={bathSink1:{old:[1.77,5.17,.55,.43,90],next:initialFurniture.find(f=>f.id==='bathSink1')},toilet1:{old:[1.91,5.84,.4,.67,90],next:initialFurniture.find(f=>f.id==='toilet1')},bathSink2:{old:[8.49,3.12,.52,.42,-90],next:initialFurniture.find(f=>f.id==='bathSink2')},toilet2:{old:[7.02,3.87,.4,.67,180],next:initialFurniture.find(f=>f.id==='toilet2')}};for(const [id,{old,next}]of Object.entries(updates)){const item=result.find(f=>f.id===id);if(item&&['x','z','w','d','rot'].every((key,index)=>Math.abs(item[key]-old[index])<1e-6))Object.assign(item,clone(next));}}
+ if(revision<10){const updates={kitchen:{old:[5.43,6.87,2,.62,180],next:initialFurniture.find(f=>f.id==='kitchen')},toilet1:{old:[1.795,5.84,.4,.67,90],next:initialFurniture.find(f=>f.id==='toilet1')}};for(const [id,{old,next}]of Object.entries(updates)){const item=result.find(f=>f.id===id);if(item&&['x','z','w','d','rot'].every((key,index)=>Math.abs(item[key]-old[index])<1e-6))Object.assign(item,clone(next));}}
  return result;
 }
