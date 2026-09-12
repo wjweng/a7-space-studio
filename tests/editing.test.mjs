@@ -49,6 +49,6 @@ test('wide cabinet layouts use modular fronts and default opening envelopes stay
  for(const f of initialFurniture.filter(f=>['wardrobe','console','kitchen','fridge'].includes(f.type)))for(let step=1;step<=20;step++)for(const rect of cabinetRects(f,step/20)){
   assert(corners(rect).every(([x,z])=>inside(x,z)),f.name+' exceeds shell');
   assert(wallRects().every(w=>signedDistance(rect,w)>=-EPS),f.name+' hits wall');
-  for(const other of initialFurniture)if(other.id!==f.id&&other.type!=='rug'&&sameRoom(f,other))assert(signedDistance(rect,other)>=-EPS,f.name+' hits '+other.name);
+  for(const other of initialFurniture)if(other.id!==f.id&&!['rug','light','beam'].includes(other.type)&&sameRoom(f,other))assert(signedDistance(rect,other)>=-EPS,f.name+' hits '+other.name);
  }
 });

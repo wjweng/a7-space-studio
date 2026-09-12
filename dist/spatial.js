@@ -32,7 +32,7 @@ export function findRoute(start,goal,clear){
 
 
 // Low tables/chairs can be viewed from above; tall furniture always protects the camera.
-export const blocksCamera=(f,eye=1.6)=>f.type!=='rug'&&f.h>.15&&(!['table','chair','desk'].includes(f.type)||f.h>=eye-.2);
+export const blocksCamera=(f,eye=1.6)=>!['rug','light','beam'].includes(f.type)&&f.h>.15&&(!['table','chair','desk'].includes(f.type)||f.h>=eye-.2);
 export function cabinetLayout(f){
  const style=f.doorStyle||'double',edge=.015;
  if(style==='drawers'){const n=f.type==='console'?Math.max(1,Math.ceil(f.w/.6)):Math.max(1,Math.ceil(f.w/.8)),pw=(f.w-edge*2)/n;return{doors:[],drawers:Array.from({length:n},(_,i)=>({x:-f.w/2+edge+pw*(i+.5),width:pw-edge,rows:f.type==='console'?1:3})),slides:[]};}

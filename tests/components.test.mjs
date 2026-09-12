@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {initialFurniture,issues,validateFurniture,normalizeKitchenParts,normalizeSinkBasin} from '../dist/model.js';
+import {initialFurniture,issues,validateFurniture,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,migrateLayout,LAYOUT_REVISION} from '../dist/model.js';
 import {furnitureInterference,tableChairInterference} from '../dist/geometry.js';
 import {SpaceScene} from '../dist/scene.js';
 import {constrainMove} from '../dist/spatial.js';
@@ -27,7 +27,18 @@ test('adjustable sink and kitchen parts are clamped to their work surfaces',()=>
 });
 
 test('opened washer contains a dark recessed drum behind the movable door',()=>{
- const s=Object.create(SpaceScene.prototype);s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf'].map(k=>[k,new THREE.MeshStandardMaterial()]));s.actions=new Map;
+ const s=Object.create(SpaceScene.prototype);s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow'].map(k=>[k,new THREE.MeshStandardMaterial()]));s.actions=new Map;
  const f=initialFurniture.find(f=>f.type==='washer'),g=new THREE.Group;s.makeFurniture(g,f);const a=s.actions.get(f.id);
  assert.equal(a.type,'washer');assert(a.pivot.children.length>=3);assert(g.children.some(o=>o.material===s.m.dark));
+});
+
+test('revision 12 migrates untouched chair defaults, keeps custom chair edits and adds ceiling lights',()=>{
+ const old=initialFurniture.filter(f=>f.type!=='light').map(f=>({...f}));
+ const migrated=migrateLayout(old,LAYOUT_REVISION-1);
+ assert.deepEqual(migrated.filter(f=>f.type==='chair').map(f=>[f.id,f.x,f.z]),[['chair1',1.72,3.29],['chair2',2.2,3.29],['chair3',1.72,3.81],['chair4',2.2,3.81]]);
+ assert.equal(migrated.filter(f=>f.type==='light').length,9);
+ const custom=old.map(f=>f.id==='chair1'?({...f,x:1.9}):f);
+ assert.equal(migrateLayout(custom,LAYOUT_REVISION-1).find(f=>f.id==='chair1').x,1.9);
+ const light=normalizeLight({lightKind:'invalid',brightness:999,watts:-2,height:99,on:false});
+ assert.deepEqual(light,{lightKind:'ceiling',brightness:100,watts:1,height:2.79,on:false});
 });

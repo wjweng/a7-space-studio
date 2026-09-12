@@ -1,7 +1,7 @@
 import {corners,overlaps,signedDistance,sameRoom,furnitureInterference,EPS} from './geometry.js';
 export {corners,overlaps} from './geometry.js';
 export const VERSION=1;
-export const LAYOUT_REVISION=11;
+export const LAYOUT_REVISION=12;
 export const WALL_THICKNESS=.12;
 // Structural columns follow the outside-wall faces and dimensions printed on A7.
 export const columns=[
@@ -53,16 +53,17 @@ const onWall=([x,z],wall)=>Math.abs((wall.b[0]-wall.a[0])*(z-wall.a[1])-(wall.b[
 const endpoints=[...new Map(walls.flatMap(w=>[w.a,w.b]).map(point=>[point.join(','),point])).values()];
 export const wallJoints=endpoints.filter(point=>walls.filter(wall=>onWall(point,wall)).length>1).map(([x,z],i)=>({id:'wall-joint-'+i,x,z,w:WALL_THICKNESS,d:WALL_THICKNESS,rot:0}));
 const f=(id,type,name,x,z,w,d,h,rot=0,doorStyle,extra={})=>({id,type,name,x,z,w,d,h,rot,open:0,...(doorStyle?{doorStyle}:{}),...extra,assumed:true});
+const light=(id,name,x,z,height=2.7)=>f(id,'light',name,x,z,.24,.24,.12,0,undefined,{lightKind:'ceiling',brightness:75,watts:24,height,on:true});
 export const initialFurniture=[
  f('sofa','sofa','三人沙發',2.03,1.23,2.05,.87,.84,-90),
  f('tv','console','電視矮櫃',.32,1.57,1.8,.4,.48,90,'drawers'),
  f('coffee','table','橢圓茶几',1.07,1.25,.55,1.04,.4),
  f('rug','rug','客廳地毯',1.34,1.32,1.8,2.5,.012),
  f('dining','table','餐桌',1.96,3.55,1.2,.75,.75),
- f('chair1','chair','餐椅 01',1.58,2.91,.44,.48,.8),
- f('chair2','chair','餐椅 02',2.34,2.91,.44,.48,.8),
- f('chair3','chair','餐椅 03',1.58,4.19,.44,.48,.8,180),
- f('chair4','chair','餐椅 04',2.34,4.19,.44,.48,.8,180),
+ f('chair1','chair','餐椅 01',1.72,3.29,.44,.48,.8),
+ f('chair2','chair','餐椅 02',2.20,3.29,.44,.48,.8),
+ f('chair3','chair','餐椅 03',1.72,3.81,.44,.48,.8,180),
+ f('chair4','chair','餐椅 04',2.20,3.81,.44,.48,.8,180),
  f('bedA','bed','臥室 A 單人床',4.56,1.35,.98,1.98,.6),
  f('wardA','wardrobe','臥室 A 衣櫃',3.24,.53,.67,.6,2.35,0,'sliding'),
  f('deskA','desk','臥室 A 書桌',3.28,1.53,.72,.48,.75,90),
@@ -82,12 +83,23 @@ export const initialFurniture=[
  f('bathSink2','sink','衛浴 B 洗手台',8.58,3.17,.82,.42,.83,-90,undefined,{basin:{w:.533,d:.231}}),
  f('toilet2','toilet','衛浴 B 馬桶',7.02,4.005,.4,.67,.75,180),
  f('showerB','shower','衛浴 B 轉角淋浴區',8.08,3.96,1.36,.76,2.1),
- f('plant','plant','落地植栽',.36,4.35,.43,.43,1.2)
+ f('plant','plant','落地植栽',.36,4.35,.43,.43,1.2),
+ light('light-living','客餐廳主燈',1.3,3.15),
+ light('light-bedroomA','臥室 A 主燈',3.98,1.35),
+ light('light-master','主臥主燈',6.8,1.3),
+ light('light-bedroomB','臥室 B 主燈',5.25,4.75),
+ light('light-kitchen','廚房主燈',4.9,6.45),
+ light('light-bathA','衛浴 A 主燈',2.25,5.8,2.6),
+ light('light-bathB','衛浴 B 主燈',7.75,3.55,2.6),
+ light('light-balcony','工作陽台主燈',7.45,5.85),
+ light('light-entry','玄關主燈',.75,7.7)
 ];
 export const palettes={oak:{name:'日光・淺橡木',wood:'#c2a17b',wall:'#f1ece3',fabric:'#d8d0c1',accent:'#536665',floor:'#bb9470'},walnut:{name:'暖暮・胡桃木',wood:'#72503c',wall:'#e7dfd3',fabric:'#b5a087',accent:'#885849',floor:'#957252'},mist:{name:'霧白・現代',wood:'#b7b1a4',wall:'#e9eded',fabric:'#9ba8ac',accent:'#3d535f',floor:'#b1ada3'}};
 export const clone=v=>JSON.parse(JSON.stringify(v));
-export const minimums={sofa:[1.1,.5,.45],bed:[.65,1.2,.25],chair:[.3,.3,.55],wardrobe:[.2,.2,.3],drawer:[.2,.2,.2],console:[.5,.2,.2],table:[.3,.25,.2],desk:[.4,.35,.4],kitchen:[1.2,.4,.7],fridge:[.4,.4,.9],washer:[.4,.4,.6],sink:[.3,.3,.5],toilet:[.3,.4,.5],plant:[.2,.2,.3],shower:[.6,.6,1.8],rug:[.2,.2,.005]};
+export const minimums={sofa:[1.1,.5,.45],bed:[.65,1.2,.25],chair:[.3,.3,.55],wardrobe:[.2,.2,.3],drawer:[.2,.2,.2],console:[.5,.2,.2],table:[.3,.25,.2],desk:[.4,.35,.4],kitchen:[1.2,.4,.7],fridge:[.4,.4,.9],washer:[.4,.4,.6],sink:[.3,.3,.5],toilet:[.3,.4,.5],plant:[.2,.2,.3],shower:[.6,.6,1.8],rug:[.2,.2,.005],light:[.1,.1,.02],beam:[.2,.1,.05]};
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,Number.isFinite(value)?value:min));
+export const lightKinds=['ceiling','pendant','spot'];
+export function normalizeLight(f){return{lightKind:lightKinds.includes(f.lightKind)?f.lightKind:'ceiling',brightness:clamp(f.brightness??75,0,100),watts:clamp(f.watts??24,1,200),height:clamp(f.height??2.7,.5,HEIGHT),on:f.on!==false};}
 export function normalizeSinkBasin(f){
  const maxW=Math.max(.08,f.w-.08),maxD=Math.max(.08,f.d-.08),basin=f.basin||{};
  return {w:clamp(basin.w??f.w*.65,.08,maxW),d:clamp(basin.d??f.d*.55,.08,maxD)};
@@ -100,8 +112,8 @@ export function normalizeKitchenParts(f){
 }
 export function inside(x,z){let c=false;for(let i=0,j=outline.length-1;i<outline.length;j=i++){let a=outline[i],b=outline[j];if((a[1]>z)!==(b[1]>z)&&x<(b[0]-a[0])*(z-a[1])/(b[1]-a[1])+a[0])c=!c}return c}
 export function wallRects(){return walls.flatMap(w=>{let dx=w.b[0]-w.a[0],dz=w.b[1]-w.a[1],len=Math.hypot(dx,dz),ranges=w.opening&&w.opening[2]===0?[[0,w.opening[0]],[w.opening[0]+w.opening[1],len]]:[[0,len]];return ranges.filter(([a,b])=>b-a>.01).map(([a,b])=>({x:w.a[0]+dx/len*(a+b)/2,z:w.a[1]+dz/len*(a+b)/2,w:b-a,d:WALL_THICKNESS,rot:-Math.atan2(dz,dx)*180/Math.PI}));}).concat(wallJoints,structuralSolids);}
-export function issues(f,items){if(f.type==='rug')return[];let messages=[];if(corners(f).some(([x,z])=>!inside(x,z)))messages.push('超出戶型邊界');if(wallRects().some(w=>signedDistance(f,w)<-EPS))messages.push('與牆體重疊');for(const other of items)if(other.id!==f.id&&other.type!=='rug'&&sameRoom(f,other)&&furnitureInterference(f,other))messages.push('與'+other.name+'重疊');return messages;}
-export function validateFurniture(input){if(!Array.isArray(input)||input.length>150)throw Error('家具資料格式不正確');let ids=new Set;return input.map(f=>{if(!f||typeof f.id!=='string'||ids.has(f.id)||!initialFurniture.some(a=>a.type===f.type)||typeof f.name!=='string')throw Error('家具種類或編號不正確');ids.add(f.id);const limits=minimums[f.type];if(f.w<limits[0]||f.d<limits[1]||f.h<limits[2])throw Error('此家具最小寬／深／高為 '+limits.map(n=>Math.round(n*100)).join('／')+' cm');for(const k of['x','z','w','d','h','rot'])if(!Number.isFinite(f[k]))throw Error('尺寸必須為有效數字');if(f.w<.1||f.d<.1||f.h<.005||f.w>5||f.d>5||f.h>HEIGHT||Math.abs(f.x)>20||Math.abs(f.z)>20)throw Error('尺寸或位置超出允許範圍');const next={id:f.id,type:f.type,name:f.name.slice(0,60),x:f.x,z:f.z,w:f.w,d:f.d,h:f.h,rot:f.rot,open:f.open?1:0,doorStyle:['left','right','double','multi','drawers','mixed','sliding'].includes(f.doorStyle)?f.doorStyle:'double',draft:!!f.draft,assumed:true};if(f.type==='sink')next.basin=normalizeSinkBasin(f);if(f.type==='kitchen')next.kitchenParts=normalizeKitchenParts(f);return next;});}
+export function issues(f,items){if(['rug','light','beam'].includes(f.type))return[];let messages=[];if(corners(f).some(([x,z])=>!inside(x,z)))messages.push('超出戶型邊界');if(wallRects().some(w=>signedDistance(f,w)<-EPS))messages.push('與牆體重疊');for(const other of items)if(other.id!==f.id&&!['rug','light','beam'].includes(other.type)&&sameRoom(f,other)&&furnitureInterference(f,other))messages.push('與'+other.name+'重疊');return messages;}
+export function validateFurniture(input){if(!Array.isArray(input)||input.length>150)throw Error('家具資料格式不正確');let ids=new Set;return input.map(f=>{if(!f||typeof f.id!=='string'||ids.has(f.id)||!minimums[f.type]||typeof f.name!=='string')throw Error('家具種類或編號不正確');ids.add(f.id);const limits=minimums[f.type];if(f.w<limits[0]||f.d<limits[1]||f.h<limits[2])throw Error('此家具最小寬／深／高為 '+limits.map(n=>Math.round(n*100)).join('／')+' cm');for(const k of['x','z','w','d','h','rot'])if(!Number.isFinite(f[k]))throw Error('尺寸必須為有效數字');if(f.w<.1||f.d<.1||f.h<.005||f.w>5||f.d>5||f.h>HEIGHT||Math.abs(f.x)>20||Math.abs(f.z)>20)throw Error('尺寸或位置超出允許範圍');const next={id:f.id,type:f.type,name:f.name.slice(0,60),x:f.x,z:f.z,w:f.w,d:f.d,h:f.h,rot:f.rot,open:f.open?1:0,doorStyle:['left','right','double','multi','drawers','mixed','sliding'].includes(f.doorStyle)?f.doorStyle:'double',draft:!!f.draft,assumed:true};if(f.type==='sink')next.basin=normalizeSinkBasin(f);if(f.type==='kitchen')next.kitchenParts=normalizeKitchenParts(f);if(f.type==='light')Object.assign(next,normalizeLight(f));return next;});}
 
 // Only the fixtures explicitly corrected from A7 migrate; other furniture edits are retained.
 export function migrateLayout(items,revision){
@@ -117,5 +129,6 @@ export function migrateLayout(items,revision){
  if(revision<9){const updates={bathSink1:{old:[1.77,5.17,.55,.43,90],next:initialFurniture.find(f=>f.id==='bathSink1')},toilet1:{old:[1.91,5.84,.4,.67,90],next:initialFurniture.find(f=>f.id==='toilet1')},bathSink2:{old:[8.49,3.12,.52,.42,-90],next:initialFurniture.find(f=>f.id==='bathSink2')},toilet2:{old:[7.02,3.87,.4,.67,180],next:initialFurniture.find(f=>f.id==='toilet2')}};for(const [id,{old,next}]of Object.entries(updates)){const item=result.find(f=>f.id===id);if(item&&['x','z','w','d','rot'].every((key,index)=>Math.abs(item[key]-old[index])<1e-6))Object.assign(item,clone(next));}}
  if(revision<10){const updates={kitchen:{old:[5.43,6.87,2,.62,180],next:initialFurniture.find(f=>f.id==='kitchen')},toilet1:{old:[1.795,5.84,.4,.67,90],next:initialFurniture.find(f=>f.id==='toilet1')}};for(const [id,{old,next}]of Object.entries(updates)){const item=result.find(f=>f.id===id);if(item&&['x','z','w','d','rot'].every((key,index)=>Math.abs(item[key]-old[index])<1e-6))Object.assign(item,clone(next));}}
  if(revision<11){const toilet=result.find(f=>f.id==='toilet1'),fresh=initialFurniture.find(f=>f.id==='toilet1');if(toilet&&fresh&&Math.abs(toilet.x-1.795)<1e-6&&Math.abs(toilet.z-6.00)<1e-6&&Math.abs(toilet.w-.4)<1e-6&&Math.abs(toilet.d-.67)<1e-6&&toilet.rot===90)toilet.z=fresh.z;for(const item of result){if(item.type==='kitchen'&&!item.kitchenParts)item.kitchenParts=clone(normalizeKitchenParts(item));if(item.type==='sink'&&!item.basin)item.basin=clone(normalizeSinkBasin(item));}}
+ if(revision<12){const chairUpdates={chair1:[1.58,2.91,0],chair2:[2.34,2.91,0],chair3:[1.58,4.19,180],chair4:[2.34,4.19,180]};for(const [id,[x,z,rot]]of Object.entries(chairUpdates)){const item=result.find(f=>f.id===id),fresh=initialFurniture.find(f=>f.id===id);if(item&&fresh&&Math.abs(item.x-x)<1e-6&&Math.abs(item.z-z)<1e-6&&item.rot===rot){item.x=fresh.x;item.z=fresh.z;}}for(const light of initialFurniture.filter(f=>f.type==='light'))if(!result.some(item=>item.id===light.id))result.push(clone(light));}
  return result;
 }
