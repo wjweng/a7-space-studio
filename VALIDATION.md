@@ -50,3 +50,7 @@ Bath-A's default toilet is now 5.92 m on the plan axis. Table and desk collision
 ## Lighting and direct resize editing
 
 Lighting now uses lumens plus dimming percentage for the relative scene-light estimate. Ceiling fixtures stay attached to the ceiling, pendant fixtures expose drop length, and ceiling fixtures support round or square shapes. Lights are visible/selectable in top view and available from the add-furniture catalog. Four top-view edge handles resize furniture and beams in local coordinates; the resize solver shifts the center away from the apartment shell and only reduces the requested size when the full size cannot fit. Automated tests pass, `git diff --check` is clean, and headless Chrome verified light edits, catalog entries, top-view handles, and persisted chair resizing.
+
+## Light temperatures and beam-edge editing
+
+Default lights now use white light, while the inspector offers white, natural and warm/yellow temperatures. The fixture models add a metal canopy, trim and coloured diffuser for ceiling and pendant variants. Top-view resizing no longer renders corner blocks: moving over a selected object edge changes to the corresponding resize cursor. Beam resizing preserves the opposite endpoint and clamps the dragged edge at both the exterior shell and interior walls. In orbit view with cutaway enabled, beams and their selection outline are hidden. All eight automated test files pass, including white-light migration, selected colour rendering, interior-wall beam clamping and cutaway beam visibility.

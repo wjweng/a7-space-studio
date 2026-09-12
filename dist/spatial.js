@@ -82,12 +82,14 @@ export function placeAtTarget(f,target,items){
 }
 
 const resizeClear=f=>corners(f).every(([x,z])=>inside(x,z));
+const beamResizeClear=f=>resizeClear(f)&&wallRects().every(w=>signedDistance(f,w)>=-EPS);
 const resizeDirection=(f,axis,sign)=>{const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);return axis==='w'?{x:sign*c,z:-sign*s}:{x:sign*s,z:sign*c};};
 const shiftedResize=(candidate,direction)=>{if(resizeClear(candidate))return candidate;for(let distance=.01;distance<=12;distance+=.01){const moved={...candidate,x:candidate.x-direction.x*distance,z:candidate.z-direction.z*distance};if(resizeClear(moved))return moved;}return null;};
 export function resizeAtHandle(f,axis,sign,target){
  const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=target.x-f.x,dz=target.z-f.z,local=axis==='w'?dx*c-dz*s:dx*s+dz*c,start=axis==='w'?f.w:f.d,min=minimums[f.type]?.[axis==='w'?0:1]??.1,fixed=-sign*start/2;
- let desired=Math.max(min,sign*(local-fixed)),shift=(local+fixed)/2,center={x:f.x+shift*(axis==='w'?c:s),z:f.z+shift*(axis==='w'?-s:c)};
- const direction=resizeDirection(f,axis,sign),build=size=>shiftedResize({...f,x:center.x,z:center.z,[axis]:size},direction);
+ let desired=Math.max(min,sign*(local-fixed));const centerFor=size=>{const shift=fixed+sign*size/2;return{x:f.x+shift*(axis==='w'?c:s),z:f.z+shift*(axis==='w'?-s:c)}};
+ if(f.type==='beam'){const build=size=>({...f,...centerFor(size),[axis]:size});let fitted=build(desired);if(beamResizeClear(fitted))return{item:fitted,blocked:false,clamped:false};let lo=min,hi=desired,best=null;for(let i=0;i<28;i++){const mid=(lo+hi)/2,candidate=build(mid);if(beamResizeClear(candidate)){best=candidate;lo=mid;}else hi=mid;}return best?{item:best,blocked:false,clamped:true}:{item:f,blocked:true,clamped:true};}
+ const direction=resizeDirection(f,axis,sign),build=size=>shiftedResize({...f,...centerFor(size),[axis]:size},direction);
  let fitted=build(desired);if(fitted)return{item:fitted,blocked:false,clamped:false};
  let lo=min,hi=desired,best=null;for(let i=0;i<28;i++){const mid=(lo+hi)/2,candidate=build(mid);if(candidate){best=candidate;lo=mid;}else hi=mid;}
  return best?{item:best,blocked:false,clamped:true}:{item:f,blocked:true,clamped:true};

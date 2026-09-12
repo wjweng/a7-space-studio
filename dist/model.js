@@ -1,7 +1,7 @@
 import {corners,overlaps,signedDistance,sameRoom,furnitureInterference,EPS} from './geometry.js';
 export {corners,overlaps} from './geometry.js';
 export const VERSION=1;
-export const LAYOUT_REVISION=13;
+export const LAYOUT_REVISION=14;
 export const WALL_THICKNESS=.12;
 // Structural columns follow the outside-wall faces and dimensions printed on A7.
 export const columns=[
@@ -53,7 +53,7 @@ const onWall=([x,z],wall)=>Math.abs((wall.b[0]-wall.a[0])*(z-wall.a[1])-(wall.b[
 const endpoints=[...new Map(walls.flatMap(w=>[w.a,w.b]).map(point=>[point.join(','),point])).values()];
 export const wallJoints=endpoints.filter(point=>walls.filter(wall=>onWall(point,wall)).length>1).map(([x,z],i)=>({id:'wall-joint-'+i,x,z,w:WALL_THICKNESS,d:WALL_THICKNESS,rot:0}));
 const f=(id,type,name,x,z,w,d,h,rot=0,doorStyle,extra={})=>({id,type,name,x,z,w,d,h,rot,open:0,...(doorStyle?{doorStyle}:{}),...extra,assumed:true});
-const light=(id,name,x,z,lumens=1200)=>f(id,'light',name,x,z,.24,.24,.12,0,undefined,{lightKind:'ceiling',shape:'round',lumens,dimming:75,pendantLength:.45,on:true});
+const light=(id,name,x,z,lumens=1200)=>f(id,'light',name,x,z,.24,.24,.12,0,undefined,{lightKind:'ceiling',shape:'round',colorTemperature:'white',lumens,dimming:75,pendantLength:.45,on:true});
 export const initialFurniture=[
  f('sofa','sofa','三人沙發',2.03,1.23,2.05,.87,.84,-90),
  f('tv','console','電視矮櫃',.32,1.57,1.8,.4,.48,90,'drawers'),
@@ -100,7 +100,8 @@ export const minimums={sofa:[1.1,.5,.45],bed:[.65,1.2,.25],chair:[.3,.3,.55],war
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,Number.isFinite(value)?value:min));
 export const lightKinds=['ceiling','pendant'];
 export const lightShapes=['round','square'];
-export function normalizeLight(f){const legacyLumens=Number.isFinite(f.lumens)?f.lumens:Number.isFinite(f.watts)?f.watts*50:1200;return{lightKind:lightKinds.includes(f.lightKind)?f.lightKind:'ceiling',shape:lightShapes.includes(f.shape)?f.shape:'round',lumens:clamp(legacyLumens,100,10000),dimming:clamp(f.dimming??f.brightness??75,0,100),pendantLength:clamp(f.pendantLength??.45,.05,HEIGHT-.12),on:f.on!==false};}
+export const lightColorTemperatures=['white','natural','warm'];
+export function normalizeLight(f){const legacyLumens=Number.isFinite(f.lumens)?f.lumens:Number.isFinite(f.watts)?f.watts*50:1200;return{lightKind:lightKinds.includes(f.lightKind)?f.lightKind:'ceiling',shape:lightShapes.includes(f.shape)?f.shape:'round',colorTemperature:lightColorTemperatures.includes(f.colorTemperature)?f.colorTemperature:'white',lumens:clamp(legacyLumens,100,10000),dimming:clamp(f.dimming??f.brightness??75,0,100),pendantLength:clamp(f.pendantLength??.45,.05,HEIGHT-.12),on:f.on!==false};}
 export function normalizeSinkBasin(f){
  const maxW=Math.max(.08,f.w-.08),maxD=Math.max(.08,f.d-.08),basin=f.basin||{};
  return {w:clamp(basin.w??f.w*.65,.08,maxW),d:clamp(basin.d??f.d*.55,.08,maxD)};
@@ -131,6 +132,7 @@ export function migrateLayout(items,revision){
  if(revision<10){const updates={kitchen:{old:[5.43,6.87,2,.62,180],next:initialFurniture.find(f=>f.id==='kitchen')},toilet1:{old:[1.795,5.84,.4,.67,90],next:initialFurniture.find(f=>f.id==='toilet1')}};for(const [id,{old,next}]of Object.entries(updates)){const item=result.find(f=>f.id===id);if(item&&['x','z','w','d','rot'].every((key,index)=>Math.abs(item[key]-old[index])<1e-6))Object.assign(item,clone(next));}}
  if(revision<11){const toilet=result.find(f=>f.id==='toilet1'),fresh=initialFurniture.find(f=>f.id==='toilet1');if(toilet&&fresh&&Math.abs(toilet.x-1.795)<1e-6&&Math.abs(toilet.z-6.00)<1e-6&&Math.abs(toilet.w-.4)<1e-6&&Math.abs(toilet.d-.67)<1e-6&&toilet.rot===90)toilet.z=fresh.z;for(const item of result){if(item.type==='kitchen'&&!item.kitchenParts)item.kitchenParts=clone(normalizeKitchenParts(item));if(item.type==='sink'&&!item.basin)item.basin=clone(normalizeSinkBasin(item));}}
  if(revision<12){const chairUpdates={chair1:[1.58,2.91,0],chair2:[2.34,2.91,0],chair3:[1.58,4.19,180],chair4:[2.34,4.19,180]};for(const [id,[x,z,rot]]of Object.entries(chairUpdates)){const item=result.find(f=>f.id===id),fresh=initialFurniture.find(f=>f.id===id);if(item&&fresh&&Math.abs(item.x-x)<1e-6&&Math.abs(item.z-z)<1e-6&&item.rot===rot){item.x=fresh.x;item.z=fresh.z;}}}
- if(revision<13){for(const light of initialFurniture.filter(f=>f.type==='light'))if(!result.some(item=>item.id===light.id))result.push(clone(light));for(const item of result)if(item.type==='light')Object.assign(item,normalizeLight(item));}
+ if(revision<14){for(const light of initialFurniture.filter(f=>f.type==='light'))if(!result.some(item=>item.id===light.id))result.push(clone(light));for(const item of result)if(item.type==='light')Object.assign(item,normalizeLight(item));}
+ if(revision<14)for(const item of result)if(item.type==='light')item.colorTemperature='white';
  return result;
 }
