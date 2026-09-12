@@ -17,11 +17,15 @@ test('resize handles preserve the opposite edge and shift the center away from t
  const result=resizeAtHandle(f,'w',-1,{x:-.2,z:3});
  assert.equal(result.blocked,false);assert(result.item.w>.7);assert(result.item.x>f.x);assert(result.item.x-result.item.w/2>=0);assert.equal(result.clamped,false);
 });
-test('beam resizing fixes the opposite end and stops before an interior wall',()=>{
+test('a furniture edge already touching the exterior can extend from its opposite edge',()=>{
+ const f={id:'contact',name:'contact',type:'chair',x:.25,z:3,w:.5,d:.5,h:.8,rot:0};
+ const result=resizeAtHandle(f,'w',1,{x:1.25,z:3});
+ assert.equal(result.blocked,false);assert.equal(result.clamped,false);assert(Math.abs(result.item.x-result.item.w/2)<1e-5);assert(result.item.w>.9);
+});
+test('beam resizing fixes the opposite end while passing through an interior wall',()=>{
  const beam={id:'beam',name:'beam',type:'beam',x:1,z:2,w:.8,d:.2,h:.3,rot:0},left=beam.x-beam.w/2;
  const result=resizeAtHandle(beam,'w',1,{x:4,z:2});
- assert.equal(result.blocked,false);assert(result.clamped);assert(Math.abs(result.item.x-result.item.w/2-left)<1e-6);
- for(const wall of wallRects())assert(signedDistance(result.item,wall)>=-EPS);
+ assert.equal(result.blocked,false);assert.equal(result.clamped,false);assert(Math.abs(result.item.x-result.item.w/2-left)<1e-6);assert(wallRects().some(wall=>signedDistance(result.item,wall)<-EPS));
 });
 test('all fixed door slabs and both handles clear structural walls throughout opening',()=>{
  for(const d of doors){const limit=fixedDoorLimit(d);assert(limit>75,d.id);for(let i=0;i<=100;i++)for(const r of doorRects(d,i/100,limit))for(const wall of wallRects())assert(signedDistance(r,wall)>=-EPS,`${d.id} at ${i}%`);}

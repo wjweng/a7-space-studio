@@ -1,4 +1,4 @@
-import {corners,overlaps,inside,walls,wallRects,minimums} from './model.js';
+import {corners,overlaps,inside,outline,walls,wallRects,minimums} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference} from './geometry.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
 export const leafWidth=d=>d.width-(d.id==='door-0'?.18:.13);
@@ -81,8 +81,9 @@ export function placeAtTarget(f,target,items){
  return{item,blocked:false};
 }
 
-const resizeClear=f=>corners(f).every(([x,z])=>inside(x,z));
-const beamResizeClear=f=>resizeClear(f)&&wallRects().every(w=>signedDistance(f,w)>=-EPS);
+const onOutline=(x,z)=>outline.some((a,i)=>{const b=outline[(i+1)%outline.length],dx=b[0]-a[0],dz=b[1]-a[1],length=dx*dx+dz*dz,t=length?Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/length)):0;return Math.hypot(x-a[0]-dx*t,z-a[1]-dz*t)<=1e-5;});
+const resizeClear=f=>corners(f).every(([x,z])=>inside(x,z)||onOutline(x,z));
+const beamResizeClear=resizeClear;
 const resizeDirection=(f,axis,sign)=>{const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);return axis==='w'?{x:sign*c,z:-sign*s}:{x:sign*s,z:sign*c};};
 const shiftedResize=(candidate,direction)=>{if(resizeClear(candidate))return candidate;for(let distance=.01;distance<=12;distance+=.01){const moved={...candidate,x:candidate.x-direction.x*distance,z:candidate.z-direction.z*distance};if(resizeClear(moved))return moved;}return null;};
 export function resizeAtHandle(f,axis,sign,target){
