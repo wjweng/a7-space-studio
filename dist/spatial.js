@@ -1,6 +1,6 @@
 import {corners,overlaps,inside,walls,wallRects} from './model.js';
-import {EPS,signedDistance,roomAt,sameRoom} from './geometry.js';
-export {EPS,signedDistance,roomAt,sameRoom,distanceLabel} from './geometry.js';
+import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference} from './geometry.js';
+export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
 export const leafWidth=d=>d.width-(d.id==='door-0'?.18:.13);
 export const doorInset=d=>d.id==='door-0'?.10:.085;
 export function doorRects(d,amount=1,maxAngle=d.maxAngle??90){
@@ -66,7 +66,8 @@ export function showerDoorRects(f,amount){
 export function constrainMove(f,target,items){
  const obstacles=[...wallRects(),...items.filter(o=>o.id!==f.id&&o.type!=='rug'&&f.type!=='rug')];
  const initial=obstacles.map(o=>signedDistance(f,o));
- const clear=p=>corners(p).every(([x,z])=>inside(x,z))&&obstacles.every((o,i)=>signedDistance(p,o)>=Math.min(0,initial[i])-EPS);
+ const initialConflict=obstacles.map((o,i)=>o.type?furnitureInterference(f,o):initial[i]<0);
+ const clear=p=>corners(p).every(([x,z])=>inside(x,z))&&obstacles.every((o,i)=>o.type?(!furnitureInterference(p,o)||initialConflict[i]):signedDistance(p,o)>=Math.min(0,initial[i])-EPS);
  const dx=target.x-f.x,dz=target.z-f.z,n=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.01));let previous=0;
  for(let i=1;i<=n;i++){const t=i/n,p={...f,x:f.x+dx*t,z:f.z+dz*t};if(!clear(p)){let lo=previous,hi=t;for(let j=0;j<35;j++){const mid=(lo+hi)/2;if(clear({...f,x:f.x+dx*mid,z:f.z+dz*mid}))lo=mid;else hi=mid;}return{item:{...f,x:f.x+dx*lo,z:f.z+dz*lo},blocked:true};}previous=t;}
  return{item:{...f,x:target.x,z:target.z},blocked:false};

@@ -42,3 +42,7 @@ Both shower enclosures now have hinged glass doors derived from the same geometr
 ## Kitchen and floor-board follow-up
 
 Floor boards now exclude wall thicknesses, removing the remaining brown strip beside the master-bedroom east wall. Bath-A's default toilet moves to 6.00 m on the plan axis while remaining clear of the sink and shower. The kitchen default is 208 × 58 cm, fills the usable run to the inner face of the right wall and south exterior wall, and keeps the sink on the left with the cooktop on the right. Revision-ten migration updates only untouched legacy kitchen and Bath-A toilet defaults. All seven automated test files pass; a fresh headless Chrome top-view capture at 1440 × 1000 confirmed the three reported locations.
+
+## Under-table clearance and adjustable fixtures
+
+Bath-A's default toilet is now 5.92 m on the plan axis. Table and desk collision geometry separates tabletop clearance from four table legs: chairs may tuck under the top, while the chair back and legs remain collision checks. Bathroom sink recesses and kitchen sink/cooktop dimensions are persisted, clamped to their countertop zones, and editable from the inspector. The washer now renders a dark recessed drum behind its opening door. Eight automated test files pass; headless Chrome at 1440 × 1000 verified the kitchen controls, clamping behavior, top view and washer opening state.
