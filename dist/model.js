@@ -1,7 +1,7 @@
 import {corners,overlaps,signedDistance,sameRoom,furnitureInterference,EPS} from './geometry.js';
 export {corners,overlaps} from './geometry.js';
 export const VERSION=1;
-export const LAYOUT_REVISION=14;
+export const LAYOUT_REVISION=15;
 export const WALL_THICKNESS=.12;
 // Structural columns follow the outside-wall faces and dimensions printed on A7.
 export const columns=[
@@ -113,8 +113,16 @@ export function normalizeKitchenParts(f){
  return {sink:{w:clamp(sink.w??.57,.08,sinkMaxW),d:clamp(sink.d??.41,.08,maxD)},cooktop:{w:clamp(cooktop.w??.56,.08,cooktopMaxW),d:clamp(cooktop.d??.45,.08,maxD)}};
 }
 export function inside(x,z){let c=false;for(let i=0,j=outline.length-1;i<outline.length;j=i++){let a=outline[i],b=outline[j];if((a[1]>z)!==(b[1]>z)&&x<(b[0]-a[0])*(z-a[1])/(b[1]-a[1])+a[0])c=!c}return c}
+// A point on the drawn shell is valid too.  The ray-cast above deliberately
+// treats that point as outside, which is useful for geometry tests but wrong
+// for an object resting exactly against the exterior wall.
+export const onOutline=(x,z)=>outline.some((a,i)=>{const b=outline[(i+1)%outline.length],dx=b[0]-a[0],dz=b[1]-a[1],length=dx*dx+dz*dz,t=length?Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/length)):0;return Math.hypot(x-a[0]-dx*t,z-a[1]-dz*t)<=1e-7;});
+export const insideOrOutline=(x,z)=>inside(x,z)||onOutline(x,z);
 export function wallRects(){return walls.flatMap(w=>{let dx=w.b[0]-w.a[0],dz=w.b[1]-w.a[1],len=Math.hypot(dx,dz),ranges=w.opening&&w.opening[2]===0?[[0,w.opening[0]],[w.opening[0]+w.opening[1],len]]:[[0,len]];return ranges.filter(([a,b])=>b-a>.01).map(([a,b])=>({x:w.a[0]+dx/len*(a+b)/2,z:w.a[1]+dz/len*(a+b)/2,w:b-a,d:WALL_THICKNESS,rot:-Math.atan2(dz,dx)*180/Math.PI}));}).concat(wallJoints,structuralSolids);}
-export function issues(f,items){if(['rug','light','beam'].includes(f.type))return[];let messages=[];if(corners(f).some(([x,z])=>!inside(x,z)))messages.push('超出戶型邊界');if(wallRects().some(w=>signedDistance(f,w)<-EPS))messages.push('與牆體重疊');for(const other of items)if(other.id!==f.id&&!['rug','light','beam'].includes(other.type)&&sameRoom(f,other)&&furnitureInterference(f,other))messages.push('與'+other.name+'重疊');return messages;}
+// Only wall segments whose centre lies on the exterior polygon are the hard
+// shell. Interior partitions intentionally remain editable draft conflicts.
+export function exteriorWallRects(){return wallRects().filter(w=>onOutline(w.x,w.z));}
+export function issues(f,items){if(['rug','light','beam'].includes(f.type))return[];let messages=[];if(corners(f).some(([x,z])=>!insideOrOutline(x,z)))messages.push('超出戶型邊界');if(wallRects().some(w=>signedDistance(f,w)<-EPS))messages.push('與牆體重疊');for(const other of items)if(other.id!==f.id&&!['rug','light','beam'].includes(other.type)&&sameRoom(f,other)&&furnitureInterference(f,other))messages.push('與'+other.name+'重疊');return messages;}
 export function validateFurniture(input){if(!Array.isArray(input)||input.length>150)throw Error('家具資料格式不正確');let ids=new Set;return input.map(f=>{if(!f||typeof f.id!=='string'||ids.has(f.id)||!minimums[f.type]||typeof f.name!=='string')throw Error('家具種類或編號不正確');ids.add(f.id);const limits=minimums[f.type];if(f.w<limits[0]||f.d<limits[1]||f.h<limits[2])throw Error('此家具最小寬／深／高為 '+limits.map(n=>Math.round(n*100)).join('／')+' cm');for(const k of['x','z','w','d','h','rot'])if(!Number.isFinite(f[k]))throw Error('尺寸必須為有效數字');if(f.w<.1||f.d<.1||f.h<.005||f.w>5||f.d>5||f.h>HEIGHT||Math.abs(f.x)>20||Math.abs(f.z)>20)throw Error('尺寸或位置超出允許範圍');const next={id:f.id,type:f.type,name:f.name.slice(0,60),x:f.x,z:f.z,w:f.w,d:f.d,h:f.h,rot:f.rot,open:f.open?1:0,doorStyle:['left','right','double','multi','drawers','mixed','sliding'].includes(f.doorStyle)?f.doorStyle:'double',draft:!!f.draft,assumed:true};if(f.type==='sink')next.basin=normalizeSinkBasin(f);if(f.type==='kitchen')next.kitchenParts=normalizeKitchenParts(f);if(f.type==='light')Object.assign(next,normalizeLight(f));return next;});}
 
 // Only the fixtures explicitly corrected from A7 migrate; other furniture edits are retained.
@@ -134,5 +142,6 @@ export function migrateLayout(items,revision){
  if(revision<12){const chairUpdates={chair1:[1.58,2.91,0],chair2:[2.34,2.91,0],chair3:[1.58,4.19,180],chair4:[2.34,4.19,180]};for(const [id,[x,z,rot]]of Object.entries(chairUpdates)){const item=result.find(f=>f.id===id),fresh=initialFurniture.find(f=>f.id===id);if(item&&fresh&&Math.abs(item.x-x)<1e-6&&Math.abs(item.z-z)<1e-6&&item.rot===rot){item.x=fresh.x;item.z=fresh.z;}}}
  if(revision<14){for(const light of initialFurniture.filter(f=>f.type==='light'))if(!result.some(item=>item.id===light.id))result.push(clone(light));for(const item of result)if(item.type==='light')Object.assign(item,normalizeLight(item));}
  if(revision<14)for(const item of result)if(item.type==='light')item.colorTemperature='white';
+ if(revision<15){for(const light of initialFurniture.filter(f=>f.type==='light'))if(!result.some(item=>item.id===light.id))result.push(clone(light));for(const item of result)if(item.type==='light')Object.assign(item,normalizeLight(item));}
  return result;
 }

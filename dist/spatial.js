@@ -1,8 +1,13 @@
-import {corners,overlaps,inside,outline,walls,wallRects,minimums} from './model.js';
+import {corners,overlaps,inside,insideOrOutline,walls,wallRects,exteriorWallRects,minimums} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference} from './geometry.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
+// Collision leaves retain their surveyed swing clearance. Their rendered
+// faces use a separate close-fitting finish panel below.
+const tightClosingDoor=d=>['door-3','door-4','door-5'].includes(d.id);
 export const leafWidth=d=>d.width-(d.id==='door-0'?.18:.13);
 export const doorInset=d=>d.id==='door-0'?.10:.085;
+export const visualLeafWidth=d=>d.width-(d.id==='door-0'?.18:tightClosingDoor(d)?.025:.13);
+export const visualDoorInset=d=>d.id==='door-0'?.10:tightClosingDoor(d)?.015:.085;
 export function doorRects(d,amount=1,maxAngle=d.maxAngle??90){
  const inset=doorInset(d),offset=-d.swing*.055,ca=Math.cos(d.angle),sa=Math.sin(d.angle),hx=d.x+inset*ca+offset*sa,hz=d.z-inset*sa+offset*ca,angle=d.angle+d.swing*amount*maxAngle*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),w=leafWidth(d);
  const rect=(x,z,width,depth)=>({x:hx+x*c+z*s,z:hz-x*s+z*c,w:width,d:depth,rot:angle*180/Math.PI});
@@ -67,7 +72,7 @@ export function constrainMove(f,target,items){
  const obstacles=[...wallRects(),...items.filter(o=>o.id!==f.id&&o.type!=='rug'&&f.type!=='rug')];
  const initial=obstacles.map(o=>signedDistance(f,o));
  const initialConflict=obstacles.map((o,i)=>o.type?furnitureInterference(f,o):initial[i]<0);
- const clear=p=>corners(p).every(([x,z])=>inside(x,z))&&obstacles.every((o,i)=>o.type?(!furnitureInterference(p,o)||initialConflict[i]):signedDistance(p,o)>=Math.min(0,initial[i])-EPS);
+ const clear=p=>corners(p).every(([x,z])=>insideOrOutline(x,z))&&obstacles.every((o,i)=>o.type?(!furnitureInterference(p,o)||initialConflict[i]):signedDistance(p,o)>=Math.min(0,initial[i])-EPS);
  const dx=target.x-f.x,dz=target.z-f.z,n=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.01));let previous=0;
  for(let i=1;i<=n;i++){const t=i/n,p={...f,x:f.x+dx*t,z:f.z+dz*t};if(!clear(p)){let lo=previous,hi=t;for(let j=0;j<35;j++){const mid=(lo+hi)/2;if(clear({...f,x:f.x+dx*mid,z:f.z+dz*mid}))lo=mid;else hi=mid;}return{item:{...f,x:f.x+dx*lo,z:f.z+dz*lo},blocked:true};}previous=t;}
  return{item:{...f,x:target.x,z:target.z},blocked:false};
@@ -76,13 +81,20 @@ export function constrainMove(f,target,items){
 // Editor drags represent lifting an item. Interior conflicts remain editable drafts;
 // only crossing the apartment's exterior outline blocks the pointer position.
 export function placeAtTarget(f,target,items){
- const item={...f,...target};
- if(corners(item).some(([x,z])=>!inside(x,z)))return{item:f,blocked:true};
- return{item,blocked:false};
+ const exterior=exteriorWallRects();
+ const clear=item=>corners(item).every(([x,z])=>insideOrOutline(x,z))&&exterior.every(w=>signedDistance(item,w)>=-EPS);
+ const desired={...f,...target};
+ if(clear(desired))return{item:desired,blocked:false};
+ // Resolve axes independently when the pointer also pushes into a wall. This
+ // preserves the tangent component, so an item already at the shell can slide
+ // along it instead of appearing stuck.
+ const travel=(start,axis,value)=>{let delta=value-start[axis],n=Math.max(1,Math.ceil(Math.abs(delta)/.005)),last=start;for(let i=1;i<=n;i++){let candidate={...start,[axis]:start[axis]+delta*i/n};if(!clear(candidate)){let lo=(i-1)/n,hi=i/n;for(let j=0;j<30;j++){let mid=(lo+hi)/2,candidate={...start,[axis]:start[axis]+delta*mid};if(clear(candidate))lo=mid;else hi=mid;}return{...start,[axis]:start[axis]+delta*lo};}last=candidate;}return last;};
+ const xz=travel(travel(f,'x',target.x),'z',target.z),zx=travel(travel(f,'z',target.z),'x',target.x);
+ const score=p=>Math.hypot(p.x-target.x,p.z-target.z),item=score(xz)<=score(zx)?xz:zx;
+ return{item,blocked:true};
 }
 
-const onOutline=(x,z)=>outline.some((a,i)=>{const b=outline[(i+1)%outline.length],dx=b[0]-a[0],dz=b[1]-a[1],length=dx*dx+dz*dz,t=length?Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/length)):0;return Math.hypot(x-a[0]-dx*t,z-a[1]-dz*t)<=1e-5;});
-const resizeClear=f=>corners(f).every(([x,z])=>inside(x,z)||onOutline(x,z));
+const resizeClear=f=>corners(f).every(([x,z])=>insideOrOutline(x,z));
 const beamResizeClear=resizeClear;
 const resizeDirection=(f,axis,sign)=>{const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);return axis==='w'?{x:sign*c,z:-sign*s}:{x:sign*s,z:sign*c};};
 const shiftedResize=(candidate,direction)=>{if(resizeClear(candidate))return candidate;for(let distance=.01;distance<=12;distance+=.01){const moved={...candidate,x:candidate.x-direction.x*distance,z:candidate.z-direction.z*distance};if(resizeClear(moved))return moved;}return null;};

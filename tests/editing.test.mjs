@@ -18,7 +18,8 @@ test('draft placement follows the pointer across interior conflicts and only rej
  const acrossFurniture=placeAtTarget(f,{x:2.2,z:1},[f,other]);assert.equal(acrossFurniture.blocked,false);assert.equal(acrossFurniture.item.x,2.2);
  assert.equal(placeAtTarget(f,{x:1.6,z:1},[f,other]).blocked,false);
  const acrossWall=placeAtTarget({...f,x:2,z:1},{x:4,z:1},[f]);assert.equal(acrossWall.blocked,false);assert.equal(acrossWall.item.x,4);
- assert.equal(placeAtTarget(f,{x:-1,z:1},[f]).blocked,true);
+ const shell=placeAtTarget(f,{x:-1,z:1},[f]);assert.equal(shell.blocked,true);assert(shell.item.x>=.26-EPS);
+ const slide=placeAtTarget({...f,x:.26,z:1},{x:-.1,z:2},[f]);assert.equal(slide.blocked,true);assert(Math.abs(slide.item.z-2)<EPS);assert(slide.item.x>=.26-EPS);
 });
 test('property edits survive placement validation',()=>{
  const f={id:'test',name:'test',type:'chair',x:1,z:1,w:.4,d:.4,h:.8,rot:0};
