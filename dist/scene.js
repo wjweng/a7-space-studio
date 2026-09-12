@@ -3,7 +3,9 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight} from './model.js';
 import {doorRects,visualDoorInset,visualLeafWidth,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
-const BEAM_CEILING_OVERLAP=.002;
+// Deliberately overlap the open-top beam into the ceiling: a centimetre-scale
+// overlap survives anti-aliasing at oblique indoor camera angles.
+const BEAM_CEILING_OVERLAP=.012;
 export function floorBoardRects(){const flooringWalls=wallRects(),boards=[];for(let x=-.45;x<8.85;x+=.19)for(let z=0;z<8.5;z+=1.12){let zz=z+((Math.round((x+.45)/.19)%2)*.56),board={x:x+.093,z:zz+.54,w:.186,d:1.08,rot:0};if(inside(x+.09,zz+.54)&&inside(x,zz)&&inside(x+.185,zz+1.08)&&!flooringWalls.some(w=>overlaps(board,w)))boards.push(board);}return boards;}
 export class SpaceScene{
  constructor(host,onSelect,onDrag,onDragEnd,onOperate){this.host=host;this.onSelect=onSelect;this.onDrag=onDrag;this.onDragEnd=onDragEnd;this.onOperate=onOperate;this.collisionWalls=wallRects();this.mode='orbit';this.palette='oak';this.items=[];this.groups=new Map;this.invalidHelpers=new Map;this.invalidMarkers=new Map;this.foregroundDraft=null;this.actions=new Map;this.lightObjects=[];this.resizeHandles=new T.Group;this.openStates={};this.keys=new Set;this.night=false;this.lightsOn=true;this.eye=1.6;this.cutaway=true;this.selected=null;this.viewStates={};this.avoidFurniture=true;this.placing=false;doors.forEach(d=>d.maxAngle=fixedDoorLimit(d));this.route=[];
