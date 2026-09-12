@@ -82,7 +82,7 @@ export function constrainMove(f,target,items){
 // only crossing the apartment's exterior outline blocks the pointer position.
 export function placeAtTarget(f,target,items){
  const exterior=exteriorWallRects();
- const clear=item=>corners(item).every(([x,z])=>insideOrOutline(x,z))&&exterior.every(w=>signedDistance(item,w)>=-EPS);
+ const clear=item=>corners(item).every(([x,z])=>insideOrOutline(x,z))&&exterior.every(w=>signedDistance(item,w)>=-EPS)&&(!['light','beam'].includes(item.type)||items.filter(other=>other.id!==item.id&&['light','beam'].includes(other.type)).every(other=>!overlaps(item,other)));
  const desired={...f,...target};
  if(clear(desired))return{item:desired,blocked:false};
  // New catalogue items start at a neutral template coordinate outside the

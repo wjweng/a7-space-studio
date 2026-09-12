@@ -24,3 +24,4 @@
   #walkHud label{justify-content:space-between}
   #miniMap,#touchPad{bottom:252px}
 }
+.sidehint{margin:-2px 0 10px;color:#667d75;font-size:12px}.sidehint summary{cursor:pointer;list-style-position:inside}.shortcutTipText{margin:7px 0 0;padding:8px 10px;background:#f6f8f6;border-radius:6px;font-size:12px;line-height:1.75}

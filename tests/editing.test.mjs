@@ -27,6 +27,10 @@ test('property edits survive placement validation',()=>{
  const result=placeAtTarget(f,{...f,w:.6,d:.5,h:1,rot:90},[f]);
  assert.equal(result.blocked,false);assert.deepEqual(result.item,{...f,w:.6,d:.5,h:1,rot:90});
 });
+test('lights and ceiling beams cannot occupy the same ceiling footprint',()=>{
+ const beam={id:'beam',name:'樑',type:'beam',x:2,z:2,w:1,d:.2,h:.2,rot:0},light={id:'light',name:'燈',type:'light',x:1,z:2,w:.3,d:.3,h:.1,rot:0};
+ const result=placeAtTarget(light,{x:2,z:2},[light,beam]);assert(result.blocked);assert(issues({...light,x:2,z:2},[light,beam]).length>0);
+});
 test('legacy overlaps can move outward but cannot get worse',()=>{
  const f={id:'test',type:'chair',x:.25,z:3,w:.5,d:.5,h:.8,rot:0};assert(constrainMove(f,{x:.24,z:3},[]).blocked);assert(!constrainMove(f,{x:.32,z:3},[]).blocked);
 });
