@@ -1,4 +1,4 @@
-import {corners,overlaps,inside,walls,wallRects} from './model.js';
+import {corners,overlaps,inside,walls,wallRects,minimums} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference} from './geometry.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
 export const leafWidth=d=>d.width-(d.id==='door-0'?.18:.13);
@@ -79,4 +79,16 @@ export function placeAtTarget(f,target,items){
  const item={...f,...target};
  if(corners(item).some(([x,z])=>!inside(x,z)))return{item:f,blocked:true};
  return{item,blocked:false};
+}
+
+const resizeClear=f=>corners(f).every(([x,z])=>inside(x,z));
+const resizeDirection=(f,axis,sign)=>{const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);return axis==='w'?{x:sign*c,z:-sign*s}:{x:sign*s,z:sign*c};};
+const shiftedResize=(candidate,direction)=>{if(resizeClear(candidate))return candidate;for(let distance=.01;distance<=12;distance+=.01){const moved={...candidate,x:candidate.x-direction.x*distance,z:candidate.z-direction.z*distance};if(resizeClear(moved))return moved;}return null;};
+export function resizeAtHandle(f,axis,sign,target){
+ const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=target.x-f.x,dz=target.z-f.z,local=axis==='w'?dx*c-dz*s:dx*s+dz*c,start=axis==='w'?f.w:f.d,min=minimums[f.type]?.[axis==='w'?0:1]??.1,fixed=-sign*start/2;
+ let desired=Math.max(min,sign*(local-fixed)),shift=(local+fixed)/2,center={x:f.x+shift*(axis==='w'?c:s),z:f.z+shift*(axis==='w'?-s:c)};
+ const direction=resizeDirection(f,axis,sign),build=size=>shiftedResize({...f,x:center.x,z:center.z,[axis]:size},direction);
+ let fitted=build(desired);if(fitted)return{item:fitted,blocked:false,clamped:false};
+ let lo=min,hi=desired,best=null;for(let i=0;i<28;i++){const mid=(lo+hi)/2,candidate=build(mid);if(candidate){best=candidate;lo=mid;}else hi=mid;}
+ return best?{item:best,blocked:false,clamped:true}:{item:f,blocked:true,clamped:true};
 }

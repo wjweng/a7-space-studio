@@ -32,13 +32,15 @@ test('opened washer contains a dark recessed drum behind the movable door',()=>{
  assert.equal(a.type,'washer');assert(a.pivot.children.length>=3);assert(g.children.some(o=>o.material===s.m.dark));
 });
 
-test('revision 12 migrates untouched chair defaults, keeps custom chair edits and adds ceiling lights',()=>{
+test('revision 13 migrates untouched chair defaults, keeps custom chair edits and adds ceiling lights',()=>{
  const old=initialFurniture.filter(f=>f.type!=='light').map(f=>({...f}));
  const migrated=migrateLayout(old,LAYOUT_REVISION-1);
  assert.deepEqual(migrated.filter(f=>f.type==='chair').map(f=>[f.id,f.x,f.z]),[['chair1',1.72,3.29],['chair2',2.2,3.29],['chair3',1.72,3.81],['chair4',2.2,3.81]]);
  assert.equal(migrated.filter(f=>f.type==='light').length,9);
  const custom=old.map(f=>f.id==='chair1'?({...f,x:1.9}):f);
  assert.equal(migrateLayout(custom,LAYOUT_REVISION-1).find(f=>f.id==='chair1').x,1.9);
- const light=normalizeLight({lightKind:'invalid',brightness:999,watts:-2,height:99,on:false});
- assert.deepEqual(light,{lightKind:'ceiling',brightness:100,watts:1,height:2.79,on:false});
+ const light=normalizeLight({lightKind:'spot',shape:'invalid',lumens:99999,dimming:-2,pendantLength:99,on:false});
+ assert.deepEqual(light,{lightKind:'ceiling',shape:'round',lumens:10000,dimming:0,pendantLength:2.67,on:false});
+ const legacy={...initialFurniture.find(f=>f.id==='light-living'),brightness:50,watts:24};delete legacy.lumens;delete legacy.dimming;delete legacy.shape;delete legacy.pendantLength;
+ const migratedLight=migrateLayout([legacy],12)[0];assert.deepEqual({lumens:migratedLight.lumens,dimming:migratedLight.dimming,shape:migratedLight.shape},{lumens:1200,dimming:50,shape:'round'});
 });

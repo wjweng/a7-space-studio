@@ -46,3 +46,7 @@ Floor boards now exclude wall thicknesses, removing the remaining brown strip be
 ## Under-table clearance and adjustable fixtures
 
 Bath-A's default toilet is now 5.92 m on the plan axis. Table and desk collision geometry separates tabletop clearance from four table legs: chairs may tuck under the top, while the chair back and legs remain collision checks. Bathroom sink recesses and kitchen sink/cooktop dimensions are persisted, clamped to their countertop zones, and editable from the inspector. The washer now renders a dark recessed drum behind its opening door. Eight automated test files pass; headless Chrome at 1440 × 1000 verified the kitchen controls, clamping behavior, top view and washer opening state.
+
+## Lighting and direct resize editing
+
+Lighting now uses lumens plus dimming percentage for the relative scene-light estimate. Ceiling fixtures stay attached to the ceiling, pendant fixtures expose drop length, and ceiling fixtures support round or square shapes. Lights are visible/selectable in top view and available from the add-furniture catalog. Four top-view edge handles resize furniture and beams in local coordinates; the resize solver shifts the center away from the apartment shell and only reduces the requested size when the full size cannot fit. Automated tests pass, `git diff --check` is clean, and headless Chrome verified light edits, catalog entries, top-view handles, and persisted chair resizing.

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {initialFurniture,doors,rooms,wallRects,issues,migrateLayout,corners,inside} from '../dist/model.js';
-import {signedDistance,distanceLabel,sameRoom,roomAt,doorRects,fixedDoorLimit,pointClear,findRoute,segmentClear,showerDoorRects,EPS} from '../dist/spatial.js';
+import {signedDistance,distanceLabel,sameRoom,roomAt,doorRects,fixedDoorLimit,pointClear,findRoute,segmentClear,showerDoorRects,resizeAtHandle,EPS} from '../dist/spatial.js';
 test('wall contact and sub-centimetre penetration have consistent signed labels',()=>{
  const a={x:1,z:1,w:1,d:1,rot:0},b={...a,x:2};
  assert.equal(signedDistance(a,b),0);assert.match(distanceLabel(signedDistance(a,b)),/接觸/);
@@ -11,6 +11,11 @@ test('wall contact and sub-centimetre penetration have consistent signed labels'
 test('furniture across room boundaries does not produce furniture interference',()=>{
  const a={id:'a',name:'A',x:6.50,z:4.8,w:.4,d:.4,h:1,rot:0},b={...a,id:'b',name:'B',x:6.64};
  assert(!sameRoom(a,b));assert(!issues(a,[a,b]).some(x=>x.includes('B')));
+});
+test('resize handles preserve the opposite edge and shift the center away from the shell boundary',()=>{
+ const f={id:'resize',name:'resize',type:'chair',x:.35,z:3,w:.5,d:.5,h:.8,rot:0};
+ const result=resizeAtHandle(f,'w',-1,{x:-.2,z:3});
+ assert.equal(result.blocked,false);assert(result.item.w>.7);assert(result.item.x>f.x);assert(result.item.x-result.item.w/2>=0);assert.equal(result.clamped,false);
 });
 test('all fixed door slabs and both handles clear structural walls throughout opening',()=>{
  for(const d of doors){const limit=fixedDoorLimit(d);assert(limit>75,d.id);for(let i=0;i<=100;i++)for(const r of doorRects(d,i/100,limit))for(const wall of wallRects())assert(signedDistance(r,wall)>=-EPS,`${d.id} at ${i}%`);}
