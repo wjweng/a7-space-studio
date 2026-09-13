@@ -54,3 +54,11 @@ Lighting now uses lumens plus dimming percentage for the relative scene-light es
 ## Light temperatures and beam-edge editing
 
 Default lights now use white light, while the inspector offers white, natural and warm/yellow temperatures. The fixture models use a smooth white body and diffuser without a dark centre. Top-view resizing no longer renders corner blocks: moving over a selected object edge changes to the corresponding resize cursor, and its geometry updates during the drag. Exterior-wall contact is valid when extending the opposite edge. Beam resizing preserves the opposite endpoint, may cross interior partitions, and remains constrained by the exterior shell. In orbit view with cutaway enabled, beams and their selection outline are hidden. All eight automated test files pass, including white-light migration, selected colour rendering, exterior-contact resizing, cross-partition beam resizing and cutaway beam visibility.
+
+## Current editor and rendering follow-up
+
+All eight automated test files pass (`npm test`), including exterior-shell placement and boundary sliding, ceiling/floor layer separation, light-to-wall warnings, beam interior-partition traversal, 5 cm beam minimum dimensions, draft ceiling-object overlap, and fixed-door sweep clearance. The test suite also covers import validation, navigation, scene geometry, static assets and legacy layout migration.
+
+Current interaction policy: exterior walls are hard placement boundaries; interior floor collisions and ceiling-object collisions remain editable red drafts. Floor objects do not check against ceiling objects. Lights check ceiling objects and walls; beams check other ceiling objects, may span interior partitions, and report clearance against exterior walls only. The "靠近牆面" action translates the object to a wall while preserving its rotation.
+
+Ceiling beams use an open-top render mesh embedded 12 mm into the ceiling. Ceiling material uses a depth offset to avoid the coplanar wall-top/ceiling rendering conflict. These are display-stability measures, not physical construction details. Current automated checks do not replace an interactive browser inspection at the target GPU, browser and display; lighting and visual seams should still be reviewed after future renderer/material changes.
