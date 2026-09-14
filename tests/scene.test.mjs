@@ -33,6 +33,16 @@ test('beams keep their full box when clear of walls and lose the part hidden ins
   assert(Math.abs(area(whole)-free.w*free.d)<1e-9);
 });
 
+test('a beam overhanging a wall face by a sub-millimetre remainder is drawn flush, leaving no hairline strip',()=>{
+  // Exported layout from the user: dragged and resized so its face sits 0.2 mm proud of the bedroom A wall.
+  const f={id:'beam-user',type:'beam',x:1.9339639913623,z:2.784,w:3.7479279827245997,d:0.11238817957503189,h:.2,rot:0};
+  const pieces=beamVisiblePieces(f),wallFace=2.78+WALL_THICKNESS/2;
+  assert(Math.abs(f.z+pieces.bounds[3]-wallFace)<1e-9,'the proud face snaps onto the wall face');
+  for(const piece of pieces){const zs=piece.map(v=>v[1]);assert(Math.max(...zs)-Math.min(...zs)>.005,'no sub-5 mm strip survives the cut');}
+  const normals=beamGeometry(f,pieces).getAttribute('normal');
+  assert([...Array(normals.count).keys()].some(i=>normals.getZ(i)===1),'the visible part past the wall end keeps its front face');
+});
+
 test('moving a beam rebuilds its clipped geometry',()=>{
   const s=Object.create(SpaceScene.prototype),f={id:'beam-move',type:'beam'},calls=[];
   s.groups=new Map([[f.id,{}]]);

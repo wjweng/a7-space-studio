@@ -6,6 +6,7 @@ import {doorRects,visualDoorInset,visualLeafWidth,fixedDoorLimit,pointClear,find
 // Deliberately overlap the open-top beam into the ceiling: a centimetre-scale
 // overlap survives anti-aliasing at oblique indoor camera angles.
 const BEAM_CEILING_OVERLAP=.012;
+const BEAM_FLUSH_SNAP=.005;
 // A beam may run inside a wall. Its hidden faces then sit exactly on the wall's
 // visible face, and their edges poke through as a dashed seam; a depth offset
 // only moves the seam to the wall corner. So the part of a beam hidden by a solid
@@ -30,14 +31,29 @@ function clipPolygon(poly,p,q,side){
   return out.length>=3&&Math.abs(polygonArea(out))>1e-9?out:null;
 }
 // Convex pieces of the beam footprint, in the beam's local x (width) / z (depth) frame.
+// A face that overhangs a wall face by less than BEAM_FLUSH_SNAP (dragging and resizing
+// leave sub-millimetre remainders) is snapped flush first; otherwise the overhang
+// survives the cut as a hairline strip that renders as the very seam being removed.
 export function beamVisiblePieces(f){
   const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),bottom=HEIGHT-f.h+BEAM_CEILING_OVERLAP;
-  let pieces=[[[-f.w/2,-f.d/2],[f.w/2,-f.d/2],[f.w/2,f.d/2],[-f.w/2,f.d/2]]];
-  for(const solid of ceilingOccluders()){
-    if(solid.bottom>bottom+1e-6)continue;
+  const solids=ceilingOccluders().filter(solid=>solid.bottom<=bottom+1e-6).map(solid=>{
     const sa=solid.rot*Math.PI/180,sc=Math.cos(sa),ss=Math.sin(sa);
     const poly=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,z])=>{const dx=solid.x+sc*x*solid.w/2+ss*z*solid.d/2-f.x,dz=solid.z-ss*x*solid.w/2+sc*z*solid.d/2-f.z;return[dx*c-dz*s,dx*s+dz*c];});
     if(polygonArea(poly)<0)poly.reverse();
+    return poly;
+  });
+  let[x0,x1,z0,z1]=[-f.w/2,f.w/2,-f.d/2,f.d/2];
+  for(const poly of solids){
+    const xs=poly.map(v=>v[0]),zs=poly.map(v=>v[1]),ox0=Math.min(...xs),ox1=Math.max(...xs),oz0=Math.min(...zs),oz1=Math.max(...zs);
+    if(Math.abs(polygonArea(poly)-(ox1-ox0)*(oz1-oz0))>1e-9)continue;
+    if(ox0>=x1||ox1<=x0||oz0>=z1||oz1<=z0)continue;
+    if(z1>oz1&&z1-oz1<BEAM_FLUSH_SNAP)z1=oz1;
+    if(z0<oz0&&oz0-z0<BEAM_FLUSH_SNAP)z0=oz0;
+    if(x1>ox1&&x1-ox1<BEAM_FLUSH_SNAP)x1=ox1;
+    if(x0<ox0&&ox0-x0<BEAM_FLUSH_SNAP)x0=ox0;
+  }
+  let pieces=[[[x0,z0],[x1,z0],[x1,z1],[x0,z1]]];
+  for(const poly of solids){
     pieces=pieces.flatMap(piece=>{
       const outside=[];let rest=piece;
       for(let i=0;i<poly.length&&rest;i++){
@@ -48,13 +64,14 @@ export function beamVisiblePieces(f){
       return rest?outside:[piece];
     });
   }
+  pieces.bounds=[x0,x1,z0,z1];
   return pieces;
 }
 // Open-top prism: bottom faces for every piece, side faces only on the beam's own outline.
 export function beamGeometry(f,pieces){
-  const hw=f.w/2,hd=f.d/2,hh=f.h/2,eps=1e-6,position=[],normal=[];
+  const[x0,x1,z0,z1]=pieces.bounds||[-f.w/2,f.w/2,-f.d/2,f.d/2],hh=f.h/2,eps=1e-6,position=[],normal=[];
   const tri=(p,q,r,n)=>{const u=[q[0]-p[0],q[1]-p[1],q[2]-p[2]],v=[r[0]-p[0],r[1]-p[1],r[2]-p[2]];if((u[1]*v[2]-u[2]*v[1])*n[0]+(u[2]*v[0]-u[0]*v[2])*n[1]+(u[0]*v[1]-u[1]*v[0])*n[2]<0)[q,r]=[r,q];position.push(...p,...q,...r);normal.push(...n,...n,...n);};
-  const outline=(p,q)=>Math.abs(p[0]-hw)<eps&&Math.abs(q[0]-hw)<eps?[1,0,0]:Math.abs(p[0]+hw)<eps&&Math.abs(q[0]+hw)<eps?[-1,0,0]:Math.abs(p[1]-hd)<eps&&Math.abs(q[1]-hd)<eps?[0,0,1]:Math.abs(p[1]+hd)<eps&&Math.abs(q[1]+hd)<eps?[0,0,-1]:null;
+  const outline=(p,q)=>Math.abs(p[0]-x1)<eps&&Math.abs(q[0]-x1)<eps?[1,0,0]:Math.abs(p[0]-x0)<eps&&Math.abs(q[0]-x0)<eps?[-1,0,0]:Math.abs(p[1]-z1)<eps&&Math.abs(q[1]-z1)<eps?[0,0,1]:Math.abs(p[1]-z0)<eps&&Math.abs(q[1]-z0)<eps?[0,0,-1]:null;
   for(const piece of pieces){
     for(let i=1;i<piece.length-1;i++)tri([piece[0][0],-hh,piece[0][1]],[piece[i][0],-hh,piece[i][1]],[piece[i+1][0],-hh,piece[i+1][1]],[0,-1,0]);
     for(let i=0;i<piece.length;i++){
