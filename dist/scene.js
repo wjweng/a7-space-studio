@@ -67,7 +67,9 @@ export function beamVisiblePieces(f){
   pieces.bounds=[x0,x1,z0,z1];
   return pieces;
 }
-// Open-top prism: bottom faces for every piece, side faces only on the beam's own outline.
+// Bottom faces for every piece and side faces only on the beam's own outline. The top
+// covers the whole outline: the original box always drew its top (a single-material
+// mesh ignores face groups), sitting above the ceiling, and top view shows exactly that.
 export function beamGeometry(f,pieces){
   const[x0,x1,z0,z1]=pieces.bounds||[-f.w/2,f.w/2,-f.d/2,f.d/2],hh=f.h/2,eps=1e-6,position=[],normal=[];
   const tri=(p,q,r,n)=>{const u=[q[0]-p[0],q[1]-p[1],q[2]-p[2]],v=[r[0]-p[0],r[1]-p[1],r[2]-p[2]];if((u[1]*v[2]-u[2]*v[1])*n[0]+(u[2]*v[0]-u[0]*v[2])*n[1]+(u[0]*v[1]-u[1]*v[0])*n[2]<0)[q,r]=[r,q];position.push(...p,...q,...r);normal.push(...n,...n,...n);};
@@ -79,6 +81,7 @@ export function beamGeometry(f,pieces){
       if(n){tri([p[0],-hh,p[1]],[q[0],-hh,q[1]],[q[0],hh,q[1]],n);tri([p[0],-hh,p[1]],[q[0],hh,q[1]],[p[0],hh,p[1]],n);}
     }
   }
+  tri([x0,hh,z0],[x1,hh,z0],[x1,hh,z1],[0,1,0]);tri([x0,hh,z0],[x1,hh,z1],[x0,hh,z1],[0,1,0]);
   const geo=new T.BufferGeometry();
   geo.setAttribute('position',new T.Float32BufferAttribute(position,3));
   geo.setAttribute('normal',new T.Float32BufferAttribute(normal,3));

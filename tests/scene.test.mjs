@@ -43,6 +43,19 @@ test('a beam overhanging a wall face by a sub-millimetre remainder is drawn flus
   assert([...Array(normals.count).keys()].some(i=>normals.getZ(i)===1),'the visible part past the wall end keeps its front face');
 });
 
+test('clipped beams keep a full top face so top view still shows them over walls',()=>{
+  const f={id:'beam-user',type:'beam',x:1.9339639913623,z:2.784,w:3.7479279827245997,d:0.11238817957503189,h:.2,rot:0};
+  const pieces=beamVisiblePieces(f),[x0,x1,z0,z1]=pieces.bounds,geo=beamGeometry(f,pieces),pos=geo.getAttribute('position'),nor=geo.getAttribute('normal');
+  let topArea=0;
+  for(let i=0;i<pos.count;i+=3){
+    if(nor.getY(i)!==1)continue;
+    const ax=pos.getX(i+1)-pos.getX(i),az=pos.getZ(i+1)-pos.getZ(i),bx=pos.getX(i+2)-pos.getX(i),bz=pos.getZ(i+2)-pos.getZ(i);
+    assert(ax*bz-az*bx<0,'top triangles face up');
+    topArea+=Math.abs(ax*bz-az*bx)/2;
+  }
+  assert(Math.abs(topArea-(x1-x0)*(z1-z0))<1e-6,'the top spans the whole beam, including where a wall hides the rest');
+});
+
 test('moving a beam rebuilds its clipped geometry',()=>{
   const s=Object.create(SpaceScene.prototype),f={id:'beam-move',type:'beam'},calls=[];
   s.groups=new Map([[f.id,{}]]);
