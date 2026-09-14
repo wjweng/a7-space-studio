@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {SpaceScene,floorBoardRects,ceilingOccluders,beamVisiblePieces,beamGeometry} from '../dist/scene.js';
-import {initialFurniture,minimums,wallRects,overlaps,WALL_THICKNESS} from '../dist/model.js';
+import {initialFurniture,minimums,wallRects,overlaps,WALL_THICKNESS,HEIGHT} from '../dist/model.js';
 function fixture(){const s=Object.create(SpaceScene.prototype);s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow','lightWhite','lightNatural','lightWarm'].map(k=>[k,new THREE.MeshStandardMaterial()]));s.actions=new Map;s.lightObjects=[];s.resizeHandles=new THREE.Group;s.collisionWalls=wallRects();s.items=[];s.invalidHelpers=new Map;s.invalidMarkers=new Map;s.foregroundDraft=null;return s;}
 test('every furniture type generates finite geometry at initial and minimum dimensions',()=>{const s=fixture();for(const f of initialFurniture)for(const dims of[[f.w,f.d,f.h],minimums[f.type]]){const g=new THREE.Group;s.makeFurniture(g,{...f,w:dims[0],d:dims[1],h:dims[2]});assert(g.children.length>0);g.traverse(o=>{if(o.geometry){const a=o.geometry.attributes.position.array;for(const n of a)assert(Number.isFinite(n),f.name);o.geometry.computeBoundingBox();assert(!o.geometry.boundingBox.isEmpty(),f.name);}});}});
 test('cabinet resized parts and animation pivots share updated dimensions',()=>{const s=fixture(),g=new THREE.Group;const f={...initialFurniture.find(f=>f.type==='wardrobe'),doorStyle:'double',w:1.8,d:.7,h:2.5};s.makeFurniture(g,f);const a=s.actions.get(f.id);assert.equal(a.pivots.length,2);assert.equal(a.base,.35);assert.equal(a.item.h,2.5);assert.equal(a.pivots[0].position.y,1.25);});
@@ -54,6 +54,17 @@ test('clipped beams keep a full top face so top view still shows them over walls
     topArea+=Math.abs(ax*bz-az*bx)/2;
   }
   assert(Math.abs(topArea-(x1-x0)*(z1-z0))<1e-6,'the top spans the whole beam, including where a wall hides the rest');
+});
+
+test('beams hang exactly their entered depth below the ceiling',()=>{
+  for(const f of[{id:'beam-free',type:'beam',x:1.4,z:3.3,w:1.6,d:.3,h:.2,rot:0},{id:'beam-user',type:'beam',x:1.9339639913623,z:2.784,w:3.7479279827245997,d:0.11238817957503189,h:.2,rot:0}]){
+    const s=Object.create(SpaceScene.prototype),g=new THREE.Group;s.m={wall:new THREE.MeshStandardMaterial()};s.actions=new Map();
+    s.makeFurniture(g,f);
+    const beam=g.children.find(o=>o.isMesh&&o.material===s.m.wall);beam.geometry.computeBoundingBox();
+    const box=beam.geometry.boundingBox;
+    assert(Math.abs(beam.position.y+box.min.y-(HEIGHT-f.h))<1e-6,f.id+' bottom');
+    assert(Math.abs(beam.position.y+box.max.y-HEIGHT)<1e-6,f.id+' top');
+  }
 });
 
 test('moving a beam rebuilds its clipped geometry',()=>{
