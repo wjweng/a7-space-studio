@@ -6,11 +6,67 @@ import {doorRects,visualDoorInset,visualLeafWidth,fixedDoorLimit,pointClear,find
 // Deliberately overlap the open-top beam into the ceiling: a centimetre-scale
 // overlap survives anti-aliasing at oblique indoor camera angles.
 const BEAM_CEILING_OVERLAP=.012;
-// Beams share the wall colour but not its material: aligning a beam to a wall (or
-// clamping it against one) leaves a beam face exactly coplanar with the wall face.
-// With a shared, un-offset material the beam's bottom edge pokes through that face
-// as a dashed seam on some GPUs, so the beam material is pushed back in depth and
-// the wall always wins the tie.
+// A beam may run inside a wall. Its hidden faces then sit exactly on the wall's
+// visible face, and their edges poke through as a dashed seam; a depth offset
+// only moves the seam to the wall corner. So the part of a beam hidden by a solid
+// that covers its full height is cut away, and no face is emitted along the cut.
+export function ceilingOccluders(){
+  const rects=walls.flatMap(w=>{
+    const dx=w.b[0]-w.a[0],dz=w.b[1]-w.a[1],len=Math.hypot(dx,dz),rot=-Math.atan2(dz,dx)*180/Math.PI;
+    const spans=w.opening?[[0,w.opening[0],0],[w.opening[0]+w.opening[1],len,0],[w.opening[0],w.opening[0]+w.opening[1],w.opening[2]+w.opening[3]]]:[[0,len,0]];
+    return spans.filter(([a,b,bottom])=>b-a>.005&&bottom<HEIGHT).map(([a,b,bottom])=>({x:w.a[0]+dx/len*(a+b)/2,z:w.a[1]+dz/len*(a+b)/2,w:b-a,d:WALL_THICKNESS,rot,bottom}));
+  });
+  return rects.concat([...wallJoints,...structuralSolids].map(s=>({x:s.x,z:s.z,w:s.w,d:s.d,rot:0,bottom:0})));
+}
+const cross2=(p,q,v)=>(q[0]-p[0])*(v[1]-p[1])-(q[1]-p[1])*(v[0]-p[0]);
+const polygonArea=poly=>poly.reduce((sum,p,i)=>{const q=poly[(i+1)%poly.length];return sum+p[0]*q[1]-q[0]*p[1];},0)/2;
+function clipPolygon(poly,p,q,side){
+  const out=[];
+  for(let i=0;i<poly.length;i++){
+    const a=poly[i],b=poly[(i+1)%poly.length],ca=side*cross2(p,q,a),cb=side*cross2(p,q,b);
+    if(ca>=0)out.push(a);
+    if((ca>0&&cb<0)||(ca<0&&cb>0)){const t=ca/(ca-cb);out.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);}
+  }
+  return out.length>=3&&Math.abs(polygonArea(out))>1e-9?out:null;
+}
+// Convex pieces of the beam footprint, in the beam's local x (width) / z (depth) frame.
+export function beamVisiblePieces(f){
+  const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),bottom=HEIGHT-f.h+BEAM_CEILING_OVERLAP;
+  let pieces=[[[-f.w/2,-f.d/2],[f.w/2,-f.d/2],[f.w/2,f.d/2],[-f.w/2,f.d/2]]];
+  for(const solid of ceilingOccluders()){
+    if(solid.bottom>bottom+1e-6)continue;
+    const sa=solid.rot*Math.PI/180,sc=Math.cos(sa),ss=Math.sin(sa);
+    const poly=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,z])=>{const dx=solid.x+sc*x*solid.w/2+ss*z*solid.d/2-f.x,dz=solid.z-ss*x*solid.w/2+sc*z*solid.d/2-f.z;return[dx*c-dz*s,dx*s+dz*c];});
+    if(polygonArea(poly)<0)poly.reverse();
+    pieces=pieces.flatMap(piece=>{
+      const outside=[];let rest=piece;
+      for(let i=0;i<poly.length&&rest;i++){
+        const p=poly[i],q=poly[(i+1)%poly.length],part=clipPolygon(rest,p,q,-1);
+        if(part)outside.push(part);
+        rest=clipPolygon(rest,p,q,1);
+      }
+      return rest?outside:[piece];
+    });
+  }
+  return pieces;
+}
+// Open-top prism: bottom faces for every piece, side faces only on the beam's own outline.
+export function beamGeometry(f,pieces){
+  const hw=f.w/2,hd=f.d/2,hh=f.h/2,eps=1e-6,position=[],normal=[];
+  const tri=(p,q,r,n)=>{const u=[q[0]-p[0],q[1]-p[1],q[2]-p[2]],v=[r[0]-p[0],r[1]-p[1],r[2]-p[2]];if((u[1]*v[2]-u[2]*v[1])*n[0]+(u[2]*v[0]-u[0]*v[2])*n[1]+(u[0]*v[1]-u[1]*v[0])*n[2]<0)[q,r]=[r,q];position.push(...p,...q,...r);normal.push(...n,...n,...n);};
+  const outline=(p,q)=>Math.abs(p[0]-hw)<eps&&Math.abs(q[0]-hw)<eps?[1,0,0]:Math.abs(p[0]+hw)<eps&&Math.abs(q[0]+hw)<eps?[-1,0,0]:Math.abs(p[1]-hd)<eps&&Math.abs(q[1]-hd)<eps?[0,0,1]:Math.abs(p[1]+hd)<eps&&Math.abs(q[1]+hd)<eps?[0,0,-1]:null;
+  for(const piece of pieces){
+    for(let i=1;i<piece.length-1;i++)tri([piece[0][0],-hh,piece[0][1]],[piece[i][0],-hh,piece[i][1]],[piece[i+1][0],-hh,piece[i+1][1]],[0,-1,0]);
+    for(let i=0;i<piece.length;i++){
+      const p=piece[i],q=piece[(i+1)%piece.length],n=outline(p,q);
+      if(n){tri([p[0],-hh,p[1]],[q[0],-hh,q[1]],[q[0],hh,q[1]],n);tri([p[0],-hh,p[1]],[q[0],hh,q[1]],[p[0],hh,p[1]],n);}
+    }
+  }
+  const geo=new T.BufferGeometry();
+  geo.setAttribute('position',new T.Float32BufferAttribute(position,3));
+  geo.setAttribute('normal',new T.Float32BufferAttribute(normal,3));
+  return geo;
+}
 export function floorBoardRects(){const flooringWalls=wallRects(),boards=[];for(let x=-.45;x<8.85;x+=.19)for(let z=0;z<8.5;z+=1.12){let zz=z+((Math.round((x+.45)/.19)%2)*.56),board={x:x+.093,z:zz+.54,w:.186,d:1.08,rot:0};if(inside(x+.09,zz+.54)&&inside(x,zz)&&inside(x+.185,zz+1.08)&&!flooringWalls.some(w=>overlaps(board,w)))boards.push(board);}return boards;}
 export class SpaceScene{
  constructor(host,onSelect,onDrag,onDragEnd,onOperate){this.host=host;this.onSelect=onSelect;this.onDrag=onDrag;this.onDragEnd=onDragEnd;this.onOperate=onOperate;this.collisionWalls=wallRects();this.mode='orbit';this.palette='oak';this.items=[];this.groups=new Map;this.invalidHelpers=new Map;this.invalidMarkers=new Map;this.foregroundDraft=null;this.actions=new Map;this.lightObjects=[];this.resizeHandles=new T.Group;this.openStates={};this.keys=new Set;this.night=false;this.lightsOn=true;this.eye=1.6;this.cutaway=true;this.selected=null;this.viewStates={};this.avoidFurniture=true;this.placing=false;doors.forEach(d=>d.maxAngle=fixedDoorLimit(d));this.route=[];
@@ -22,7 +78,7 @@ export class SpaceScene{
  this.building=new T.Group;this.furniture=new T.Group;this.scene.add(this.building,this.furniture,this.resizeHandles);this.ray=new T.Raycaster;this.pointer=new T.Vector2;this.plane=new T.Plane(new T.Vector3(0,1,0),0);this.walkYaw=Math.PI;this.walkPitch=0;this.clock=new T.Clock;
  this.makeMaterials();this.buildHouse();this.bind();this.resize();new ResizeObserver(()=>this.resize()).observe(host);this.renderer.setAnimationLoop(()=>this.frame());}
  texture(kind){const c=document.createElement('canvas');c.width=c.height=512;const ctx=c.getContext('2d');let seed=45;const rand=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296};ctx.fillStyle=kind==='wood'?'#c9b59a':'#e3e0d9';ctx.fillRect(0,0,512,512);for(let i=0;i<(kind==='wood'?1500:22000);i++){const v=Math.floor(80+rand()*100);ctx.strokeStyle=`rgba(${v},${v*.87},${v*.7},${kind==='wood'?.12:.1})`;ctx.fillStyle=ctx.strokeStyle;if(kind==='wood'){let x=rand()*512,y=rand()*512;ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(x+rand()*7,y+40,x-8,y+100,x+2,y+150);ctx.stroke()}else ctx.fillRect(rand()*512,rand()*512,1,2)}const tx=new T.CanvasTexture(c);tx.colorSpace=T.SRGBColorSpace;tx.wrapS=tx.wrapT=T.RepeatWrapping;tx.anisotropy=this.renderer.capabilities.getMaxAnisotropy();return tx;}
- makeMaterials(){const p=palettes[this.palette];if(!this.woodTexture){this.woodTexture=this.texture('wood');this.fabricTexture=this.texture('fabric');}this.m={};const mat=(color,roughness=.8,extra={})=>new T.MeshStandardMaterial({color,roughness,...extra});this.m.wall=mat(p.wall);this.m.beam=mat(p.wall,.8,{polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1});this.m.wood=mat(p.wood,.6,{map:this.woodTexture});this.m.floor=mat(p.floor,.55,{map:this.woodTexture});this.m.fabric=mat(p.fabric,.98,{map:this.fabricTexture});this.m.accent=mat(p.accent,.9,{map:this.fabricTexture});this.m.white=mat('#f4f1e9',.7);this.m.tile=mat('#cecfc7',.35);this.m.stone=mat('#e4e0d7',.35);this.m.dark=mat('#27383a',.6);this.m.metal=mat('#929b98',.3,{metalness:.8});this.m.glass=mat('#b9d5da',.1,{transparent:true,opacity:.24,metalness:.1,depthWrite:false});this.m.glow=mat('#fff3b0',.25,{emissive:'#ffd36a',emissiveIntensity:1.5});this.m.lightWhite=mat('#f7fbff',.2,{emissive:'#dcecff',emissiveIntensity:1.9});this.m.lightNatural=mat('#fff4dc',.22,{emissive:'#ffe6af',emissiveIntensity:1.8});this.m.lightWarm=mat('#ffd7a0',.25,{emissive:'#ffb55d',emissiveIntensity:1.75});this.m.leaf=mat('#496649',.9);}
+ makeMaterials(){const p=palettes[this.palette];if(!this.woodTexture){this.woodTexture=this.texture('wood');this.fabricTexture=this.texture('fabric');}this.m={};const mat=(color,roughness=.8,extra={})=>new T.MeshStandardMaterial({color,roughness,...extra});this.m.wall=mat(p.wall);this.m.wood=mat(p.wood,.6,{map:this.woodTexture});this.m.floor=mat(p.floor,.55,{map:this.woodTexture});this.m.fabric=mat(p.fabric,.98,{map:this.fabricTexture});this.m.accent=mat(p.accent,.9,{map:this.fabricTexture});this.m.white=mat('#f4f1e9',.7);this.m.tile=mat('#cecfc7',.35);this.m.stone=mat('#e4e0d7',.35);this.m.dark=mat('#27383a',.6);this.m.metal=mat('#929b98',.3,{metalness:.8});this.m.glass=mat('#b9d5da',.1,{transparent:true,opacity:.24,metalness:.1,depthWrite:false});this.m.glow=mat('#fff3b0',.25,{emissive:'#ffd36a',emissiveIntensity:1.5});this.m.lightWhite=mat('#f7fbff',.2,{emissive:'#dcecff',emissiveIntensity:1.9});this.m.lightNatural=mat('#fff4dc',.22,{emissive:'#ffe6af',emissiveIntensity:1.8});this.m.lightWarm=mat('#ffd7a0',.25,{emissive:'#ffb55d',emissiveIntensity:1.75});this.m.leaf=mat('#496649',.9);}
  box(parent,w,h,d,x,y,z,mat,round=0){let geo=round?new RoundedBoxGeometry(w,h,d,3,Math.min(round,w/3,h/3,d/3)):new T.BoxGeometry(w,h,d);let mesh=new T.Mesh(geo,typeof mat==='string'?this.m[mat]:mat);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;parent.add(mesh);return mesh;}
  cyl(parent,r1,r2,h,x,y,z,mat){let m=new T.Mesh(new T.CylinderGeometry(r1,r2,h,32),typeof mat==='string'?this.m[mat]:mat);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
  clearGroup(g){if(g===this.furniture&&this.lightObjects)this.lightObjects=[];g.traverse(o=>{if(o.geometry)o.geometry.dispose()});g.clear();}
@@ -44,7 +100,7 @@ export class SpaceScene{
  resizeItem(f){const old=this.groups.get(f.id);if(!old)return this.buildFurniture(this.items);old.traverse(o=>o.geometry?.dispose());this.furniture.remove(old);this.groups.delete(f.id);if(this.actions.get(f.id)?.item)this.actions.delete(f.id);this.lightObjects=(this.lightObjects||[]).filter(light=>light.f.id!==f.id);const marker=this.invalidMarkers.get(f.id);if(marker){this.scene.remove(marker);marker.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});this.invalidMarkers.delete(f.id);}const g=new T.Group;g.position.set(f.x,0,f.z);g.rotation.y=f.rot*Math.PI/180;g.userData.furniture=f.id;this.furniture.add(g);this.groups.set(f.id,g);this.makeFurniture(g,f);this.updateLight();this.highlight(this.selected);this.refreshValidity();}
  makeFurniture(g,f){let{w,d,h,type}=f;const box=(ww,hh,dd,x,y,z,m='wood',r=0)=>this.box(g,ww,hh,dd,x,y,z,m,r);const legs=(height,offset=.07)=>{for(let x of[-w/2+offset,w/2-offset])for(let z of[-d/2+offset,d/2-offset])box(.045,height,.045,x,height/2,z,'wood',.008);};
  if(type==='rug'){box(w,.01,d,0,.012,0,'accent',.005);return}
- if(type==='beam'){const geo=new T.BoxGeometry(w,h,d);geo.clearGroups();for(const face of[0,1,3,4,5])geo.addGroup(face*6,6,0);const beam=new T.Mesh(geo,this.m.beam);beam.position.y=HEIGHT-h/2+BEAM_CEILING_OVERLAP;beam.castShadow=false;beam.receiveShadow=true;g.add(beam);const hitMaterial=new T.MeshBasicMaterial();hitMaterial.colorWrite=false;hitMaterial.depthWrite=false;hitMaterial.depthTest=false;const hit=new T.Mesh(new T.BoxGeometry(Math.max(w,.3),.02,Math.max(d,.3)),hitMaterial);hit.position.y=HEIGHT-h/2+BEAM_CEILING_OVERLAP;hit.castShadow=false;hit.receiveShadow=false;g.add(hit);return;}
+ if(type==='beam'){const pieces=beamVisiblePieces(f),clipped=Math.abs(pieces.reduce((sum,piece)=>sum+Math.abs(polygonArea(piece)),0)-w*d)>1e-9;let geo;if(clipped)geo=beamGeometry(f,pieces);else{geo=new T.BoxGeometry(w,h,d);geo.clearGroups();for(const face of[0,1,3,4,5])geo.addGroup(face*6,6,0);}const beam=new T.Mesh(geo,this.m.wall);beam.position.y=HEIGHT-h/2+BEAM_CEILING_OVERLAP;beam.castShadow=false;beam.receiveShadow=true;g.add(beam);const hitMaterial=new T.MeshBasicMaterial();hitMaterial.colorWrite=false;hitMaterial.depthWrite=false;hitMaterial.depthTest=false;const hit=new T.Mesh(new T.BoxGeometry(Math.max(w,.3),.02,Math.max(d,.3)),hitMaterial);hit.position.y=HEIGHT-h/2+BEAM_CEILING_OVERLAP;hit.castShadow=false;hit.receiveShadow=false;g.add(hit);return;}
  if(type==='light'){const light=normalizeLight(f),thickness=Math.max(.02,Math.min(.3,h)),mountY=HEIGHT-thickness/2,round=light.shape==='round',size=Math.max(.08,Math.min(w,d)),temperature={white:['lightWhite','#eef6ff'],natural:['lightNatural','#fff0cf'],warm:['lightWarm','#ffc26f']}[light.colorTemperature],lightMat=temperature[0];if(light.lightKind==='pendant'){const drop=Math.max(.05,Math.min(HEIGHT-.12,light.pendantLength)),lampY=HEIGHT-drop;this.cyl(g,Math.max(.04,size*.20),Math.max(.04,size*.20),.025,0,HEIGHT-.013,0,'white');box(.014,Math.max(.03,drop-thickness*.8),.014,0,HEIGHT-(drop-thickness*.8)/2,0,'metal');if(round){this.cyl(g,size*.46,size*.34,thickness*1.45,0,lampY+thickness*.18,0,'white');this.cyl(g,size*.40,size*.40,thickness*.62,0,lampY-thickness*.28,0,lightMat);}else{box(w+.035,thickness*1.25,d+.035,0,lampY+thickness*.12,0,'white',Math.min(.05,w/5,d/5));box(Math.max(.04,w-.045),thickness*.55,Math.max(.04,d-.045),0,lampY-thickness*.28,0,lightMat,Math.min(.04,w/5,d/5));}}else if(round){this.cyl(g,size*.52,size*.52,thickness*.38,0,HEIGHT-thickness*.18,0,'white');this.cyl(g,size*.46,size*.46,thickness*.78,0,mountY-thickness*.08,0,lightMat);}else{box(w+.035,thickness*.5,d+.035,0,HEIGHT-thickness*.24,0,'white',Math.min(.05,w/5,d/5));box(Math.max(.04,w-.045),thickness*.78,Math.max(.04,d-.045),0,mountY-thickness*.08,0,lightMat,Math.min(.04,w/5,d/5));}const point=new T.PointLight(temperature[1],0,Math.max(2.8,5.5+size*2),2);point.position.set(0,light.lightKind==='pendant'?Math.max(.1,HEIGHT-light.pendantLength):HEIGHT-thickness,0);g.add(point);if(!this.lightObjects)this.lightObjects=[];this.lightObjects.push({f,point});return;}
  if(type==='bed'){const scale=h/.65;const raw=box;const bedbox=(ww,hh,dd,x,y,z,m,r)=>raw(ww,hh*scale,dd,x,y*scale,z,m,r);bedbox(w,.25,d,0,.17,0,'wood',.045);bedbox(w-.02,.22,d-.04,0,.41,0,'white',.08);bedbox(w+.025,.65,.075,0,.325,-d/2,'fabric',.025);bedbox(w-.08,.055,d*.67,0,.547,d*.11,'fabric',.025);bedbox(w-.07,.02,d*.21,0,.58,d*.29,'accent',.01);for(let x of w>1.3?[-w*.24,w*.24]:[0])bedbox(w>1.3?w*.42:w*.8,.11,.4,x,.59,-d*.32,'white',.075);return;}
  if(type==='sofa'){g.scale.y=h/.84;h=.84;legs(.12,.12);box(w,.23,d,0,.22,0,'fabric',.07);box(w,h-.22,.16,0,(h+.22)/2,-d/2+.08,'fabric',.055);for(let x of[-w/2+.09,w/2-.09])box(.18,h*.68,d,x,h*.34+.1,0,'fabric',.055);for(let i=0;i<3;i++){let x=-w/2+.23+(w-.46)/6+i*(w-.46)/3;box((w-.49)/3,.18,d-.22,x,.425,.06,'fabric',.07);box((w-.5)/3,.3,.17,x,.64,-d/2+.2,'fabric',.06);}let pillow=box(.3,.3,.11,w*.31,.59,-.12,'accent',.065);pillow.rotation.z=-.18;return;}
@@ -128,7 +184,7 @@ export class SpaceScene{
  window.addEventListener('keyup',e=>this.keys.delete(e.code));
  }
  updateGrid(){if(!this.snapGrid){this.snapGrid=new T.GridHelper(12,240,0x688679,0x91aaa0);this.snapGrid.position.set(4,.042,4);this.snapGrid.material.transparent=true;this.snapGrid.material.opacity=.32;this.snapGrid.material.depthWrite=false;this.scene.add(this.snapGrid);}this.snapGrid.visible=this.mode==='top'&&this.snapEnabled!==false;}
- moveItem(f){let g=this.groups.get(f.id);g.position.set(f.x,0,f.z);g.rotation.y=f.rot*Math.PI/180;this.refreshValidity();this.updateBeamVisibility();this.updateResizeHandles();}
+ moveItem(f){if(f.type==='beam'&&this.groups.has(f.id)){this.resizeItem(f);this.updateBeamVisibility();this.updateResizeHandles();return;}let g=this.groups.get(f.id);g.position.set(f.x,0,f.z);g.rotation.y=f.rot*Math.PI/180;this.refreshValidity();this.updateBeamVisibility();this.updateResizeHandles();}
  walkObstacles(includeDoors=true){
  const obstacles=[...this.collisionWalls,...this.items.filter(f=>!f.draft&&blocksCamera(f,this.eye))];
  for(const a of this.actions.values()){

@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {SpaceScene,floorBoardRects} from '../dist/scene.js';
-import {initialFurniture,minimums,wallRects,overlaps,palettes} from '../dist/model.js';
+import {SpaceScene,floorBoardRects,ceilingOccluders,beamVisiblePieces,beamGeometry} from '../dist/scene.js';
+import {initialFurniture,minimums,wallRects,overlaps,WALL_THICKNESS} from '../dist/model.js';
 function fixture(){const s=Object.create(SpaceScene.prototype);s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow','lightWhite','lightNatural','lightWarm'].map(k=>[k,new THREE.MeshStandardMaterial()]));s.actions=new Map;s.lightObjects=[];s.resizeHandles=new THREE.Group;s.collisionWalls=wallRects();s.items=[];s.invalidHelpers=new Map;s.invalidMarkers=new Map;s.foregroundDraft=null;return s;}
 test('every furniture type generates finite geometry at initial and minimum dimensions',()=>{const s=fixture();for(const f of initialFurniture)for(const dims of[[f.w,f.d,f.h],minimums[f.type]]){const g=new THREE.Group;s.makeFurniture(g,{...f,w:dims[0],d:dims[1],h:dims[2]});assert(g.children.length>0);g.traverse(o=>{if(o.geometry){const a=o.geometry.attributes.position.array;for(const n of a)assert(Number.isFinite(n),f.name);o.geometry.computeBoundingBox();assert(!o.geometry.boundingBox.isEmpty(),f.name);}});}});
 test('cabinet resized parts and animation pivots share updated dimensions',()=>{const s=fixture(),g=new THREE.Group;const f={...initialFurniture.find(f=>f.type==='wardrobe'),doorStyle:'double',w:1.8,d:.7,h:2.5};s.makeFurniture(g,f);const a=s.actions.get(f.id);assert.equal(a.pivots.length,2);assert.equal(a.base,.35);assert.equal(a.item.h,2.5);assert.equal(a.pivots[0].position.y,1.25);});
@@ -16,19 +16,27 @@ test('draft furniture has a strong red editor marker and is hidden outside top v
 test('top picking prioritizes the most recently moved interfering furniture',()=>{globalThis.document={pointerLockElement:null};const s=fixture(),large=new THREE.Group,small=new THREE.Group,largeMesh=new THREE.Mesh,smallMesh=new THREE.Mesh;large.userData.furniture='large';small.userData.furniture='small';large.add(largeMesh);small.add(smallMesh);Object.assign(s,{mode:'top',foregroundDraft:'small',host:{getBoundingClientRect:()=>({left:0,top:0,width:100,height:100})},renderer:{domElement:{}},pointer:new THREE.Vector2,topCamera:new THREE.OrthographicCamera,furniture:new THREE.Group,building:new THREE.Group});s.ray={setFromCamera(){},intersectObjects:()=>[{object:largeMesh},{object:smallMesh}]};assert.deepEqual(s.pick({clientX:50,clientY:50}),{kind:'furniture',id:'small'});});
 test('left, right and paired cabinet meshes use their selected hinges',()=>{const s=fixture();for(const doorStyle of ['left','right','double']){const f={...initialFurniture.find(f=>f.type==='wardrobe'),doorStyle},g=new THREE.Group;s.makeFurniture(g,f);const a=s.actions.get(f.id);assert.equal(a.pivots.length,doorStyle==='double'?2:1);for(const p of a.pivots){assert.equal(Math.sign(p.position.x),p.userData.swing);p.rotation.y=p.userData.swing*Math.PI/2;p.updateMatrixWorld(true);const slab=p.children[0],center=slab.getWorldPosition(new THREE.Vector3);assert(center.z>f.d/2);}}});
 
-test('ceiling beams lose depth ties to coplanar walls instead of sharing the wall material',()=>{
-  const s=Object.create(SpaceScene.prototype);
-  s.palette=Object.keys(palettes)[0];
-  s.texture=()=>new THREE.Texture();
-  s.makeMaterials();
-  assert.notEqual(s.m.beam,s.m.wall);
-  assert.equal(s.m.beam.color.getHex(),s.m.wall.color.getHex());
-  assert.equal(s.m.beam.polygonOffset,true);
-  assert(s.m.beam.polygonOffsetFactor>0&&s.m.beam.polygonOffsetUnits>0);
-  s.actions=new Map();
-  const g=new THREE.Group,f={id:'beam-test',type:'beam',name:'樑',x:2,z:2,w:1.2,d:.3,h:.4,rot:0};
-  s.makeFurniture(g,f);
-  const visible=[];g.traverse(o=>{if(o.isMesh&&o.material.colorWrite!==false)visible.push(o);});
-  assert.equal(visible.length,1);
-  assert.equal(visible[0].material,s.m.beam);
+test('beams keep their full box when clear of walls and lose the part hidden inside a full-height wall',()=>{
+  const area=pieces=>pieces.reduce((sum,piece)=>sum+Math.abs(piece.reduce((s,p,i)=>{const q=piece[(i+1)%piece.length];return s+p[0]*q[1]-q[0]*p[1];},0)/2),0);
+  const wall=ceilingOccluders().find(r=>r.bottom===0&&r.w>6);
+  assert(wall,'expected a long full-height wall');
+  const a=wall.rot*Math.PI/180,nx=Math.sin(a),nz=Math.cos(a),d=.3;
+  const flush={id:'beam-flush',type:'beam',name:'樑',w:1,d,h:.4,rot:wall.rot,x:wall.x+nx*(WALL_THICKNESS/2-d/2),z:wall.z+nz*(WALL_THICKNESS/2-d/2)};
+  const hidden=beamVisiblePieces(flush);
+  assert(Math.abs(area(hidden)-flush.w*(d-WALL_THICKNESS))<1e-9,'only the part beyond the wall remains');
+  for(const piece of hidden)for(const [,z] of piece)assert(z<=d/2-WALL_THICKNESS+1e-9,'no remaining vertex lies inside the wall');
+  const geo=beamGeometry(flush,hidden),normals=geo.getAttribute('normal');
+  for(let i=0;i<normals.count;i++)assert.notDeepEqual([normals.getX(i),normals.getY(i),normals.getZ(i)],[0,0,1],'no face is emitted along the cut wall face');
+  const free={...flush,x:flush.x+nx*.5,z:flush.z+nz*.5};
+  const whole=beamVisiblePieces(free);
+  assert.equal(whole.length,1);
+  assert(Math.abs(area(whole)-free.w*free.d)<1e-9);
+});
+
+test('moving a beam rebuilds its clipped geometry',()=>{
+  const s=Object.create(SpaceScene.prototype),f={id:'beam-move',type:'beam'},calls=[];
+  s.groups=new Map([[f.id,{}]]);
+  s.resizeItem=item=>calls.push(item);s.updateBeamVisibility=()=>{};s.updateResizeHandles=()=>{};
+  s.moveItem(f);
+  assert.deepEqual(calls,[f]);
 });
