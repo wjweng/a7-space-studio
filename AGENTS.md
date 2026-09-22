@@ -2,11 +2,11 @@
 
 ## Location & Related Files
 
-The code lives only in this local repository (`~/projects/a7-space-studio`); it moved out of Dropbox on 2026-09-11 because Dropbox must not sync `.git/`. Never move it back. Non-code materials (original floor plan and furniture reference images) live in `Dropbox/Agent/100_Todo/projects/a7-space-studio/`, whose `README.md` points back here. Keep this pointer and that one in sync if either location changes.
+The code lives only in this local repository (`~/projects/a7-space-studio`); it moved out of Dropbox on 2026-09-11 because Dropbox must not sync `.git/`. Never move it back. Non-code materials (floor plans, furniture and lighting references, Street View captures, issue screenshots and supplier comparison sheets) live in `Dropbox/Agent/100_Todo/projects/a7-space-studio/`, whose `README.md` points back here. Keep this pointer and that one in sync if either location changes.
 
 ## Project Structure & Module Organization
 
-This repository is a buildless Three.js apartment editor. The deployable application lives in `dist/`: `app.js` coordinates UI and persistence, `scene.js` owns Three.js rendering and navigation, `model.js` defines the A7 floor plan and furniture data, `geometry.js` contains low-level geometry helpers, and `spatial.js` handles placement, clearance, doors, and routing. Styles and markup are in `dist/style.css` and `dist/index.html`. Keep reference drawings in `dist/assets/` and vendored Three.js files in `dist/vendor/`. Tests are in `tests/*.test.mjs`. `server.mjs` serves the static application locally.
+This repository is a buildless Three.js apartment editor. The deployable application lives in `dist/`: `app.js` coordinates UI and persistence, `scene.js` owns Three.js rendering and navigation, `model.js` defines the A7 floor plan and furniture data, `geometry.js` contains low-level geometry helpers, `spatial.js` handles placement, clearance, doors, and routing, `finishes.js` holds the board-finish catalogue and texture generator, and `surroundings.js` describes and paints the view outside and the lift lobby. Styles and markup are in `dist/style.css` and `dist/index.html`. Keep reference drawings in `dist/assets/` and vendored Three.js files in `dist/vendor/`. Tests are in `tests/*.test.mjs`. `server.mjs` serves the static application locally.
 
 ## Build, Test, and Development Commands
 
@@ -40,10 +40,10 @@ Recent commits use short imperative subjects, such as `Fix kitchen door pivots a
 - The view outside (`dist/surroundings.js`) is an estimate: tower kinds from 2025 Street View, distances (18 m north, 8 m east) from the owner. A7's three north windows face the right third of the louvred tower opposite; the east neighbour shares A7's setback, so it must not reach north past A7's north face. Outside materials are unlit `MeshBasicMaterial` with painted day and night looks, so indoor lamps and bounce never light the neighbours and they cost no shadow texture units; keep it that way.
 - Judge a finish colour on a sampled pixel, not by eye. The old sky-heavy hemisphere plus an unshadowed sun at 3.1 lit floors about 1.4x, so walnut rendered as light oak while the palette floor's dark texture hid it. Keep light from above close to light from below (a test checks the ratio).
 - `floorBoardRects()` leaves about a quarter of each room uncovered; the base slab shows through. A room with a chosen floor finish therefore gets one continuous `roomFloorGeometry` panel instead of boards or tiles.
-- Some files mix CRLF and LF line endings (`dist/scene.js`, `tests/scene.test.mjs`, `VALIDATION.md`). Edit them byte-for-byte and confirm `git diff --stat` matches the size of the change; a text-mode rewrite silently converts every line.
+- Many tracked files mix CRLF and LF line endings (most of `dist/`, several tests, `VALIDATION.md`, `package.json`; check with `grep -c $'\r'`). Edit them byte-for-byte and confirm `git diff --stat` matches the size of the change; a text-mode rewrite silently converts every line.
 
 ## Security & Configuration
 
-Do not commit secrets or user-exported layout JSON. Browser state is stored per origin in `localStorage`. Treat residential drawings as sensitive, and configure access controls at the hosting layer before broader sharing. Preserve `.openai/hosting.json` and the static `dist` publishing configuration.
+Do not commit secrets or user-exported layout JSON. Browser state is stored per origin in `localStorage`. The A7 plan is public marketing material, not the owner's residence (confirmed 2026-09-11); no hosting access control is needed. Preserve `.openai/hosting.json` and the static `dist` publishing configuration.
 
 Board finishes (`dist/finishes.js`) are modelled on a supplier catalogue whose images are all rights reserved. Never commit or hotlink supplier images: store only measured colours and pattern types, and generate textures in code. The side-by-side comparison sheets live in the Dropbox project folder (`材質比對/`), not here.
