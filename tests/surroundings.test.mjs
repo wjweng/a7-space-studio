@@ -22,7 +22,7 @@ test('facades paint deterministically, with some but not all windows lit at nigh
   const a=paintFacade(t,20,40),b=paintFacade(t,20,40);
   assert.deepEqual(a.albedo,b.albedo,t.id);
   let lit=0;for(let k=0;k<a.glow.length;k+=4)if(a.glow[k]+a.glow[k+1]+a.glow[k+2]>0)lit++;
-  const share=lit/(a.width*a.height);assert(share>.03&&share<.5,t.id+' lit share '+share.toFixed(2));
+  const share=lit/(a.width*a.height),min=t.style==='endwall'?0:.03;assert(lit>0&&share>min&&share<.5,t.id+' lit share '+share.toFixed(3));
  }
 });
 
@@ -75,4 +75,12 @@ test('the towers sit where the owner described them',()=>{
 test('A7\'s front door has the same finish as the other units\' doors',async()=>{
  const src=(await import('node:fs')).readFileSync(new URL('../dist/scene.js',import.meta.url),'utf8');
  assert.match(src,/door\.id==='door-0'\?'entryDoor'/);assert.match(src,/unit:lob\(ENTRY_DOOR\)/);
+});
+test('the east end wall has one column of slit windows and no glazed bay',()=>{
+ const east=towers.find(t=>t.id==='east'),p=paintFacade(east,east.z1-east.z0,east.top-SITE.ground);
+ assert.equal(east.slabs,undefined);
+ const y=Math.floor((1.6/(east.top-SITE.ground))*p.height),dark=[];
+ for(let x=0;x<p.width;x++){const k=(y*p.width+x)*4;if(p.albedo[k]<90)dark.push(x);}
+ const runs=dark.filter((x,i)=>i===0||x!==dark[i-1]+1).length;
+ assert.equal(runs,1,'one run of dark window pixels across a floor');
 });
