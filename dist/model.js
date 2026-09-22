@@ -22,6 +22,8 @@ export const HEIGHT=2.79;
 export const outline=[[0,0],[8.3,0],[8.3,2.7],[8.85,2.7],[8.85,4.4],[8.3,4.4],[8.3,6.46],[8.95,6.46],[8.95,7.31],[8.1,7.31],[8.1,7.25],[1.85,7.25],[1.85,8.53],[-.45,8.53],[-.45,6.65],[0,6.65]];
 export const rooms=[{name:'客餐廳',x:1.3,z:3.15},{name:'臥室 A',x:3.98,z:1.35},{name:'主臥室',x:6.8,z:1.3},{name:'臥室 B',x:5.25,z:4.75},{name:'廚房',x:4.9,z:6.45},{name:'衛浴 A',x:2.25,z:5.8},{name:'衛浴 B',x:7.75,z:3.55},{name:'工作陽台',x:7.45,z:5.85},{name:'玄關',x:.75,z:7.7}];
 // Wall endpoints, optional opening: distance from first endpoint, width, sill, height.
+// A door hinges at the opening's first-endpoint side; the entrance wall runs south to north
+// so its hinge is on the south jamb and the handle is on the right seen from inside.
 export const walls=[
  {id:'window-living',a:[0,0],b:[2.82,0],opening:[.42,1.88,.9,1.5]},
  {id:'window-A',a:[2.82,0],b:[5.18,0],opening:[.55,1.64,.9,1.5]},
@@ -30,7 +32,7 @@ export const walls=[
  {a:[8.3,2.7],b:[8.85,2.7]},{id:'window-bathB',a:[8.85,2.7],b:[8.85,4.4],opening:[.85,.72,1.5,.7]},
  {a:[8.85,4.4],b:[8.3,4.4]},{id:'balcony-railing',a:[8.3,4.4],b:[8.3,6.46],opening:[.67,1.34,.1,2.69],openingType:'railing'},
  {a:[8.1,7.25],b:[1.85,7.25]}, {a:[1.85,7.25],b:[1.85,8.53]},
- {a:[1.85,8.53],b:[-.45,8.53]}, {a:[-.45,6.71],b:[-.45,8.53],opening:[.78,1.04,0,2.1]},
+ {a:[1.85,8.53],b:[-.45,8.53]}, {a:[-.45,8.53],b:[-.45,6.71],opening:[0,1.04,0,2.1]},
  {a:[-.45,6.71],b:[0,6.71]},
  {a:[2.82,0],b:[2.82,2.78]}, {a:[5.18,0],b:[5.18,2.78]},
  {a:[2.82,2.78],b:[5.18,2.78],opening:[.09,.9,0,2.1]},
@@ -47,7 +49,7 @@ export const walls=[
  {a:[3.08,4.75],b:[3.08,7.25],opening:[0,.74,0,2.1]},
  {a:[1.4,7.25],b:[3.08,7.25]}
 ];
-export const doors=walls.filter(w=>w.opening&&w.opening[2]===0).map((w,i)=>{let [s,width]=w.opening,dx=w.b[0]-w.a[0],dz=w.b[1]-w.a[1],len=Math.hypot(dx,dz);return{id:'door-'+i,swing:[1,1,1,1,1,1,-1][i],name:['臥室 A 房門','主臥通道門','臥室 B 房門','衛浴 B 房門','陽台門','衛浴 A 房門'][i-1]||'玄關大門',x:w.a[0]+dx/len*s,z:w.a[1]+dz/len*s,angle:-Math.atan2(dz,dx),width,height:2.1};});
+export const doors=walls.filter(w=>w.opening&&w.opening[2]===0).map((w,i)=>{let [s,width]=w.opening,dx=w.b[0]-w.a[0],dz=w.b[1]-w.a[1],len=Math.hypot(dx,dz);return{id:'door-'+i,swing:[-1,1,1,1,1,1,-1][i],name:['臥室 A 房門','主臥通道門','臥室 B 房門','衛浴 B 房門','陽台門','衛浴 A 房門'][i-1]||'玄關大門',x:w.a[0]+dx/len*s,z:w.a[1]+dz/len*s,angle:-Math.atan2(dz,dx),width,height:2.1};});
 const curtainNames=['客廳窗簾','臥室 A 窗簾','主臥窗簾'];
 export const curtains=walls.filter(w=>['window-living','window-A','window-master'].includes(w.id)).map((wall,i)=>{const openingStart=wall.a[0]+wall.opening[0],openingEnd=openingStart+wall.opening[1],columnEdge=columns[0].x+columns[0].w/2,start=wall.id==='window-living'?Math.max(openingStart-.06,columnEdge):openingStart-.06,end=openingEnd+.06;return{id:'curtain-'+i,name:curtainNames[i],x:(start+end)/2,z:.15,w:end-start};});
 const onWall=([x,z],wall)=>Math.abs((wall.b[0]-wall.a[0])*(z-wall.a[1])-(wall.b[1]-wall.a[1])*(x-wall.a[0]))<EPS&&x>=Math.min(wall.a[0],wall.b[0])-EPS&&x<=Math.max(wall.a[0],wall.b[0])+EPS&&z>=Math.min(wall.a[1],wall.b[1])-EPS&&z<=Math.max(wall.a[1],wall.b[1])+EPS;

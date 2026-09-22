@@ -2,7 +2,7 @@ import * as T from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {BOARD,finishByCode,finishPixels} from './finishes.js';
-import {SITE,towers,paintFacade,corridor,eastFacade,northFacade} from './surroundings.js';
+import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight} from './model.js';
 import {doorRects,visualDoorInset,visualLeafWidth,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
 const BEAM_FLUSH_SNAP=.005;
@@ -183,15 +183,30 @@ export class SpaceScene{
   const leaves=material('#4a6b37');for(let x=-30;x<45;x+=6.5)for(const z of[-3,-15.5])solid(3.6,3.2,3.6,x+(z<-10?3:0),ground+5,z,leaves);
   // Sky dome that follows the camera; its colours are set per day and night.
   const sky=new T.Mesh(new T.SphereGeometry(95,24,12),new T.MeshBasicMaterial({vertexColors:true,side:T.BackSide,depthWrite:false,fog:false}));sky.geometry.setAttribute('color',new T.BufferAttribute(new Float32Array(sky.geometry.attributes.position.count*3),3));sky.renderOrder=-1;this.sky=sky;g.add(sky);
-  // Lift lobby corridor: floor, ceiling, walls, neighbours' doors, lifts and stair door.
-  const c=corridor,cw=c.x1-c.x0,cd=c.z1-c.z0,cx=(c.x0+c.x1)/2,cz=(c.z0+c.z1)/2,wallM=material('#e2ddd4',{},this.lobby),floorM=material('#bdb6ab',{roughness:.5},this.lobby),grout=material('#a39b90',{},this.lobby);
-  solid(cw,.16,cd,cx,-.08,cz,floorM);for(let x=c.x1-.6;x>c.x0;x-=.6)solid(.01,.004,cd,x,.002,cz,grout);
-  solid(cw,.12,cd,cx,c.height+.06,cz,wallM);
-  for(const z of[c.z0-.06,c.z1+.06])solid(cw,c.height,.12,cx,c.height/2,z,wallM);
-  solid(.12,c.height,cd,c.x0-.06,c.height/2,cz,wallM);solid(.12,c.height,c.z1-8.59,c.x1+.06,c.height/2,(8.59+c.z1)/2,wallM);
-  const leaf={unit:material('#6d5a4a',{},this.lobby),lift:material('#a9afb2',{metalness:.6,roughness:.35},this.lobby),stair:material('#858b88',{},this.lobby)},frame=material('#3d4042',{},this.lobby);
-  for(const door of c.doors){const z=door.side==='north'?c.z0+.03:c.z1-.03,h=door.kind==='lift'?2.2:2.1;solid(door.w+.12,h+.06,.04,door.x,(h+.06)/2,z,frame);solid(door.w,h,.05,door.x,h/2,z+(door.side==='north'?.02:-.02),leaf[door.kind]);if(door.kind==='lift')solid(.012,h,.052,door.x,h/2,z+(door.side==='north'?.02:-.02),frame);}
-  const lamp=material('#fff7e8',{emissive:'#fff1d6',emissiveIntensity:1},this.lobby);lamp.userData.lamp=true;for(let x=c.x1-1.2;x>c.x0;x-=2.4)solid(.5,.02,.5,x,c.height-.01,cz,lamp);
+  // Lift lobby (see corridor in surroundings.js): marble floor, doors on every wall, and the
+  // smoke lobby whose fire doors stand open with the lifts inside on its east wall.
+  const c=corridor,sl=c.smokeLobby,lob=(color,extra={})=>material(color,extra,this.lobby),wallM=lob('#e4dfd6'),ceilM=lob('#efece6');ceilM.userData.ceiling=true;
+  const marble=paintMarble(),marbleTex=new T.DataTexture(marble.pixels,marble.width,marble.height,T.RGBAFormat);Object.assign(marbleTex,{colorSpace:T.SRGBColorSpace,wrapS:T.RepeatWrapping,wrapT:T.RepeatWrapping,magFilter:T.LinearFilter,minFilter:T.LinearMipmapLinearFilter,generateMipmaps:true,needsUpdate:true});
+  const floor=(x0,x1,z0,z1)=>{const map=marbleTex.clone();map.needsUpdate=true;map.repeat.set((x1-x0)/marble.tile,(z1-z0)/marble.tile);solid(x1-x0,.16,z1-z0,(x0+x1)/2,-.08,(z0+z1)/2,lob('#ffffff',{map,emissiveMap:map,roughness:.22}));solid(x1-x0,.12,z1-z0,(x0+x1)/2,c.height+.06,(z0+z1)/2,ceilM);};
+  const wall=(x0,x1,z0,z1)=>solid(Math.max(.12,x1-x0),c.height,Math.max(.12,z1-z0),(x0+x1)/2,c.height/2,(z0+z1)/2,wallM);
+  floor(c.x0,c.x1,c.z0,c.z1);floor(sl.x0,sl.x1,c.z1,c.z1+sl.depth);
+  const gap0=(sl.x0+sl.x1)/2-sl.opening/2,gap1=gap0+sl.opening;
+  wall(c.x0,c.x1,c.z0-.12,c.z0);wall(c.x0,gap0,c.z1,c.z1+.12);wall(gap1,c.x1,c.z1,c.z1+.12);
+  wall(c.x0-.12,c.x0,c.z0,c.z1);wall(c.x1,c.x1+.12,8.59,c.z1);
+  wall(sl.x0-.12,sl.x0,c.z1,c.z1+sl.depth);wall(sl.x1,sl.x1+.12,c.z1,c.z1+sl.depth);wall(sl.x0,sl.x1,c.z1+sl.depth,c.z1+sl.depth+.12);
+  const leafM={unit:lob('#5f4d40'),stair:lob('#8b918f',{metalness:.3,roughness:.5}),lift:lob('#b5bbbe',{metalness:.7,roughness:.3})},frameM=lob('#3b3e40'),metalM=lob('#c9cdce',{metalness:.8,roughness:.3});
+  // A door on a wall face; local +z points into the room it is seen from.
+  const doorAt=(x,z,turn,w,kind)=>{const d=new T.Group;d.position.set(x,0,z);d.rotation.y=turn;g.add(d);const h=kind==='lift'?2.2:2.1,part=(pw,ph,pd,px,py,pz,m)=>{const mesh=new T.Mesh(new T.BoxGeometry(pw,ph,pd),m);mesh.position.set(px,py,pz);d.add(mesh);};
+   part(w+.12,h+.06,.03,0,(h+.06)/2,.015,frameM);
+   if(kind==='lift'){for(const s of[-1,1])part(w/2-.006,h,.03,s*w/4,h/2,.04,leafM.lift);part(.14,.3,.02,w/2+.28,1.1,.01,metalM);}
+   else{part(w,h,.045,0,h/2,.05,leafM[kind]);if(kind==='stair')part(w*.8,.05,.05,0,1,.1,metalM);else part(.14,.03,.05,w/2-.12,1.05,.1,metalM);}};
+  const facing={north:0,south:Math.PI,west:Math.PI/2,east:-Math.PI/2};
+  for(const door of c.doors){const [x,z]=door.wall==='north'?[door.at,c.z0]:door.wall==='south'?[door.at,c.z1]:door.wall==='west'?[c.x0,door.at]:[c.x1,door.at];doorAt(x,z,facing[door.wall],door.w,door.kind);}
+  for(const at of sl.lifts)doorAt(sl.x1,c.z1+at,facing.east,1,'lift');
+  // The smoke lobby's fire doors are held open against its side walls.
+  for(const [hinge,sign]of[[gap0,1],[gap1,-1]]){const leaf=new T.Mesh(new T.BoxGeometry(.045,2.1,sl.opening/2-.01),leafM.stair);leaf.position.set(hinge+sign*.03,1.05,c.z1+.12+sl.opening/4);g.add(leaf);}
+  const lamp=lob('#fff7e8',{emissive:'#fff1d6',emissiveIntensity:1});lamp.userData.lamp=true;
+  for(let x=c.x1-1.4;x>c.x0;x-=2.4)solid(.5,.02,.5,x,c.height-.01,(c.z0+c.z1)/2,lamp);solid(.5,.02,.5,(sl.x0+sl.x1)/2,c.height-.01,c.z1+sl.depth/2,lamp);
   g.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=false;}});
   this.updateOutdoor?.();
  }
@@ -201,7 +216,9 @@ export class SpaceScene{
   const pos=this.sky.geometry.attributes.position,col=this.sky.geometry.attributes.color,a=new T.Color(zenith),b=new T.Color(horizon),mix=new T.Color();
   for(let i=0;i<pos.count;i++){const t=Math.max(0,pos.getY(i)/95);mix.copy(b).lerp(a,Math.pow(t,.6));col.setXYZ(i,mix.r,mix.g,mix.b);}col.needsUpdate=true;
   for(const m of this.outdoor){m.color.copy(night?m.userData.night:m.userData.day);if(m.userData.dayMap){m.map=night?m.userData.nightMap:m.userData.dayMap;m.needsUpdate=true;}}
-  for(const m of this.lobby){if(m.userData.lamp)continue;m.emissive.copy(m.color);m.emissiveIntensity=night?.32:.08;}
+  // The lobby has no lamps of its own in the scene; a steady self-lit tone stands in for its
+  // ceiling lights, a little stronger on the ceiling, which the hemisphere barely reaches.
+  for(const m of this.lobby){if(m.userData.lamp)continue;m.emissive.copy(m.color);m.emissiveIntensity=(m.userData.ceiling?.55:.25)*(night?1.15:1);}
  }
  finishMaterial(code){
   const finish=finishByCode(code);if(!finish)return null;

@@ -63,7 +63,34 @@ export function paintFacade(tower,width,height){
   return {width:c.w,height:c.h,albedo:c.albedo,glow:c.glow};
 }
 
-// The lift lobby outside the entrance: A7's door opens onto the east end of a corridor
-// that runs west past A6 (north side), A8 (south side) and the lifts (5/7/9/11F plan).
-export const corridor={x0:-14,x1:-.51,z0:6.95,z1:9.15,height:2.6,
-  doors:[{side:'north',x:-3.6,w:1.05,kind:'unit'},{side:'south',x:-2.4,w:1.05,kind:'unit'},{side:'south',x:-7.2,w:1.1,kind:'lift'},{side:'south',x:-9,w:1.1,kind:'lift'},{side:'north',x:-10.5,w:.9,kind:'stair'}]};
+// The lift lobby (梯廳) from the 5/7/9/11F plan, scaled by A7's width: an east-west corridor
+// with A7 (north half) and A8 (south half) at its east end and A3 / A2 at its west end.
+// Seen from A7's door: A6 then A5 on the right (north); on the left (south) the A2 stair,
+// the smoke lobby (排煙室, fire doors held open; its lifts face west inside, out of sight),
+// the A1 stair, then A1. x is along the corridor, z across it.
+export const corridor={x0:-19.1,x1:-.51,z0:7.26,z1:9.92,height:2.6,
+  doors:[
+    {wall:'north',at:-2.78,w:1,kind:'unit',label:'A6'},
+    {wall:'north',at:-16.9,w:1,kind:'unit',label:'A5'},
+    {wall:'south',at:-3.05,w:.95,kind:'stair',label:'A2 梯'},
+    {wall:'south',at:-8.97,w:.95,kind:'stair',label:'A1 梯'},
+    {wall:'south',at:-17,w:1,kind:'unit',label:'A1'},
+    {wall:'west',at:8.01,w:1,kind:'unit',label:'A3'},
+    {wall:'west',at:9.19,w:1,kind:'unit',label:'A2'},
+    {wall:'east',at:9.19,w:1,kind:'unit',label:'A8'}
+  ],
+  smokeLobby:{x0:-8.35,x1:-6,depth:5.2,opening:1.5,lifts:[1.4,4.1]}
+};
+
+// Polished light marble floor like the ground-floor lobby: 80 cm tiles, soft grey veins.
+export function paintMarble(size=512,tile=.8){
+  const px=new Uint8ClampedArray(size*size*4),seed=11,base=hex('#e8e5e0'),vein=hex('#a8a198');
+  const noise=(u,v,p)=>{const x0=Math.floor(u),y0=Math.floor(v),fx=u-x0,fy=v-y0,sx=fx*fx*(3-2*fx),sy=fy*fy*(3-2*fy),w=n=>((n%p)+p)%p,a=hash(w(x0),w(y0),seed),b=hash(w(x0+1),w(y0),seed),c=hash(w(x0),w(y0+1),seed),d=hash(w(x0+1),w(y0+1),seed);return a+(b-a)*sx+(c-a)*sy+(a-b-c+d)*sx*sy;};
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+    const u=x/size,v=y/size;let f=0,amp=.5;for(let o=0,p=4;o<4;o++,p*=2,amp/=2)f+=amp*noise(u*p+f*2,v*p,p);
+    const line=Math.pow(1-Math.abs(Math.sin((u*3+v*1.5+f*2.2)*Math.PI)),14),t=Math.min(1,line*.85+(f-.45)*.3);
+    const k=(y*size+x)*4,edge=x===0||y===0?.85:1;
+    for(let ch=0;ch<3;ch++)px[k+ch]=(base[ch]+(vein[ch]-base[ch])*Math.max(0,t))*edge;px[k+3]=255;
+  }
+  return {width:size,height:size,pixels:px,tile};
+}

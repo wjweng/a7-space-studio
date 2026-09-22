@@ -3,11 +3,11 @@ import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference} from './geomet
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
 // Collision leaves retain their surveyed swing clearance. Their rendered
 // faces use a separate close-fitting finish panel below.
-const tightClosingDoor=d=>['door-3','door-4','door-5'].includes(d.id);
+const tightClosingDoor=d=>['door-0','door-3','door-4','door-5'].includes(d.id);
 export const leafWidth=d=>d.width-(d.id==='door-0'?.18:.13);
 export const doorInset=d=>d.id==='door-0'?.10:.085;
-export const visualLeafWidth=d=>d.width-(d.id==='door-0'?.18:tightClosingDoor(d)?.025:.13);
-export const visualDoorInset=d=>d.id==='door-0'?.10:tightClosingDoor(d)?.015:.085;
+export const visualLeafWidth=d=>d.width-(tightClosingDoor(d)?.025:.13);
+export const visualDoorInset=d=>tightClosingDoor(d)?.015:.085;
 export function doorRects(d,amount=1,maxAngle=d.maxAngle??90){
  const inset=doorInset(d),offset=-d.swing*.055,ca=Math.cos(d.angle),sa=Math.sin(d.angle),hx=d.x+inset*ca+offset*sa,hz=d.z-inset*sa+offset*ca,angle=d.angle+d.swing*amount*maxAngle*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),w=leafWidth(d);
  const rect=(x,z,width,depth)=>({x:hx+x*c+z*s,z:hz-x*s+z*c,w:width,d:depth,rot:angle*180/Math.PI});

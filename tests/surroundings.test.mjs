@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {SITE,towers,paintFacade,northFacade,eastFacade,corridor} from '../dist/surroundings.js';
 import {walls,doors} from '../dist/model.js';
+import {doorRects,visualLeafWidth} from '../dist/spatial.js';
 import {SpaceScene} from '../dist/scene.js';
 
 test('neighbouring towers stand at the estimated distances and rise above the 14th floor',()=>{
@@ -25,12 +26,28 @@ test('facades paint deterministically, with some but not all windows lit at nigh
  }
 });
 
-test('the lobby corridor lines up with the front door and runs away from the flat',()=>{
+test('the lobby matches the floor plan as seen from A7\'s front door',()=>{
  const entry=doors.find(d=>d.name==='玄關大門'),wall=walls.find(w=>w.a[0]===-.45&&w.b[0]===-.45);
- assert(entry&&wall);
- const z0=wall.a[1]+wall.opening[0],z1=z0+wall.opening[1];
- assert(corridor.z0<z0&&corridor.z1>z1,'the doorway opens into the corridor');
+ const opening=[entry.z-entry.width,entry.z].sort((a,b)=>a-b);
+ assert(corridor.z0<opening[0]&&corridor.z1>opening[1],'the doorway opens into the corridor');
  assert(corridor.x1<=wall.a[0]-.06+1e-9,'the corridor starts outside the wall');
+ const at=(wallName,label)=>corridor.doors.find(d=>d.wall===wallName&&d.label===label);
+ // Right (north) side, nearest first: A6 then A5.
+ assert(at('north','A6').at>at('north','A5').at);
+ // Left (south) side, nearest first: A2 stair, smoke lobby, A1 stair, A1.
+ const smoke=(corridor.smokeLobby.x0+corridor.smokeLobby.x1)/2;
+ assert(at('south','A2 梯').at>smoke&&smoke>at('south','A1 梯').at&&at('south','A1 梯').at>at('south','A1').at);
+ // Straight ahead: A3 on the right (north), A2 on the left (south); A8 shares A7's end.
+ assert(at('west','A3').at<at('west','A2').at);
+ assert(at('east','A8').at>opening[1],'A8 is beside A7, south of its door');
+ assert(corridor.smokeLobby.lifts.length===2,'the lifts are inside the smoke lobby, not on the corridor');
+});
+test('the front door hinges on the south jamb and opens inward, handle on the right from inside',()=>{
+ const entry=doors.find(d=>d.name==='玄關大門'),open=doorRects(entry,1,entry.maxAngle)[0],closed=doorRects(entry,0);
+ assert(Math.abs(entry.z-8.53)<1e-9,'hinge at the south end of the opening');
+ assert(open.x>entry.x,'swings into the flat');
+ assert(closed[1].z<closed[0].z,'handle towards the north: the right-hand side facing the door from inside');
+ assert(visualLeafWidth(entry)>entry.width-.04,'the leaf fills the opening instead of leaving a see-through gap');
 });
 
 test('outside is unlit, shown only in walk view, and switches to its night look',()=>{
