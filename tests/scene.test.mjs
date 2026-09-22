@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {SpaceScene,floorBoardRects,ceilingOccluders,beamVisiblePieces,beamGeometry,resizeCursor,ceilingBounce} from '../dist/scene.js';
+import {SpaceScene,floorBoardRects,ceilingOccluders,beamVisiblePieces,beamGeometry,resizeCursor,ceilingBounce,linearLightCount} from '../dist/scene.js';
 import {initialFurniture,minimums,wallRects,overlaps,WALL_THICKNESS,HEIGHT} from '../dist/model.js';
 function fixture(){const s=Object.create(SpaceScene.prototype);s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow','lightWhite','lightNatural','lightWarm'].map(k=>[k,new THREE.MeshStandardMaterial()]));s.actions=new Map;s.lightObjects=[];s.resizeHandles=new THREE.Group;s.collisionWalls=wallRects();s.items=[];s.invalidHelpers=new Map;s.invalidMarkers=new Map;s.foregroundDraft=null;return s;}
 test('every furniture type generates finite geometry at initial and minimum dimensions',()=>{const s=fixture();for(const f of initialFurniture)for(const dims of[[f.w,f.d,f.h],minimums[f.type]]){const g=new THREE.Group;s.makeFurniture(g,{...f,w:dims[0],d:dims[1],h:dims[2]});assert(g.children.length>0);g.traverse(o=>{if(o.geometry){const a=o.geometry.attributes.position.array;for(const n of a)assert(Number.isFinite(n),f.name);o.geometry.computeBoundingBox();assert(!o.geometry.boundingBox.isEmpty(),f.name);}});}});
@@ -9,7 +9,7 @@ test('cabinet resized parts and animation pivots share updated dimensions',()=>{
 test('floor boards stay clear of wall thickness at the exposed master edge',()=>{const boards=floorBoardRects(),walls=wallRects();assert(boards.length>0);for(const board of boards)for(const wall of walls)assert.equal(overlaps(board,wall),false,`${board.x},${board.z} crosses ${wall.x},${wall.z}`);});
 test('both shower enclosures expose a hinged glass-door action',()=>{const s=fixture();for(const f of initialFurniture.filter(f=>f.type==='shower')){const g=new THREE.Group;s.makeFurniture(g,f);const action=s.actions.get(f.id);assert.equal(action.type,'shower');assert(action.pivot.children.length>=5);assert.equal(action.item,f);}});
 test('ceiling light intensity follows lumens, dimming, size and switch state',()=>{const s=Object.create(SpaceScene.prototype),f={lumens:1200,dimming:75,w:.24,d:.24,on:true},point={intensity:0};s.hemi={intensity:0};s.sun={intensity:0};s.scene={background:{set(){}}};s.lightObjects=[{f,point}];s.night=false;s.lightsOn=true;s.updateLight();assert.equal(point.intensity,.24);f.dimming=50;f.lumens=2400;f.w=.48;f.d=.48;s.night=true;s.updateLight();assert.equal(point.intensity,1.92);s.lightsOn=false;s.updateLight();assert.equal(point.intensity,0);});
-test('light models use the selected colour temperature and cutaway hides beams only in orbit view',()=>{const s=fixture(),g=new THREE.Group,f={...initialFurniture.find(item=>item.type==='light'),colorTemperature:'warm'};s.makeFurniture(g,f);const point=g.children.find(item=>item.isRectAreaLight);assert.equal(point.color.getHexString(),'ffc26f');const beam={id:'beam',type:'beam'},beamGroup=new THREE.Group,selection={visible:true};Object.assign(s,{mode:'orbit',items:[beam],groups:new Map([[beam.id,beamGroup]]),selected:beam.id,selection,wallMeshes:[],ceiling:{visible:false},curtains:[]});s.setCutaway(true);assert.equal(beamGroup.visible,false);assert.equal(selection.visible,false);s.setCutaway(false);assert.equal(beamGroup.visible,true);assert.equal(selection.visible,true);});
+test('light models use the selected colour temperature and cutaway hides beams only in orbit view',()=>{const s=fixture(),g=new THREE.Group,f={...initialFurniture.find(item=>item.type==='light'),colorTemperature:'warm'};s.makeFurniture(g,f);const point=g.children.find(item=>item.isSpotLight);assert.equal(point.color.getHexString(),'ffc26f');const beam={id:'beam',type:'beam'},beamGroup=new THREE.Group,selection={visible:true};Object.assign(s,{mode:'orbit',items:[beam],groups:new Map([[beam.id,beamGroup]]),selected:beam.id,selection,wallMeshes:[],ceiling:{visible:false},curtains:[]});s.setCutaway(true);assert.equal(beamGroup.visible,false);assert.equal(selection.visible,false);s.setCutaway(false);assert.equal(beamGroup.visible,true);assert.equal(selection.visible,true);});
 test('walking collides with furniture and extended drawers',()=>{const s=fixture(),f={...initialFurniture.find(f=>f.type==='drawer'),x:1,z:3,w:.5,d:.5,h:.5};s.items=[f];s.avoidFurniture=true;s.actions.set(f.id,{type:'cabdrawer',item:f,amount:1,travel:.4});assert(!s.canWalk(1,3));assert(!s.canWalk(1,3.5));assert(s.canWalk(.6,3.7));});
 test('draft furniture has a strong red editor marker and is hidden outside top view',()=>{const s=fixture(),f={...initialFurniture[0],draft:true},g=new THREE.Group;g.add(new THREE.Mesh(new THREE.BoxGeometry(f.w,f.h,f.d)));s.scene=new THREE.Scene;s.groups=new Map([[f.id,g]]);s.items=[f];s.selected=null;s.selection=null;s.mode='top';s.scene.add(g);s.refreshValidity();const marker=s.invalidMarkers.get(f.id);assert.equal(g.visible,true);assert.equal(s.invalidHelpers.get(f.id).visible,true);assert.equal(marker.visible,true);assert.equal(marker.children.length,5);assert(marker.children[0].material.opacity>=.3);s.setForegroundDraft(f.id);assert(g.position.y>0);assert(marker.position.y>g.position.y+f.h);s.mode='orbit';s.refreshValidity();assert.equal(g.visible,false);assert.equal(marker.visible,false);assert.equal(g.position.y,0);f.draft=false;s.refreshValidity();assert.equal(g.visible,true);assert.equal(s.invalidHelpers.has(f.id),false);assert.equal(s.invalidMarkers.has(f.id),false);});
 
@@ -74,17 +74,17 @@ test('moving a beam rebuilds its clipped geometry',()=>{
   s.moveItem(f);
   assert.deepEqual(calls,[f]);
 });
-test('a linear light is a flush ceiling bar lit by one downward area light of equal power',()=>{
+test('a linear light is a flush ceiling bar lit by up to three downlights sharing its output',()=>{
+ assert.deepEqual([.3,1.2,1.8,3.6].map(linearLightCount),[1,2,3,3]);
  const s=fixture(),g=new THREE.Group,f={...initialFurniture.find(item=>item.type==='light'),id:'linear',lightKind:'linear',w:1.8,d:.04,h:.03,lumens:1200,dimming:100};
  s.makeFurniture(g,f);
- assert.equal(g.children.filter(o=>o.isPointLight).length,0,'no bulb-like point sources');
- const panel=g.children.find(o=>o.isRectAreaLight);assert(panel);assert.equal(panel.width,1.8);assert.equal(panel.height,.04);
- const facing=new THREE.Vector3(0,0,-1).applyEuler(panel.rotation);assert(facing.y<-.999,'faces the floor');
+ const spots=g.children.filter(o=>o.isSpotLight);assert.equal(spots.length,3);assert.equal(g.children.filter(o=>o.isPointLight&&!o.isSpotLight).length,0);
+ for(const spot of spots)assert(spot.target.position.y<spot.position.y-1&&Math.abs(spot.target.position.x-spot.position.x)<1e-9,'aims straight down');
  const bar=g.children.find(o=>o.isMesh&&o.material===s.m.lightWhite);bar.geometry.computeBoundingBox();
  assert(Math.abs(bar.position.y+bar.geometry.boundingBox.max.y-HEIGHT)<1e-6,'bar sits flush with the ceiling');
  Object.assign(s,{hemi:{intensity:0},sun:{intensity:0},scene:{background:{set(){}}},night:true,lightsOn:true});s.updateLight();
- const one={intensity:0};s.lightObjects=[{f:{...f,lightKind:'ceiling',w:.24,d:.24},point:one}];s.updateLight();
- assert(Math.abs(Math.PI*panel.intensity*1.8*.04-4*Math.PI*one.intensity)<1e-9,'area light radiates what the point light would');
+ const total=spots.reduce((sum,p)=>sum+p.intensity,0),single={...f,lightKind:'ceiling',w:.24,d:.24},one={intensity:0,isSpotLight:true};s.lightObjects=[{f:single,point:one}];s.updateLight();
+ assert(Math.abs(total-one.intensity)<1e-9,'splitting keeps the total output of a standard lamp');
 });
 test('resize cursors point across the grabbed edge for any rotation',()=>{
  const f={rot:0};assert.equal(resizeCursor(f,'w'),'ew-resize');assert.equal(resizeCursor(f,'d'),'ns-resize');
@@ -95,14 +95,20 @@ test('a shadowless fill light separates wall orientations by day and dims at nig
  const s=Object.create(SpaceScene.prototype);Object.assign(s,{hemi:{intensity:0},sun:{intensity:0},fill:{intensity:0},scene:{background:{set(){}}},lightObjects:[],lightsOn:true,night:false});
  s.updateLight();assert(s.fill.intensity>.5);const day=s.fill.intensity;s.night=true;s.updateLight();assert(s.fill.intensity<day/5);
 });
-test('flush ceiling lights shine down from their diffuser while pendants keep a point source',()=>{
+test('flush ceiling lights aim a downlight at the floor while pendants keep a point source',()=>{
  const s=fixture(),base=initialFurniture.find(item=>item.type==='light');
  for(const shape of['round','square']){const g=new THREE.Group;s.makeFurniture(g,{...base,shape});
-  assert.equal(g.children.filter(o=>o.isPointLight).length,0,shape+' has no bulb point');
-  const panel=g.children.find(o=>o.isRectAreaLight);assert(new THREE.Vector3(0,0,-1).applyEuler(panel.rotation).y<-.999,shape+' faces the floor');
-  assert(panel.position.y<HEIGHT-base.h+1e-6,shape+' sits at the diffuser, below the ceiling');}
+  const spots=g.children.filter(o=>o.isSpotLight);assert.equal(spots.length,1,shape);
+  assert(spots[0].position.y<HEIGHT-base.h+1e-6,shape+' sits at the diffuser, below the ceiling');
+  assert(spots[0].target.position.y<1e-9,shape+' aims at the floor');assert(spots[0].angle<Math.PI/2,shape+' cannot reach the ceiling');}
  const pendant=new THREE.Group;s.makeFurniture(pendant,{...base,lightKind:'pendant'});
- assert.equal(pendant.children.filter(o=>o.isPointLight).length,1);
+ assert.equal(pendant.children.filter(o=>o.isPointLight&&!o.isSpotLight).length,1);
+});
+test('switched-off lights drop out of shading',()=>{
+ const s=Object.create(SpaceScene.prototype),lamp={type:'light',lightKind:'ceiling',lumens:1200,dimming:75,on:true,w:.24,d:.24},on={intensity:0,visible:true},off={intensity:0,visible:true};
+ Object.assign(s,{hemi:{intensity:0},sun:{intensity:0},scene:{background:{set(){}}},lightObjects:[{f:lamp,point:on},{f:{...lamp,on:false},point:off}],lightsOn:true,night:false});
+ s.updateLight();assert.equal(on.visible,true);assert.equal(off.visible,false);
+ s.lightsOn=false;s.updateLight();assert.equal(on.visible,false);
 });
 test('at night the ceiling gets bounce light that follows the lamps switched on',()=>{
  const lamp={type:'light',lightKind:'ceiling',lumens:1200,dimming:100,on:true,w:.24,d:.24};
