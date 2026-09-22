@@ -2,6 +2,7 @@ import * as T from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {BOARD,finishByCode,finishPixels} from './finishes.js';
+import {SITE,towers,paintFacade,corridor,eastFacade,northFacade} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight} from './model.js';
 import {doorRects,visualDoorInset,visualLeafWidth,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
 const BEAM_FLUSH_SNAP=.005;
@@ -123,7 +124,7 @@ export class SpaceScene{
  // for light bounced off floors and walls: it comes from below and follows the lamps' output.
  this.bounce=new T.HemisphereLight(0x000000,0xfff1e0,0);this.scene.add(this.bounce);this.sun=new T.DirectionalLight(0xffeed8,3.1);this.sun.position.set(-3,10,-5);this.sun.castShadow=false;this.sun.shadow.mapSize.set(2048,2048);Object.assign(this.sun.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:.5,far:40});this.sun.shadow.bias=-.0004;this.sun.shadow.normalBias=.025;this.scene.add(this.sun);
  this.building=new T.Group;this.furniture=new T.Group;this.scene.add(this.building,this.furniture,this.resizeHandles);this.ray=new T.Raycaster;this.pointer=new T.Vector2;this.plane=new T.Plane(new T.Vector3(0,1,0),0);this.walkYaw=Math.PI;this.walkPitch=0;this.clock=new T.Clock;
- this.makeMaterials();this.buildHouse();this.bind();this.resize();new ResizeObserver(()=>this.resize()).observe(host);this.renderer.setAnimationLoop(()=>this.frame());}
+ this.makeMaterials();this.buildHouse();this.buildSurroundings();this.bind();this.resize();new ResizeObserver(()=>this.resize()).observe(host);this.renderer.setAnimationLoop(()=>this.frame());}
  texture(kind){const c=document.createElement('canvas');c.width=c.height=512;const ctx=c.getContext('2d');let seed=45;const rand=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296};ctx.fillStyle=kind==='wood'?'#c9b59a':'#e3e0d9';ctx.fillRect(0,0,512,512);for(let i=0;i<(kind==='wood'?1500:22000);i++){const v=Math.floor(80+rand()*100);ctx.strokeStyle=`rgba(${v},${v*.87},${v*.7},${kind==='wood'?.12:.1})`;ctx.fillStyle=ctx.strokeStyle;if(kind==='wood'){let x=rand()*512,y=rand()*512;ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(x+rand()*7,y+40,x-8,y+100,x+2,y+150);ctx.stroke()}else ctx.fillRect(rand()*512,rand()*512,1,2)}const tx=new T.CanvasTexture(c);tx.colorSpace=T.SRGBColorSpace;tx.wrapS=tx.wrapT=T.RepeatWrapping;tx.anisotropy=this.renderer.capabilities.getMaxAnisotropy();return tx;}
  makeMaterials(){const p=palettes[this.palette];if(!this.woodTexture){this.woodTexture=this.texture('wood');this.fabricTexture=this.texture('fabric');}this.m={};const mat=(color,roughness=.8,extra={})=>new T.MeshStandardMaterial({color,roughness,...extra});this.m.wall=mat(p.wall);this.m.wood=mat(p.wood,.6,{map:this.woodTexture});this.m.floor=mat(p.floor,.55,{map:this.woodTexture});this.m.fabric=mat(p.fabric,.98,{map:this.fabricTexture});this.m.accent=mat(p.accent,.9,{map:this.fabricTexture});this.m.white=mat('#f4f1e9',.7);this.m.tile=mat('#cecfc7',.35);this.m.stone=mat('#e4e0d7',.35);this.m.dark=mat('#27383a',.6);this.m.metal=mat('#929b98',.3,{metalness:.8});this.m.glass=mat('#b9d5da',.1,{transparent:true,opacity:.24,metalness:.1,depthWrite:false});this.m.glow=mat('#fff3b0',.25,{emissive:'#ffd36a',emissiveIntensity:1.5});this.m.lightWhite=mat('#f7fbff',.2,{emissive:'#dcecff',emissiveIntensity:1.9});this.m.lightNatural=mat('#fff4dc',.22,{emissive:'#ffe6af',emissiveIntensity:1.8});this.m.lightWarm=mat('#ffd7a0',.25,{emissive:'#ffb55d',emissiveIntensity:1.75});this.m.leaf=mat('#496649',.9);}
  box(parent,w,h,d,x,y,z,mat,round=0){if(mat==='wood'&&this.woodOverride)mat=this.woodOverride;let geo=round?new RoundedBoxGeometry(w,h,d,3,Math.min(round,w/3,h/3,d/3)):new T.BoxGeometry(w,h,d);if(mat?.userData?.board)boardUV(geo,[(x*7.3+z*3.1+y*1.7)%1,(x*2.9+z*5.3)%1]);let mesh=new T.Mesh(geo,typeof mat==='string'?this.m[mat]:mat);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;parent.add(mesh);return mesh;}
@@ -155,6 +156,53 @@ export class SpaceScene{
  viewFocus(){if(this.mode==='walk')return this.camera?.position;if(this.mode==='top')return this.topCamera?.position;return this.controls?.target||this.camera?.position;}
  assignLampShadows(){const focus=this.viewFocus?.(),budget=this.shadowBudget(),lamps=(this.lightObjects||[]).map(({point})=>point).filter(point=>point.visible);const at=new T.Vector3,dist=point=>focus?Math.hypot(point.getWorldPosition(at).x-focus.x,at.z-focus.z):0;const chosen=new Set(lamps.map(point=>({point,d:dist(point)})).sort((a,b)=>a.d-b.d).slice(0,budget).map(({point})=>point));let changed=false;for(const {point}of this.lightObjects||[]){const cast=chosen.has(point);if(point.castShadow!==cast){point.castShadow=cast;changed=true;}}if(changed)this.shadowsDirty=true;this.shadowFocus=focus?{x:focus.x,z:focus.z}:null;}
  downlight(g,x,y,color){const spot=new T.SpotLight(color,0,6,1.25,.6,2);spot.position.set(x,y,0);spot.target.position.set(x,0,0);lampShadow(spot,512);g.add(spot,spot.target);return spot;}
+ // Neighbouring towers, street, sky and the lift lobby. Shown only in walk view, where they
+ // are seen through windows and the front door; they neither cast nor receive shadows.
+ buildSurroundings(){
+  if(this.surroundings){this.scene.remove(this.surroundings);this.surroundings.traverse(o=>{o.geometry?.dispose();for(const m of[].concat(o.material||[])){m.userData.dayMap?.dispose();m.userData.nightMap?.dispose();}});}
+  const g=new T.Group;g.visible=this.mode==='walk';this.surroundings=g;this.scene.add(g);this.outdoor=[];this.lobby=[];
+  // Outside is unlit (indoor lamps and bounce must not reach it) with a painted day and
+  // night look; the lobby is lit like the rooms.
+  const material=(color,extra={},list=this.outdoor)=>{if(list===this.outdoor){const m=new T.MeshBasicMaterial({color});m.userData.day=new T.Color(color);m.userData.night=new T.Color(color).multiplyScalar(.1);list.push(m);return m;}const m=new T.MeshStandardMaterial({color,roughness:.9,...extra});list.push(m);return m;};
+  const texture=(pixels,w,h)=>{const t=new T.DataTexture(pixels,w,h,T.RGBAFormat);Object.assign(t,{colorSpace:T.SRGBColorSpace,magFilter:T.LinearFilter,minFilter:T.LinearMipmapLinearFilter,generateMipmaps:true,needsUpdate:true});t.repeat.set(1,-1);t.offset.set(0,1);return t;};
+  const solid=(w,h,d,x,y,z,mat)=>{const m=new T.Mesh(new T.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);g.add(m);return m;};
+  const side=material('#4a4e51'),roof=material('#5a5e61');
+  for(const t of towers){
+   const w=t.x1-t.x0,d=t.z1-t.z0,h=t.top-SITE.ground,faceWidth=t.faces==='west'?d:w,paint=paintFacade(t,faceWidth,h);
+   const night=new Uint8ClampedArray(paint.albedo.length);for(let k=0;k<night.length;k+=4){const lit=paint.glow[k]+paint.glow[k+1]+paint.glow[k+2]>0;for(let ch=0;ch<3;ch++)night[k+ch]=lit?paint.glow[k+ch]*.72:paint.albedo[k+ch]*.1;night[k+3]=255;}
+   const front=material('#ffffff');front.userData.dayMap=texture(paint.albedo,paint.width,paint.height);front.userData.nightMap=texture(night,paint.width,paint.height);front.userData.night=new T.Color('#ffffff');front.map=front.userData.dayMap;
+   const faces=[side,side,roof,side,side,side];faces[t.faces==='west'?1:4]=front;
+   const box=new T.Mesh(new T.BoxGeometry(w,h,d),faces);box.position.set((t.x0+t.x1)/2,SITE.ground+h/2,(t.z0+t.z1)/2);g.add(box);
+   if(t.crown)solid(w*.7,t.crown,d*.8,(t.x0+t.x1)/2,t.top+t.crown/2,(t.z0+t.z1)/2,roof);
+   if(t.slabs){const slab=material('#d9ccb9'),edge=material('#c4b6a2'),under=material('#8f8373'),faces=[edge,edge,slab,under,edge,edge];for(let y=SITE.ground+SITE.floorHeight;y<=t.top;y+=SITE.floorHeight){const m=new T.Mesh(new T.BoxGeometry(t.slabs,.32,d),faces);m.position.set(t.x0-t.slabs/2,y-.16,(t.z0+t.z1)/2);g.add(m);}}
+  }
+  // Street level, forty metres down: planted setbacks either side of the lane, then trees.
+  const ground=SITE.ground,green=material('#566f45'),lane=material('#55585a'),walk=material('#8d8a82');
+  solid(200,.2,200,4,ground-.1,4,lane);
+  for(const [x0,x1,z0,z1,m]of[[-40,50,-5,SITE.northFace,green],[-40,50,northFacade,-13,green],[-40,50,-5.6,-5,walk],[-40,50,-13,-12.4,walk],[SITE.eastFace,eastFacade,-12,24,green]])solid(x1-x0,.05,z1-z0,(x0+x1)/2,ground+.03,(z0+z1)/2,m);
+  const leaves=material('#4a6b37');for(let x=-30;x<45;x+=6.5)for(const z of[-3,-15.5])solid(3.6,3.2,3.6,x+(z<-10?3:0),ground+5,z,leaves);
+  // Sky dome that follows the camera; its colours are set per day and night.
+  const sky=new T.Mesh(new T.SphereGeometry(95,24,12),new T.MeshBasicMaterial({vertexColors:true,side:T.BackSide,depthWrite:false,fog:false}));sky.geometry.setAttribute('color',new T.BufferAttribute(new Float32Array(sky.geometry.attributes.position.count*3),3));sky.renderOrder=-1;this.sky=sky;g.add(sky);
+  // Lift lobby corridor: floor, ceiling, walls, neighbours' doors, lifts and stair door.
+  const c=corridor,cw=c.x1-c.x0,cd=c.z1-c.z0,cx=(c.x0+c.x1)/2,cz=(c.z0+c.z1)/2,wallM=material('#e2ddd4',{},this.lobby),floorM=material('#bdb6ab',{roughness:.5},this.lobby),grout=material('#a39b90',{},this.lobby);
+  solid(cw,.16,cd,cx,-.08,cz,floorM);for(let x=c.x1-.6;x>c.x0;x-=.6)solid(.01,.004,cd,x,.002,cz,grout);
+  solid(cw,.12,cd,cx,c.height+.06,cz,wallM);
+  for(const z of[c.z0-.06,c.z1+.06])solid(cw,c.height,.12,cx,c.height/2,z,wallM);
+  solid(.12,c.height,cd,c.x0-.06,c.height/2,cz,wallM);solid(.12,c.height,c.z1-8.59,c.x1+.06,c.height/2,(8.59+c.z1)/2,wallM);
+  const leaf={unit:material('#6d5a4a',{},this.lobby),lift:material('#a9afb2',{metalness:.6,roughness:.35},this.lobby),stair:material('#858b88',{},this.lobby)},frame=material('#3d4042',{},this.lobby);
+  for(const door of c.doors){const z=door.side==='north'?c.z0+.03:c.z1-.03,h=door.kind==='lift'?2.2:2.1;solid(door.w+.12,h+.06,.04,door.x,(h+.06)/2,z,frame);solid(door.w,h,.05,door.x,h/2,z+(door.side==='north'?.02:-.02),leaf[door.kind]);if(door.kind==='lift')solid(.012,h,.052,door.x,h/2,z+(door.side==='north'?.02:-.02),frame);}
+  const lamp=material('#fff7e8',{emissive:'#fff1d6',emissiveIntensity:1},this.lobby);lamp.userData.lamp=true;for(let x=c.x1-1.2;x>c.x0;x-=2.4)solid(.5,.02,.5,x,c.height-.01,cz,lamp);
+  g.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=false;}});
+  this.updateOutdoor?.();
+ }
+ // Day or night on everything outside: sky colours, lit windows, the lobby's own lighting.
+ updateOutdoor(){
+  if(!this.sky)return;const night=this.night,[zenith,horizon]=night?['#070b12','#1f232b']:['#8db4d6','#e2e9ec'];
+  const pos=this.sky.geometry.attributes.position,col=this.sky.geometry.attributes.color,a=new T.Color(zenith),b=new T.Color(horizon),mix=new T.Color();
+  for(let i=0;i<pos.count;i++){const t=Math.max(0,pos.getY(i)/95);mix.copy(b).lerp(a,Math.pow(t,.6));col.setXYZ(i,mix.r,mix.g,mix.b);}col.needsUpdate=true;
+  for(const m of this.outdoor){m.color.copy(night?m.userData.night:m.userData.day);if(m.userData.dayMap){m.map=night?m.userData.nightMap:m.userData.dayMap;m.needsUpdate=true;}}
+  for(const m of this.lobby){if(m.userData.lamp)continue;m.emissive.copy(m.color);m.emissiveIntensity=night?.32:.08;}
+ }
  finishMaterial(code){
   const finish=finishByCode(code);if(!finish)return null;
   if(!this.finishMaterials)this.finishMaterials=new Map;
@@ -194,7 +242,7 @@ export class SpaceScene{
  setPalette(name){this.palette=name;this.makeMaterials();this.buildHouse();this.buildFurniture(this.items);}
  setCutaway(v){this.cutaway=v;const cut=v&&this.mode!=='walk';for(const {mesh,h,y}of this.wallMeshes){let nh=Math.max(0,Math.min(y+h,.85)-y);mesh.visible=!cut||nh>0;mesh.scale.y=cut?nh/h:1;mesh.position.y=y+(cut?nh:h)/2;}this.ceiling.visible=this.mode==='walk';for(const c of this.curtains)c.visible=this.mode!=='top';this.updateBeamVisibility();}
  updateBeamVisibility(){const hidden=this.mode==='orbit'&&this.cutaway;for(const f of this.items||[]){if(f.type!=='beam')continue;const g=this.groups?.get(f.id);if(g)g.visible=hidden?false:(this.mode==='top'||!f.draft);}const selected=this.items?.find(f=>f.id===this.selected);if(this.selection&&selected?.type==='beam')this.selection.visible=hidden?false:(this.mode==='top'||!selected.draft);}
- updateLight(){this.hemi.intensity=this.night?.28:1.75;if(this.fill)this.fill.intensity=this.night?.1:1.05;this.sun.intensity=this.night?.08:3.1;this.scene.background.set(this.night?'#77818a':'#dce4e2');for(const {f,point,share=1,span=Math.max(f.w,f.d)}of this.lightObjects||[]){const light=normalizeLight(f),spread=light.lightKind==='linear'?1:Math.max(.75,Math.min(1.6,Math.sqrt(Math.max(.01,f.w*f.d)/.0576))),base=(light.lumens/1200)*spread*share,color={white:'#eef6ff',natural:'#fff0cf',warm:'#ffc26f'}[light.colorTemperature];point.color?.set(color);point.distance=Math.max(2.8,5.5+span*2);const intensity=this.lightsOn&&light.on?(base*(light.dimming/100))*(this.night?1.2:.32):0;point.intensity=intensity*(point.isSpotLight?DOWNLIGHT_GAIN:1);point.visible=intensity>0;}this.assignLampShadows();if(this.bounce)this.bounce.intensity=this.night?ceilingBounce(this.lightsOn?[...new Set((this.lightObjects||[]).map(({f})=>f))].map(normalizeLight).filter(light=>light.on):[]):0;}
+ updateLight(){this.updateOutdoor?.();this.hemi.intensity=this.night?.28:1.75;if(this.fill)this.fill.intensity=this.night?.1:1.05;this.sun.intensity=this.night?.08:3.1;this.scene.background.set(this.night?'#77818a':'#dce4e2');for(const {f,point,share=1,span=Math.max(f.w,f.d)}of this.lightObjects||[]){const light=normalizeLight(f),spread=light.lightKind==='linear'?1:Math.max(.75,Math.min(1.6,Math.sqrt(Math.max(.01,f.w*f.d)/.0576))),base=(light.lumens/1200)*spread*share,color={white:'#eef6ff',natural:'#fff0cf',warm:'#ffc26f'}[light.colorTemperature];point.color?.set(color);point.distance=Math.max(2.8,5.5+span*2);const intensity=this.lightsOn&&light.on?(base*(light.dimming/100))*(this.night?1.2:.32):0;point.intensity=intensity*(point.isSpotLight?DOWNLIGHT_GAIN:1);point.visible=intensity>0;}this.assignLampShadows();if(this.bounce)this.bounce.intensity=this.night?ceilingBounce(this.lightsOn?[...new Set((this.lightObjects||[]).map(({f})=>f))].map(normalizeLight).filter(light=>light.on):[]):0;}
  resize(){let w=this.host.clientWidth,h=this.host.clientHeight;this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();let span=6;this.topCamera.left=-span*w/h;this.topCamera.right=span*w/h;this.topCamera.top=span;this.topCamera.bottom=-span;this.topCamera.updateProjectionMatrix();}
  get activeCamera(){return this.mode==='top'?this.topCamera:this.camera;}
  setMode(mode){
@@ -289,6 +337,7 @@ export class SpaceScene{
  }
  frame(){let dt=Math.min(this.clock.getDelta(),.04);if(this.mode==='orbit')this.controls.update();if(this.mode==='walk'){this.ensureSafeCamera();this.followTour(dt);const forward=(this.keys.has('KeyW')||this.keys.has('ArrowUp')?1:0)-(this.keys.has('KeyS')||this.keys.has('ArrowDown')?1:0),side=(this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0),norm=Math.max(1,Math.hypot(forward,side)),speed=dt*1.5/norm;this.walkYaw+=((this.keys.has('ArrowLeft')?1:0)-(this.keys.has('ArrowRight')?1:0))*dt*1.3;let dx=(-Math.sin(this.walkYaw)*forward+Math.cos(this.walkYaw)*side)*speed,dz=(-Math.cos(this.walkYaw)*forward-Math.sin(this.walkYaw)*side)*speed;let p=this.camera.position;if(this.canWalk(p.x+dx,p.z))p.x+=dx;if(this.canWalk(p.x,p.z+dz))p.z+=dz;p.y=this.eye;this.camera.rotation.order='YXZ';this.camera.rotation.set(this.walkPitch,this.walkYaw,0);}
  let moving=false;for(const [id,a]of this.actions){let target=a.item?a.item.open||0:this.openStates[id]||0;if(Math.abs(a.amount-target)>1e-4)moving=true;a.amount=T.MathUtils.damp(a.amount,target,7,dt);if(a.type==='door')a.pivot.rotation.y=a.def.swing*a.amount*(a.def.maxAngle??89)*Math.PI/180;if(a.type==='shower')a.pivot.rotation.y=a.base+a.swing*a.amount*Math.PI/2;if(a.type==='washer')a.pivot.rotation.y=-a.amount*Math.PI*.5;if(a.type==='cabinet'){a.pivots.forEach(p=>p.rotation.y=(p.userData.swing??-1)*a.amount*Math.PI*.5);a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);a.slides.forEach(p=>p.position.x=p.userData.baseX+p.userData.travelX*a.amount);}if(a.type==='cabdrawer')a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);if(a.type==='drawer')a.pivot.position.z=a.base+a.amount*a.travel;if(a.type==='curtain')for(const p of a.panels){let factor=1-.8*a.amount;p.g.scale.x=factor;p.g.position.x=p.sign<0?-a.width/2:a.width/2-a.width/2*factor;}}
+ if(this.surroundings){this.surroundings.visible=this.mode==='walk';if(this.sky)this.sky.position.copy(this.camera.position);}
  const focus=this.viewFocus?.();if(focus&&(!this.shadowFocus||Math.hypot(focus.x-this.shadowFocus.x,focus.z-this.shadowFocus.z)>.5))this.assignLampShadows();
  const shadowMap=this.renderer.shadowMap;if(shadowMap&&(this.shadowsDirty||moving)){shadowMap.needsUpdate=true;this.shadowsDirty=false;}
  this.selection?.update();this.renderer.render(this.scene,this.activeCamera);this.onFrame?.();}
