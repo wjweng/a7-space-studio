@@ -33,6 +33,7 @@ Recent commits use short imperative subjects, such as `Fix kitchen door pivots a
 - A mesh with a single material ignores `geometry.groups`: every face is drawn. The unclipped beam box still calls `addGroup` for five faces, but its top face renders, and top view depends on it. Match what a mesh actually draws, not what its groups suggest.
 - Do not fix coplanar seams with a depth offset. It only decides which surface wins, so the seam reappears on the other surface. Beams avoid seams geometrically instead (`beamVisiblePieces` / `beamGeometry` in `scene.js`); keep new solids that can hide beams in `ceilingOccluders`.
 - Reproduce rendering bugs with the user's exported layout first. Resizing leaves sub-millimetre remainders that idealised test scenes never contain.
+- Every edit path (drag, arrow-key nudge, handle resize, typed values) must share one exterior rule, `insideShell` in `model.js`: inside the outline *and* clear of the exterior walls' 12 cm thickness. When beam resizing checked only the outline, a beam could sit 6 cm inside a wall, and every later nudge was rejected because the start position already failed the rule.
 - Some files mix CRLF and LF line endings (`dist/scene.js`, `tests/scene.test.mjs`, `VALIDATION.md`). Edit them byte-for-byte and confirm `git diff --stat` matches the size of the change; a text-mode rewrite silently converts every line.
 
 ## Security & Configuration

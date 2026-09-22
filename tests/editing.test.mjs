@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {initialFurniture,structuralBlocks,wallRects,exteriorWallRects,validateFurniture,issues,migrateLayout,inside,corners} from '../dist/model.js';
-import {constrainMove,placeAtTarget,signedDistance,distanceLabel,blocksCamera,cabinetLeaves,cabinetLayout,cabinetRects,EPS,sameRoom} from '../dist/spatial.js';
+import {constrainMove,placeAtTarget,resizeAtHandle,signedDistance,distanceLabel,blocksCamera,cabinetLeaves,cabinetLayout,cabinetRects,EPS,sameRoom} from '../dist/spatial.js';
 test('last half-centimetre nudge reaches contact and repeated moves cannot penetrate',()=>{
  let f={id:'test',name:'test',type:'chair',x:.315,z:3,w:.5,d:.5,h:.8,rot:0};
  const result=constrainMove(f,{x:f.x-.01,z:f.z},[f]);assert(result.blocked);f=result.item;assert(Math.abs(f.x-.31)<1e-6);assert.match(distanceLabel(Math.min(...wallRects().map(w=>signedDistance(f,w)))),/接觸/);
@@ -57,4 +57,24 @@ test('wide cabinet layouts use modular fronts and default opening envelopes stay
   assert(wallRects().every(w=>signedDistance(rect,w)>=-EPS),f.name+' hits wall');
   for(const other of initialFurniture)if(other.id!==f.id&&!['rug','light','beam'].includes(other.type)&&sameRoom(f,other))assert(signedDistance(rect,other)>=-EPS,f.name+' hits '+other.name);
  }
+});
+test('beam resizing stops at the exterior wall face so later nudges still move it',()=>{
+ const beam={id:'beam',name:'樑',type:'beam',x:1.3,z:.3,w:2.4,d:.4,h:.3,rot:0};
+ for(const [axis,sign,target] of [['w',-1,{x:-1,z:.3}],['d',-1,{x:1.3,z:-1}]]){
+  const resized=resizeAtHandle(beam,axis,sign,target).item;
+  assert(exteriorWallRects().every(w=>signedDistance(resized,w)>=-EPS),axis+' resize enters the exterior wall');
+  assert(Math.min(...exteriorWallRects().map(w=>signedDistance(resized,w)))<1e-6,axis+' resize stops short of the wall face');
+  assert.deepEqual(issues(resized,[resized]),[]);
+  const nudged=placeAtTarget(resized,{x:resized.x+.01,z:resized.z+.01},[resized]);assert.equal(nudged.blocked,false);
+ }
+});
+test('a beam already overlapping the exterior wall is pushed back inside and flagged',()=>{
+ const beam={id:'beam',name:'樑',type:'beam',x:1.2,z:.3,w:2.4,d:.4,h:.3,rot:0};
+ assert.deepEqual(issues(beam,[beam]),['超出戶型邊界']);
+ const repaired=placeAtTarget(beam,{x:beam.x,z:beam.z-.01},[beam]);
+ assert(repaired.item);assert.deepEqual(issues(repaired.item,[repaired.item]),[]);
+});
+test('migration drops beams left untouched at the catalogue template position',()=>{
+ const ghost={id:'ghost',name:'天花板樑（新增）',type:'beam',x:0,z:0,w:1.2,d:.18,h:.3,rot:0},kept={...ghost,id:'kept',x:1};
+ assert.deepEqual(migrateLayout([ghost,kept],15).map(f=>f.id),['kept']);
 });

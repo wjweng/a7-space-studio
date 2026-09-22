@@ -1,4 +1,4 @@
-import {corners,overlaps,inside,insideOrOutline,walls,wallRects,exteriorWallRects,minimums} from './model.js';
+import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimums} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference} from './geometry.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
 // Collision leaves retain their surveyed swing clearance. Their rendered
@@ -99,7 +99,7 @@ export function placeAtTarget(f,target,items){
 }
 
 const resizeClear=f=>corners(f).every(([x,z])=>insideOrOutline(x,z));
-const beamResizeClear=resizeClear;
+const beamResizeClear=insideShell;
 const resizeDirection=(f,axis,sign)=>{const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);return axis==='w'?{x:sign*c,z:-sign*s}:{x:sign*s,z:sign*c};};
 const shiftedResize=(candidate,direction)=>{if(resizeClear(candidate))return candidate;for(let distance=.01;distance<=12;distance+=.01){const moved={...candidate,x:candidate.x-direction.x*distance,z:candidate.z-direction.z*distance};if(resizeClear(moved))return moved;}return null;};
 export function resizeAtHandle(f,axis,sign,target){

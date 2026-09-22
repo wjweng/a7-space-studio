@@ -34,11 +34,11 @@ test('opened washer contains a dark recessed drum behind the movable door',()=>{
 
 test('revision 14 migrates untouched chair defaults, keeps custom chair edits and adds white ceiling lights',()=>{
  const old=initialFurniture.filter(f=>f.type!=='light').map(f=>({...f}));
- const migrated=migrateLayout(old,LAYOUT_REVISION-1);
+ const migrated=migrateLayout(old,14);
  assert.deepEqual(migrated.filter(f=>f.type==='chair').map(f=>[f.id,f.x,f.z]),[['chair1',1.72,3.29],['chair2',2.2,3.29],['chair3',1.72,3.81],['chair4',2.2,3.81]]);
  assert.equal(migrated.filter(f=>f.type==='light').length,9);
  const custom=old.map(f=>f.id==='chair1'?({...f,x:1.9}):f);
- assert.equal(migrateLayout(custom,LAYOUT_REVISION-1).find(f=>f.id==='chair1').x,1.9);
+ assert.equal(migrateLayout(custom,14).find(f=>f.id==='chair1').x,1.9);
  const light=normalizeLight({lightKind:'spot',shape:'invalid',colorTemperature:'invalid',lumens:99999,dimming:-2,pendantLength:99,on:false});
  assert.deepEqual(light,{lightKind:'ceiling',shape:'round',colorTemperature:'white',lumens:10000,dimming:0,pendantLength:2.67,on:false});
  assert.equal(migrated.find(f=>f.id==='light-living').colorTemperature,'white');
