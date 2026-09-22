@@ -99,6 +99,9 @@ export const initialFurniture=[
 ];
 export const palettes={oak:{name:'日光・淺橡木',wood:'#c2a17b',wall:'#f1ece3',fabric:'#d8d0c1',accent:'#536665',floor:'#bb9470'},walnut:{name:'暖暮・胡桃木',wood:'#72503c',wall:'#e7dfd3',fabric:'#b5a087',accent:'#885849',floor:'#957252'},mist:{name:'霧白・現代',wood:'#b7b1a4',wall:'#e9eded',fabric:'#9ba8ac',accent:'#3d535f',floor:'#b1ada3'}};
 export const clone=v=>JSON.parse(JSON.stringify(v));
+// Floor finish per room: absent means the palette's timber floor, or tiles in wet rooms.
+export const wetRooms=['衛浴 A','衛浴 B','工作陽台'];
+export function normalizeFloors(input){const out={};if(input&&typeof input==='object'&&!Array.isArray(input))for(const [room,code]of Object.entries(input))if(rooms.some(r=>r.name===room)&&finishByCode(code))out[room]=code;return out;}
 export const minimums={sofa:[1.1,.5,.45],bed:[.65,1.2,.25],chair:[.3,.3,.55],wardrobe:[.2,.2,.3],drawer:[.2,.2,.2],console:[.5,.2,.2],table:[.3,.25,.2],desk:[.4,.35,.4],kitchen:[1.2,.4,.7],fridge:[.4,.4,.9],washer:[.4,.4,.6],sink:[.3,.3,.5],toilet:[.3,.4,.5],plant:[.2,.2,.3],shower:[.6,.6,1.8],rug:[.2,.2,.005],light:[.1,.1,.02],beam:[.05,.05,.05]};
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,Number.isFinite(value)?value:min));
 export const lightKinds=['ceiling','pendant','linear'];

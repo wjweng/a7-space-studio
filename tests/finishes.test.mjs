@@ -2,7 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {finishes,finishByCode,finishPixels,finishFamilies,BOARD} from '../dist/finishes.js';
-import {validateFurniture,initialFurniture,wallRects} from '../dist/model.js';
+import {validateFurniture,initialFurniture,wallRects,normalizeFloors} from '../dist/model.js';
+import {roomAt} from '../dist/geometry.js';
 import {SpaceScene,boardUV} from '../dist/scene.js';
 
 const hex=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
@@ -61,4 +62,29 @@ test('a finish replaces only the wooden parts and maps the board at true scale a
  for(let i=0;i<pos.count;i++)if(Math.abs(nor.getZ(i))>.9){assert(Math.abs(uv.getY(i)-pos.getY(i)/BOARD.h)<1e-6,'grain runs up a tall door');assert(Math.abs(uv.getX(i)-pos.getX(i)/BOARD.w)<1e-6);}
  const top=boardUV(new THREE.BoxGeometry(2,.03,.6)),tu=top.attributes.uv,tp=top.attributes.position,tn=top.attributes.normal;
  for(let i=0;i<tp.count;i++)if(tn.getY(i)>.9)assert(Math.abs(tu.getY(i)-tp.getX(i)/BOARD.h)<1e-6,'grain runs along a long table top');
+});
+
+test('floor choices keep only real rooms and real finishes',()=>{
+ assert.deepEqual(normalizeFloors({'客餐廳':'P64','衛浴 A':'B49','陽台':'P64','主臥室':'NOPE'}),{'客餐廳':'P64','衛浴 A':'B49'});
+ assert.deepEqual(normalizeFloors(undefined),{});assert.deepEqual(normalizeFloors(['P64']),{});
+});
+
+test('a finished room gets one continuous floor over its footprint, others keep boards or tiles',()=>{
+ const s=Object.create(SpaceScene.prototype);
+ s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow','lightWhite','lightNatural','lightWarm','floor','tile','wall','entryDoor'].map(k=>[k,new THREE.MeshStandardMaterial()]));
+ Object.assign(s,{palette:'oak',building:new THREE.Group,actions:new Map,lightObjects:[],openStates:{},cutaway:false,mode:'orbit',floors:{'客餐廳':'P64','衛浴 B':'B49'}});
+ s.setCutaway=()=>{};s.updateLight=()=>{};
+ s.buildHouse();
+ const meshes=[];s.building.traverse(o=>{if(o.isMesh)meshes.push(o);});
+ const living=meshes.filter(o=>o.material===s.finishMaterial('P64')),bath=meshes.filter(o=>o.material===s.finishMaterial('B49'));
+ assert.equal(living.length,1);assert.equal(bath.length,1);
+ const covers=(geo,x,z)=>{const p=geo.attributes.position;for(let i=0;i<p.count;i+=6){const xs=[p.getX(i),p.getX(i+2)],zs=[p.getZ(i),p.getZ(i+2)];if(x>=Math.min(...xs)&&x<=Math.max(...xs)&&z>=Math.min(...zs)&&z<=Math.max(...zs))return true;}return false;};
+ for(const [x,z]of[[.3,3.9],[1.5,4.2],[2.5,3.1],[.8,1.8]])assert(covers(living[0].geometry,x,z),'living floor covers '+x+','+z);
+ assert(!covers(living[0].geometry,4,1.3),'bedroom A is not part of it');
+ const floorBoards=meshes.filter(o=>o.material===s.m.floor&&o.position.y>0&&o.position.y<.01).map(o=>roomAt(o.position.x,o.position.z));
+ assert(floorBoards.length>10&&!floorBoards.includes('客餐廳'),'living boards are replaced');
+ const tiles=meshes.filter(o=>o.material===s.m.tile).map(o=>roomAt(o.position.x,o.position.z));
+ assert(tiles.includes('衛浴 A')&&!tiles.includes('衛浴 B'),'bath B tiles are replaced');
+ const uv=living[0].geometry.attributes.uv,pos=living[0].geometry.attributes.position;
+ assert(Math.abs(uv.getX(0)-pos.getX(0)/BOARD.w)<1e-6&&Math.abs(uv.getY(0)-pos.getZ(0)/BOARD.h)<1e-6,'true board scale');
 });

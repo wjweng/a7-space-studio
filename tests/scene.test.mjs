@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
+import {readFileSync} from 'node:fs';
 import {SpaceScene,floorBoardRects,ceilingOccluders,beamVisiblePieces,beamGeometry,resizeCursor,ceilingBounce,linearLightCount} from '../dist/scene.js';
 import {initialFurniture,minimums,wallRects,overlaps,WALL_THICKNESS,HEIGHT} from '../dist/model.js';
 function fixture(){const s=Object.create(SpaceScene.prototype);s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow','lightWhite','lightNatural','lightWarm'].map(k=>[k,new THREE.MeshStandardMaterial()]));s.actions=new Map;s.lightObjects=[];s.resizeHandles=new THREE.Group;s.collisionWalls=wallRects();s.items=[];s.invalidHelpers=new Map;s.invalidMarkers=new Map;s.foregroundDraft=null;return s;}
@@ -143,4 +144,12 @@ test('shadow-casting lamps stay within the texture budget, nearest to the view f
  assert(s.lightObjects.filter(({point})=>point.castShadow).every(({point})=>point.getWorldPosition(new THREE.Vector3()).x<=3.5+1e-9));
  assert.equal(s.shadowsDirty,true);
  s.renderer.capabilities.maxTextures=8;s.assignLampShadows();assert.equal(s.lightObjects.filter(({point})=>point.castShadow).length,0,'a small GPU gets no lamp shadows rather than missing furniture');
+});
+test('indoor light from above is not much brighter than light from below, so floors keep their colour',()=>{
+ const s=Object.create(SpaceScene.prototype),hemi=new THREE.HemisphereLight(0xc4c8d0,0xb8ae9f,1);
+ Object.assign(s,{hemi:{intensity:0},sun:{intensity:0},fill:{intensity:0},scene:{background:{set(){}}},lightObjects:[],lightsOn:true,night:false});
+ s.updateLight();assert(s.sun.intensity<=1,'no strong light through the roof');
+ const src=readFileSync(new URL('../dist/scene.js',import.meta.url),'utf8'),m=src.match(/new T\.HemisphereLight\((0x[0-9a-f]+),(0x[0-9a-f]+)/);
+ const lum=c=>{const col=new THREE.Color(Number(c));return .2126*col.r+.7152*col.g+.0722*col.b;};
+ assert(lum(m[1])/lum(m[2])<1.5,'sky term close to the bounce term (it was 4.5 when floors washed out)');
 });
