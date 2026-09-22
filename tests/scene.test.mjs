@@ -130,3 +130,17 @@ test('only switched-on lamps cast shadows, daylight casts none, and shadows are 
  s.frame();assert.equal(shadowMap.needsUpdate,false,'an unchanged frame reuses the shadow maps');
  s.shadowsDirty=true;s.frame();assert.equal(shadowMap.needsUpdate,true);assert.equal(s.shadowsDirty,false);
 });
+test('shadow-casting lamps stay within the texture budget, nearest to the view first',()=>{
+ const s=fixture(),lamps=[];
+ for(let i=0;i<20;i++){const g=new THREE.Group;g.position.set(i*.5,0,0);g.updateMatrixWorld();s.makeFurniture(g,{...initialFurniture.find(item=>item.type==='light'),id:'l'+i,on:true,dimming:75});g.updateMatrixWorld(true);lamps.push(g);}
+ Object.assign(s,{hemi:{intensity:0},sun:{intensity:0},scene:{background:{set(){}}},lightsOn:true,night:true,mode:'walk',camera:{position:new THREE.Vector3(9.5,1.6,0)},renderer:{capabilities:{maxTextures:16}}});
+ s.updateLight();
+ const casting=s.lightObjects.filter(({point})=>point.castShadow);
+ assert.equal(casting.length,8,'16 texture units leave room for 8 lamp shadows');
+ assert(casting.every(({point})=>point.getWorldPosition(new THREE.Vector3()).x>=6-1e-9),'the lamps nearest the camera cast');
+ s.camera.position.set(0,1.6,0);s.shadowsDirty=false;s.assignLampShadows();
+ assert.equal(s.lightObjects.filter(({point})=>point.castShadow).length,8,'the count never changes, so shaders are not rebuilt');
+ assert(s.lightObjects.filter(({point})=>point.castShadow).every(({point})=>point.getWorldPosition(new THREE.Vector3()).x<=3.5+1e-9));
+ assert.equal(s.shadowsDirty,true);
+ s.renderer.capabilities.maxTextures=8;s.assignLampShadows();assert.equal(s.lightObjects.filter(({point})=>point.castShadow).length,0,'a small GPU gets no lamp shadows rather than missing furniture');
+});
