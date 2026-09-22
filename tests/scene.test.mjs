@@ -86,3 +86,7 @@ test('a linear light is a flush ceiling bar whose lumens are shared by up to thr
  const total=points.reduce((sum,p)=>sum+p.intensity,0),single={...f,lightKind:'ceiling'},one={intensity:0};s.lightObjects=[{f:single,point:one}];s.updateLight();
  assert(Math.abs(total-one.intensity)<1e-9,'splitting keeps the total output');
 });
+test('a shadowless fill light separates wall orientations by day and dims at night',()=>{
+ const s=Object.create(SpaceScene.prototype);Object.assign(s,{hemi:{intensity:0},sun:{intensity:0},fill:{intensity:0},scene:{background:{set(){}}},lightObjects:[],lightsOn:true,night:false});
+ s.updateLight();assert(s.fill.intensity>.5);const day=s.fill.intensity;s.night=true;s.updateLight();assert(s.fill.intensity<day/5);
+});
