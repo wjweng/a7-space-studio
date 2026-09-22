@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {initialFurniture,structuralBlocks,wallRects,exteriorWallRects,validateFurniture,issues,migrateLayout,inside,corners} from '../dist/model.js';
-import {constrainMove,placeAtTarget,resizeAtHandle,signedDistance,distanceLabel,blocksCamera,cabinetLeaves,cabinetLayout,cabinetRects,EPS,sameRoom} from '../dist/spatial.js';
+import {minimumsFor,initialFurniture,structuralBlocks,wallRects,exteriorWallRects,validateFurniture,issues,migrateLayout,inside,corners} from '../dist/model.js';
+import {constrainMove,placeAtTarget,resizeAtHandle,fitResize,signedDistance,distanceLabel,blocksCamera,cabinetLeaves,cabinetLayout,cabinetRects,EPS,sameRoom} from '../dist/spatial.js';
 test('last half-centimetre nudge reaches contact and repeated moves cannot penetrate',()=>{
  let f={id:'test',name:'test',type:'chair',x:.315,z:3,w:.5,d:.5,h:.8,rot:0};
  const result=constrainMove(f,{x:f.x-.01,z:f.z},[f]);assert(result.blocked);f=result.item;assert(Math.abs(f.x-.31)<1e-6);assert.match(distanceLabel(Math.min(...wallRects().map(w=>signedDistance(f,w)))),/接觸/);
@@ -77,4 +77,25 @@ test('a beam already overlapping the exterior wall is pushed back inside and fla
 test('migration drops beams left untouched at the catalogue template position',()=>{
  const ghost={id:'ghost',name:'天花板樑（新增）',type:'beam',x:0,z:0,w:1.2,d:.18,h:.3,rot:0},kept={...ghost,id:'kept',x:1};
  assert.deepEqual(migrateLayout([ghost,kept],15).map(f=>f.id),['kept']);
+});
+test('typed size increases grow away from a wall or furniture the item already touches',()=>{
+ const free={id:'t',name:'t',type:'drawer',x:1,z:3,w:.4,d:.4,h:.5,rot:0};
+ assert.equal(fitResize(free,{...free,w:.6},[free]).x,1,'free items still grow from the centre');
+ const atWall={...free,x:.06+.2};
+ const grown=fitResize(atWall,{...atWall,w:.6},[atWall]);
+ assert(Math.abs(grown.x-grown.w/2-(atWall.x-atWall.w/2))<1e-9,'the wall-side edge stays put');
+ assert.deepEqual(issues(grown,[grown]),[]);
+ const neighbour={...free,id:'n',name:'n',x:1.4};
+ const beside=fitResize(free,{...free,w:.6},[free,neighbour]);
+ assert(Math.abs(beside.x+beside.w/2-1.2)<1e-9,'the edge touching the neighbour stays put');
+ const rotated={...atWall,rot:90,x:.06+.2,w:.4,d:.4};
+ const deeper=fitResize(rotated,{...rotated,d:.6},[rotated]);
+ assert.deepEqual(issues(deeper,[deeper]),[]);
+ const both=fitResize(atWall,{...atWall,w:.6,d:.6},[atWall]);assert.deepEqual(issues(both,[both]),[]);
+});
+test('only linear lights may be narrower than ten centimetres',()=>{
+ const base={id:'l',name:'燈',type:'light',x:2,z:2,w:1.2,d:.04,h:.03,rot:0};
+ assert.deepEqual(minimumsFor({...base,lightKind:'linear'}),[.1,.02,.02]);
+ assert.equal(validateFurniture([{...base,lightKind:'linear'}])[0].lightKind,'linear');
+ assert.throws(()=>validateFurniture([{...base,lightKind:'ceiling'}]));
 });

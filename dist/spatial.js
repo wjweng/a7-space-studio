@@ -1,4 +1,4 @@
-import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimums} from './model.js';
+import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference} from './geometry.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
 // Collision leaves retain their surveyed swing clearance. Their rendered
@@ -102,8 +102,21 @@ const resizeClear=f=>corners(f).every(([x,z])=>insideOrOutline(x,z));
 const beamResizeClear=insideShell;
 const resizeDirection=(f,axis,sign)=>{const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);return axis==='w'?{x:sign*c,z:-sign*s}:{x:sign*s,z:sign*c};};
 const shiftedResize=(candidate,direction)=>{if(resizeClear(candidate))return candidate;for(let distance=.01;distance<=12;distance+=.01){const moved={...candidate,x:candidate.x-direction.x*distance,z:candidate.z-direction.z*distance};if(resizeClear(moved))return moved;}return null;};
+// Typed width/depth changes grow from the centre. When that crosses the shell or
+// adds a conflict, keep one edge fixed and grow toward the other side instead.
+export function fitResize(f,next,items){
+ const others=items.filter(o=>o.id!==f.id),a=next.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+ const shifts=axis=>{const grow=next[axis]-f[axis];return grow>1e-9&&next.rot===f.rot?[0,grow/2,-grow/2]:[0];};
+ const score=p=>[insideShell(p)?0:1,issues(p,[p,...others]).length];
+ let best=null;
+ for(const u of shifts('w'))for(const v of shifts('d')){
+  const p={...next,x:next.x+u*c+v*s,z:next.z-u*s+v*c},[shell,conflicts]=score(p),moved=Math.abs(u)+Math.abs(v);
+  if(!best||shell<best.shell||shell===best.shell&&(conflicts<best.conflicts||conflicts===best.conflicts&&moved<best.moved))best={p,shell,conflicts,moved};
+ }
+ return best.p;
+}
 export function resizeAtHandle(f,axis,sign,target){
- const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=target.x-f.x,dz=target.z-f.z,local=axis==='w'?dx*c-dz*s:dx*s+dz*c,start=axis==='w'?f.w:f.d,min=minimums[f.type]?.[axis==='w'?0:1]??.1,fixed=-sign*start/2;
+ const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=target.x-f.x,dz=target.z-f.z,local=axis==='w'?dx*c-dz*s:dx*s+dz*c,start=axis==='w'?f.w:f.d,min=minimumsFor(f)?.[axis==='w'?0:1]??.1,fixed=-sign*start/2;
  let desired=Math.max(min,sign*(local-fixed));const centerFor=size=>{const shift=fixed+sign*size/2;return{x:f.x+shift*(axis==='w'?c:s),z:f.z+shift*(axis==='w'?-s:c)}};
  if(f.type==='beam'){const build=size=>({...f,...centerFor(size),[axis]:size});let fitted=build(desired);if(beamResizeClear(fitted))return{item:fitted,blocked:false,clamped:false};let lo=min,hi=desired,best=null;for(let i=0;i<28;i++){const mid=(lo+hi)/2,candidate=build(mid);if(beamResizeClear(candidate)){best=candidate;lo=mid;}else hi=mid;}return best?{item:best,blocked:false,clamped:true}:{item:f,blocked:true,clamped:true};}
  const direction=resizeDirection(f,axis,sign),build=size=>shiftedResize({...f,...centerFor(size),[axis]:size},direction);
