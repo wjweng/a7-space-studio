@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {SpaceScene,floorBoardRects,ceilingOccluders,beamVisiblePieces,beamGeometry,resizeCursor} from '../dist/scene.js';
+import {SpaceScene,floorBoardRects,ceilingOccluders,beamVisiblePieces,beamGeometry,resizeCursor,ceilingBounce} from '../dist/scene.js';
 import {initialFurniture,minimums,wallRects,overlaps,WALL_THICKNESS,HEIGHT} from '../dist/model.js';
 function fixture(){const s=Object.create(SpaceScene.prototype);s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow','lightWhite','lightNatural','lightWarm'].map(k=>[k,new THREE.MeshStandardMaterial()]));s.actions=new Map;s.lightObjects=[];s.resizeHandles=new THREE.Group;s.collisionWalls=wallRects();s.items=[];s.invalidHelpers=new Map;s.invalidMarkers=new Map;s.foregroundDraft=null;return s;}
 test('every furniture type generates finite geometry at initial and minimum dimensions',()=>{const s=fixture();for(const f of initialFurniture)for(const dims of[[f.w,f.d,f.h],minimums[f.type]]){const g=new THREE.Group;s.makeFurniture(g,{...f,w:dims[0],d:dims[1],h:dims[2]});assert(g.children.length>0);g.traverse(o=>{if(o.geometry){const a=o.geometry.attributes.position.array;for(const n of a)assert(Number.isFinite(n),f.name);o.geometry.computeBoundingBox();assert(!o.geometry.boundingBox.isEmpty(),f.name);}});}});
@@ -103,4 +103,12 @@ test('flush ceiling lights shine down from their diffuser while pendants keep a 
   assert(panel.position.y<HEIGHT-base.h+1e-6,shape+' sits at the diffuser, below the ceiling');}
  const pendant=new THREE.Group;s.makeFurniture(pendant,{...base,lightKind:'pendant'});
  assert.equal(pendant.children.filter(o=>o.isPointLight).length,1);
+});
+test('at night the ceiling gets bounce light that follows the lamps switched on',()=>{
+ const lamp={type:'light',lightKind:'ceiling',lumens:1200,dimming:100,on:true,w:.24,d:.24};
+ assert.equal(ceilingBounce([]),0);assert(Math.abs(ceilingBounce([lamp,lamp])-.24)<1e-9);assert.equal(ceilingBounce(Array(20).fill(lamp)),1);
+ const s=Object.create(SpaceScene.prototype);Object.assign(s,{hemi:{intensity:0},sun:{intensity:0},fill:{intensity:0},bounce:{intensity:0},scene:{background:{set(){}}},lightObjects:[{f:lamp,point:{intensity:0}},{f:{...lamp,on:false},point:{intensity:0}}],lightsOn:true,night:true});
+ s.updateLight();assert(Math.abs(s.bounce.intensity-.12)<1e-9,'only the switched-on lamp counts');
+ s.lightsOn=false;s.updateLight();assert.equal(s.bounce.intensity,0);
+ s.lightsOn=true;s.night=false;s.updateLight();assert.equal(s.bounce.intensity,0,'daylight already reaches the ceiling');
 });
