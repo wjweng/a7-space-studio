@@ -14,11 +14,15 @@ export const eastFacade=SITE.eastFace+SITE.eastGap;
 const top=floors=>SITE.ground+floors*SITE.floorHeight;
 
 // Towers are boxes whose facing side carries a painted facade. `style` picks the painter.
+// North, across the lane (Street View 2025-04, seen from the ground): a brown-slab tower,
+// then the dark louvred tower whose right third faces A7's three north windows (x 0-8.3),
+// then, across a small lane, the grey tower with deep fins and a column of rings.
+// East, on A7's side of the lane with a similar setback: the neighbour's pale end wall.
 export const towers=[
-  {id:'north-west',style:'slab-brown',x0:-26,x1:-5,z0:northFacade-16,z1:northFacade,top:top(19),faces:'south'},
-  {id:'north-centre',style:'louvre',x0:-5,x1:15,z0:northFacade-16,z1:northFacade,top:top(20),faces:'south',crown:4},
-  {id:'north-east',style:'rings',x0:15,x1:34,z0:northFacade-16,z1:northFacade+1.5,top:top(19),faces:'south'},
-  {id:'east',style:'slab-light',x0:eastFacade,x1:eastFacade+22,z0:-12,z1:24,top:top(18),faces:'west',slabs:1.1}
+  {id:'north-west',style:'slab-brown',x0:-40,x1:-18,z0:northFacade-16,z1:northFacade-1,top:top(19),faces:'south',slabs:{depth:.8}},
+  {id:'north-centre',style:'louvre',x0:-16.5,x1:9,z0:northFacade-18,z1:northFacade,top:top(20),faces:'south',crown:{w:10,h:4.5}},
+  {id:'north-east',style:'rings',x0:15,x1:34,z0:northFacade-16,z1:northFacade+1.5,top:top(19),faces:'south',slabs:{depth:.9,from:3}},
+  {id:'east',style:'endwall',x0:eastFacade,x1:eastFacade+24,z0:-.5,z1:24,top:top(18),faces:'west',slabs:{depth:.7,from:0,to:4}}
 ];
 
 const PX=.05;                                          // metres per texture pixel
@@ -38,28 +42,47 @@ function canvas(width,height){
 function nightWindow(c,x0,y0,x1,y1,a,b,seed){const r=hash(a,b,seed);if(r<.34)c.light(x0,y0,x1,y1,r<.26?'#ffc27a':'#dfe7ff');}
 
 const painters={
-  // Brown tower: deep horizontal slab every floor, glazing between.
-  'slab-brown'(width,height,seed){const c=canvas(width,height),fh=SITE.floorHeight;c.fill(0,0,width,height,'#5e4d42');
-    for(let f=0,y=0;y<height;f++,y+=fh){for(let x=.6,b=0;x<width-.6;x+=3.4,b++){c.fill(x,y+.55,x+2.9,y+fh-.45,'#3c4247');c.fill(x+1.43,y+.55,x+1.5,y+fh-.45,'#2a2622');nightWindow(c,x+.1,y+.65,x+2.8,y+fh-.55,f,b,seed);}c.fill(0,y+fh-.45,width,y+fh,'#7a6656');c.fill(0,y+fh-.45,width,y+fh-.38,'#8d7867');}
+  // Brown tower: grey-green stone frame, brown balcony slabs (real geometry) and a strip
+  // of vertical timber slats near its east edge.
+  'slab-brown'(width,height,seed){const c=canvas(width,height),fh=SITE.floorHeight;c.fill(0,0,width,height,'#66706c');
+    for(let f=0,y=0;y<height;f++,y+=fh){for(let x=1.2,b=0;x<width-5;x+=3.4,b++){c.fill(x,y+.5,x+2.9,y+fh-.4,'#343b40');c.fill(x+1.43,y+.5,x+1.5,y+fh-.4,'#2a2622');nightWindow(c,x+.1,y+.6,x+2.8,y+fh-.5,f,b,seed);}c.fill(0,y+fh-.4,width,y+fh,'#6a5446');}
+    c.fill(width-4.2,0,width-2.4,height,'#5a4235');for(let x=width-4.1;x<width-2.5;x+=.16)c.fill(x,0,x+.07,height,'#8a6a52');
     return c;},
-  // Dark tower: stone piers, bronze vertical louvres over the glazing, dark balcony bands.
-  louvre(width,height,seed){const c=canvas(width,height),fh=SITE.floorHeight;c.fill(0,0,width,height,'#4a4f4d');
-    for(let x=0,b=0;x<width;x+=5,b++){c.fill(x,0,x+1.1,height,'#66706c');for(let f=0,y=0;y<height;f++,y+=fh){c.fill(x+1.1,y+.4,x+5,y+fh-.35,'#2f3436');nightWindow(c,x+1.3,y+.5,x+4.8,y+fh-.45,f,b,seed);for(let l=x+1.25;l<x+5;l+=.24)c.fill(l,y+.4,l+.08,y+fh-.35,'#3b3230');c.fill(x+1.1,y+fh-.35,x+5,y+fh,'#262221');}}
+  // The tower opposite: grey stone frame and piers, a dark bronze louvre strip up its
+  // middle, glazed balcony bays with railing bands, and a planted column at its east end.
+  louvre(width,height,seed){const c=canvas(width,height),fh=SITE.floorHeight,mid=width/2;c.fill(0,0,width,height,'#5f6866');
+    for(let f=0,y=0;y<height;f++,y+=fh){
+      for(const [a,b]of[[1.2,mid-2.6],[mid+2.6,width-3]])for(let x=a,k=0;x<b-.5;x+=3.3,k++){const e=Math.min(b,x+2.9);c.fill(x,y+.35,e,y+fh-.45,'#2c3336');nightWindow(c,x+.1,y+.45,e-.1,y+fh-.55,f,k+(a>mid?20:0),seed);c.fill(x,y+fh-1.35,e,y+fh-1.25,'#79817f');}
+      c.fill(0,y+fh-.45,width,y+fh,'#454d4b');
+      c.fill(width-2.8,y+.35,width-1.2,y+fh-.45,'#2c3336');for(let x=width-2.7;x<width-1.3;x+=.35)c.fill(x,y+fh-1.1,x+.25,y+fh-.5,'#4d6b3c');}
+    c.fill(mid-2.6,0,mid-1.5,height,'#707a78');c.fill(mid+1.5,0,mid+2.6,height,'#707a78');
+    c.fill(mid-1.5,0,mid+1.5,height,'#2a2522');for(let x=mid-1.45;x<mid+1.5;x+=.2)c.fill(x,0,x+.08,height,'#4a3c34');
     return c;},
-  // Grey tower with a column of ring ornaments beside the balconies.
-  rings(width,height,seed){const c=canvas(width,height),fh=SITE.floorHeight;c.fill(0,0,width,height,'#5b5f61');
-    for(let f=0,y=0;y<height;f++,y+=fh){for(let x=3,b=0;x<width-.5;x+=3.2,b++){c.fill(x,y+.5,x+2.7,y+fh-.5,'#384046');nightWindow(c,x+.1,y+.6,x+2.6,y+fh-.6,f,b,seed);}c.fill(0,y+fh-.5,width,y+fh,'#43464a');}
-    c.fill(.4,0,2.4,height,'#3a3c3f');for(let y=1.6;y<height;y+=fh)c.ring(1.4,y,.8,.14,'#c9ccc9');
+  // Grey tower across the small lane: dark glass bays behind deep fins (real geometry) and
+  // a dark strip carrying a column of white rings on its west side.
+  rings(width,height,seed){const c=canvas(width,height),fh=SITE.floorHeight;c.fill(0,0,width,height,'#4f5456');
+    for(let f=0,y=0;y<height;f++,y+=fh){for(let x=3.4,b=0;x<width-.5;x+=3.2,b++){c.fill(x,y+.5,x+2.7,y+fh-.5,'#33393e');nightWindow(c,x+.1,y+.6,x+2.6,y+fh-.6,f,b,seed);}c.fill(3,y+fh-.5,width,y+fh,'#43474a');}
+    c.fill(.3,0,2.7,height,'#2f3235');for(let y=1.6;y<height;y+=fh)c.ring(1.5,y,.85,.16,'#d4d6d3');
     return c;},
-  // Champagne tower: pale walls, dark glass bays; its deep slabs are real geometry.
-  'slab-light'(width,height,seed){const c=canvas(width,height),fh=SITE.floorHeight;c.fill(0,0,width,height,'#cbbca8');
-    for(let f=0,y=0;y<height;f++,y+=fh)for(let x=1,b=0;x<width-1;x+=4.2,b++){c.fill(x,y+.5,x+3.4,y+fh-.3,'#3f474e');for(const m of[x+1.13,x+2.26])c.fill(m,y+.5,m+.06,y+fh-.3,'#9c9488');nightWindow(c,x+.1,y+.6,x+3.3,y+fh-.4,f,b,seed);}
+  // The east neighbour's end wall: pale tiled panels with vertical reveals, columns of slit
+  // windows and small fixings, and a recessed balcony bay at its north end.
+  endwall(width,height,seed){const c=canvas(width,height),fh=SITE.floorHeight;c.fill(0,0,width,height,'#d3d5d2');
+    for(let x=4.8;x<width;x+=1.2)c.fill(x,0,x+.05,height,'#b3b6b3');
+    c.fill(4,0,4.8,height,'#e6e7e4');c.fill(9.6,0,10.1,height,'#9ea19f');
+    for(let f=0,y=0;y<height;f++,y+=fh){
+      c.fill(0,y,4,y+fh,'#7f8381');c.fill(.3,y+.3,3.7,y+fh-.5,'#3a4247');nightWindow(c,.4,y+.4,3.6,y+fh-.6,f,0,seed);
+      for(const [x,b]of[[6.6,1],[11.4,2],[15.6,3],[19.8,4]]){c.fill(x,y+.9,x+.32,y+2.3,'#3c4448');nightWindow(c,x,y+.9,x+.32,y+2.3,f,b,seed);}
+      for(const x of[5.6,8.4,13,17.4])c.fill(x,y+1.6,x+.12,y+1.72,'#8c908e');}
+    return c;},
+  // Crown on the tower opposite: a dark band pierced by a row of tall elliptical openings.
+  crown(width,height){const c=canvas(width,height);c.fill(0,0,width,height,'#2f3437');const n=7,step=width/n;
+    for(let k=0;k<n;k++){const cx=step*(k+.5);for(let y=0;y<c.h;y++)for(let x=0;x<c.w;x++){const u=((x+.5)/c.w*width-cx)/(step*.42),v=((y+.5)/c.h*height-height*.55)/(height*.4),r=Math.hypot(u,v);if(r<=1&&r>=.78){const q=(y*c.w+x)*4;c.albedo[q]=192;c.albedo[q+1]=196;c.albedo[q+2]=194;}else if(r<.78){const q=(y*c.w+x)*4;c.albedo[q]=150;c.albedo[q+1]=180;c.albedo[q+2]=206;}}}
     return c;}
 };
 // Albedo and night-glow pixels for a tower's facade (width x height metres).
-export function paintFacade(tower,width,height){
+export function paintFacade(tower,width,height,style=tower.style){
   const seed=[...tower.id].reduce((s,ch)=>Math.imul(s,31)+ch.charCodeAt(0)|0,5);
-  const c=painters[tower.style](width,height,seed);
+  const c=painters[style](width,height,seed);
   return {width:c.w,height:c.h,albedo:c.albedo,glow:c.glow};
 }
 

@@ -65,3 +65,14 @@ test('outside is unlit, shown only in walk view, and switches to its night look'
  Object.defineProperty(orbit,'activeCamera',{get:()=>null});orbit.frame();
  assert.equal(s.surroundings.visible,false,'orbit and top views are not hidden behind the neighbours');
 });
+test('the towers sit where the owner described them',()=>{
+ const centre=towers.find(t=>t.id==='north-centre'),east=towers.find(t=>t.id==='east'),rings=towers.find(t=>t.id==='north-east');
+ const third=(centre.x1-centre.x0)/3;
+ for(const [a,b]of[[.42,2.3],[3.37,5.01],[6.45,8.08]])assert(a>=centre.x1-third-1&&b<=centre.x1+1,'A7\'s north windows face the right third of the tower opposite');
+ assert(rings.x0-centre.x1>=4,'a small lane separates the ringed tower');
+ assert(east.z0>=SITE.northFace-1,'the east neighbour is set back like A7, not standing out into the lane');
+});
+test('A7\'s front door has the same finish as the other units\' doors',async()=>{
+ const src=(await import('node:fs')).readFileSync(new URL('../dist/scene.js',import.meta.url),'utf8');
+ assert.match(src,/door\.id==='door-0'\?'entryDoor'/);assert.match(src,/unit:lob\(ENTRY_DOOR\)/);
+});
