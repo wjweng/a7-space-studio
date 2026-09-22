@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {SpaceScene,floorBoardRects,ceilingOccluders,beamVisiblePieces,beamGeometry,linearLightCount} from '../dist/scene.js';
+import {SpaceScene,floorBoardRects,ceilingOccluders,beamVisiblePieces,beamGeometry,resizeCursor} from '../dist/scene.js';
 import {initialFurniture,minimums,wallRects,overlaps,WALL_THICKNESS,HEIGHT} from '../dist/model.js';
 function fixture(){const s=Object.create(SpaceScene.prototype);s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow','lightWhite','lightNatural','lightWarm'].map(k=>[k,new THREE.MeshStandardMaterial()]));s.actions=new Map;s.lightObjects=[];s.resizeHandles=new THREE.Group;s.collisionWalls=wallRects();s.items=[];s.invalidHelpers=new Map;s.invalidMarkers=new Map;s.foregroundDraft=null;return s;}
 test('every furniture type generates finite geometry at initial and minimum dimensions',()=>{const s=fixture();for(const f of initialFurniture)for(const dims of[[f.w,f.d,f.h],minimums[f.type]]){const g=new THREE.Group;s.makeFurniture(g,{...f,w:dims[0],d:dims[1],h:dims[2]});assert(g.children.length>0);g.traverse(o=>{if(o.geometry){const a=o.geometry.attributes.position.array;for(const n of a)assert(Number.isFinite(n),f.name);o.geometry.computeBoundingBox();assert(!o.geometry.boundingBox.isEmpty(),f.name);}});}});
@@ -74,17 +74,22 @@ test('moving a beam rebuilds its clipped geometry',()=>{
   s.moveItem(f);
   assert.deepEqual(calls,[f]);
 });
-test('a linear light is a flush ceiling bar whose lumens are shared by up to three point sources',()=>{
- assert.deepEqual([.3,1.2,1.8,3.6].map(linearLightCount),[1,2,3,3]);
+test('a linear light is a flush ceiling bar lit by one downward area light of equal power',()=>{
  const s=fixture(),g=new THREE.Group,f={...initialFurniture.find(item=>item.type==='light'),id:'linear',lightKind:'linear',w:1.8,d:.04,h:.03,lumens:1200,dimming:100};
  s.makeFurniture(g,f);
- const points=g.children.filter(o=>o.isPointLight);assert.equal(points.length,3);
- assert(Math.abs(s.lightObjects.reduce((sum,l)=>sum+l.share,0)-1)<1e-9);
+ assert.equal(g.children.filter(o=>o.isPointLight).length,0,'no bulb-like point sources');
+ const panel=g.children.find(o=>o.isRectAreaLight);assert(panel);assert.equal(panel.width,1.8);assert.equal(panel.height,.04);
+ const facing=new THREE.Vector3(0,0,-1).applyEuler(panel.rotation);assert(facing.y<-.999,'faces the floor');
  const bar=g.children.find(o=>o.isMesh&&o.material===s.m.lightWhite);bar.geometry.computeBoundingBox();
  assert(Math.abs(bar.position.y+bar.geometry.boundingBox.max.y-HEIGHT)<1e-6,'bar sits flush with the ceiling');
  Object.assign(s,{hemi:{intensity:0},sun:{intensity:0},scene:{background:{set(){}}},night:true,lightsOn:true});s.updateLight();
- const total=points.reduce((sum,p)=>sum+p.intensity,0),single={...f,lightKind:'ceiling'},one={intensity:0};s.lightObjects=[{f:single,point:one}];s.updateLight();
- assert(Math.abs(total-one.intensity)<1e-9,'splitting keeps the total output');
+ const one={intensity:0};s.lightObjects=[{f:{...f,lightKind:'ceiling',w:.24,d:.24},point:one}];s.updateLight();
+ assert(Math.abs(Math.PI*panel.intensity*1.8*.04-4*Math.PI*one.intensity)<1e-9,'area light radiates what the point light would');
+});
+test('resize cursors point across the grabbed edge for any rotation',()=>{
+ const f={rot:0};assert.equal(resizeCursor(f,'w'),'ew-resize');assert.equal(resizeCursor(f,'d'),'ns-resize');
+ f.rot=90;assert.equal(resizeCursor(f,'w'),'ns-resize');assert.equal(resizeCursor(f,'d'),'ew-resize');
+ f.rot=45;assert.equal(resizeCursor(f,'w'),'nesw-resize');assert.equal(resizeCursor(f,'d'),'nwse-resize');
 });
 test('a shadowless fill light separates wall orientations by day and dims at night',()=>{
  const s=Object.create(SpaceScene.prototype);Object.assign(s,{hemi:{intensity:0},sun:{intensity:0},fill:{intensity:0},scene:{background:{set(){}}},lightObjects:[],lightsOn:true,night:false});
