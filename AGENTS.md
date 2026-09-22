@@ -39,3 +39,5 @@ Recent commits use short imperative subjects, such as `Fix kitchen door pivots a
 ## Security & Configuration
 
 Do not commit secrets or user-exported layout JSON. Browser state is stored per origin in `localStorage`. Treat residential drawings as sensitive, and configure access controls at the hosting layer before broader sharing. Preserve `.openai/hosting.json` and the static `dist` publishing configuration.
+
+Board finishes (`dist/finishes.js`) are modelled on a supplier catalogue whose images are all rights reserved. Never commit or hotlink supplier images: store only measured colours and pattern types, and generate textures in code. The side-by-side comparison sheets live in the Dropbox project folder (`材質比對/`), not here.
