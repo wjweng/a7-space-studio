@@ -118,3 +118,15 @@ test('at night the ceiling gets bounce light that follows the lamps switched on'
  s.lightsOn=false;s.updateLight();assert.equal(s.bounce.intensity,0);
  s.lightsOn=true;s.night=false;s.updateLight();assert.equal(s.bounce.intensity,0,'daylight already reaches the ceiling');
 });
+test('only switched-on lamps cast shadows, daylight casts none, and shadows are redrawn only after a change',()=>{
+ const s=fixture(),g=new THREE.Group,lamp={...initialFurniture.find(item=>item.type==='light'),dimming:75,on:true};
+ s.makeFurniture(g,lamp);const spot=g.children.find(o=>o.isSpotLight);assert.equal(spot.castShadow,true);
+ Object.assign(s,{hemi:{intensity:0},sun:{intensity:0},scene:{background:{set(){}}},lightsOn:true,night:false,shadowsDirty:false});
+ lamp.on=false;s.updateLight();assert.equal(spot.castShadow,false,'a switched-off lamp casts nothing');assert.equal(s.shadowsDirty,true,'relighting marks shadows stale');
+ lamp.on=true;s.updateLight();assert.equal(spot.castShadow,true);
+ const pendant=new THREE.Group;s.makeFurniture(pendant,{...lamp,lightKind:'pendant'});assert.equal(pendant.children.find(o=>o.isPointLight).castShadow,true);
+ const shadowMap={needsUpdate:false};Object.assign(s,{renderer:{shadowMap,render(){}},mode:'top',clock:{getDelta:()=>.016},actions:new Map,activeCameraOverride:null,shadowsDirty:false});
+ Object.defineProperty(s,'activeCamera',{get:()=>null});
+ s.frame();assert.equal(shadowMap.needsUpdate,false,'an unchanged frame reuses the shadow maps');
+ s.shadowsDirty=true;s.frame();assert.equal(shadowMap.needsUpdate,true);assert.equal(s.shadowsDirty,false);
+});
