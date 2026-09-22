@@ -25,7 +25,7 @@ export const towers=[
   {id:'east',style:'endwall',x0:eastFacade,x1:eastFacade+24,z0:-.5,z1:24,top:top(18),faces:'west'}
 ];
 
-const PX=.05;                                          // metres per texture pixel
+const PX=.025;                                          // metres per texture pixel
 const hex=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
 const hash=(a,b,seed)=>{let h=Math.imul(a,374761393)^Math.imul(b,668265263)^Math.imul(seed,2246822519);h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296;};
 
@@ -41,6 +41,20 @@ function canvas(width,height){
 // A lit window at night: about a third of homes, warm more often than cool.
 function nightWindow(c,x0,y0,x1,y1,a,b,seed){const r=hash(a,b,seed);if(r<.34)c.light(x0,y0,x1,y1,r<.26?'#ffc27a':'#dfe7ff');}
 
+// Widths are inferred from the supplied oblique street photographs, not a survey.
+// Shared by the paint and relief so railings, openings and piers cannot drift apart.
+export const northBays=[[.9,4.6],[5.5,8.1],[12.6,15.6],[16.5,20.4],[24.1,25.2]];
+export const northPiers=[[0,.9],[4.6,5.5],[8.1,9],[11.7,12.6],[15.6,16.5],[20.4,21.4],[23.5,24.1],[25.2,25.5]];
+export const northScreens=[[9,11.7],[21.4,23.5]];
+export const eastReveals=[2.3,4.6,6.2,7.9];
+function weather(c,width,height,seed,amount){
+  for(let y=0;y<c.h;y++)for(let x=0;x<c.w;x++){
+    const k=(y*c.w+x)*4,grain=(hash(x,y,seed)-.5)*amount;
+    const streak=(hash(Math.floor(x/c.w*width*12),0,seed)-.5)*1.6;
+    for(let ch=0;ch<3;ch++)c.albedo[k+ch]+=grain+streak;
+  }
+}
+
 const painters={
   // Brown tower: grey-green stone frame, brown balcony slabs (real geometry) and a strip
   // of vertical timber slats near its east edge.
@@ -50,13 +64,30 @@ const painters={
     return c;},
   // The tower opposite: grey stone frame and piers, a dark bronze louvre strip up its
   // middle, glazed balcony bays with railing bands, and a planted column at its east end.
-  louvre(width,height,seed){const c=canvas(width,height),fh=SITE.floorHeight,mid=width/2;c.fill(0,0,width,height,'#5f6866');
+  louvre(width,height,seed){const c=canvas(width,height),fh=SITE.floorHeight,scale=width/25.5;
+    c.fill(0,0,width,height,'#6f7471');
+    // Recessed balconies: continuous dark bays behind solid parapets, not a window grid.
     for(let f=0,y=0;y<height;f++,y+=fh){
-      for(const [a,b]of[[1.2,mid-2.6],[mid+2.6,width-3]])for(let x=a,k=0;x<b-.5;x+=3.3,k++){const e=Math.min(b,x+2.9);c.fill(x,y+.35,e,y+fh-.45,'#2c3336');nightWindow(c,x+.1,y+.45,e-.1,y+fh-.55,f,k+(a>mid?20:0),seed);c.fill(x,y+fh-1.35,e,y+fh-1.25,'#79817f');}
-      c.fill(0,y+fh-.45,width,y+fh,'#454d4b');
-      c.fill(width-2.8,y+.35,width-1.2,y+fh-.45,'#2c3336');for(let x=width-2.7;x<width-1.3;x+=.35)c.fill(x,y+fh-1.1,x+.25,y+fh-.5,'#4d6b3c');}
-    c.fill(mid-2.6,0,mid-1.5,height,'#707a78');c.fill(mid+1.5,0,mid+2.6,height,'#707a78');
-    c.fill(mid-1.5,0,mid+1.5,height,'#2a2522');for(let x=mid-1.45;x<mid+1.5;x+=.2)c.fill(x,0,x+.08,height,'#4a3c34');
+      for(const [i,[a,b]]of northBays.entries()){
+        const x=a*scale,e=b*scale;
+        c.fill(x,y+.23,e,y+fh-.22,'#282c2d');
+        for(let k=0;k<12;k++){const v=35+k*1.15;c.fill(x,y+.24+k*.12,e,y+.36+k*.12,[v,v+2,v+3]);}
+        const pane=(e-x)/3;
+        for(let k=0;k<3;k++){
+          const tone=hash(f,k+i*7,seed),left=x+k*pane+.06;
+          c.fill(left,y+.55,left+pane-.12,y+fh-.43,tone<.25?'#444747':tone<.7?'#343c40':'#515454');
+          if(tone>.76)c.fill(left+.07,y+.59,left+pane-.19,y+fh-.48,'#6b6861');
+          nightWindow(c,left,y+.58,left+pane-.12,y+fh-.5,f,k+i*7,seed);
+        }
+        c.fill(x,y+fh-1.04,e,y+fh-.29,'#514d48');
+        c.fill(x,y+fh-1.08,e,y+fh-1.01,'#92908a');
+        c.fill(x,y+fh-.28,e,y+fh,'#777872');
+      }
+    }
+    for(const [a,b]of northScreens){c.fill(a*scale,0,b*scale,height,'#302c2a');for(let x=a*scale;x<b*scale;x+=.115)c.fill(x,0,x+.042,height,'#62564c');}
+    // Stone panel joints stay subordinate to the balcony openings.
+    for(const [a,b]of northPiers){c.fill(a*scale,0,b*scale,height,'#858c87');for(let y=.65;y<height;y+=.65)c.fill(a*scale,y,b*scale,y+.017,'#747d78');}
+    weather(c,width,height,seed,2.8);
     return c;},
   // Grey tower across the small lane: dark glass bays behind deep fins (real geometry) and
   // a dark strip carrying a column of white rings on its west side.
@@ -67,12 +98,28 @@ const painters={
   // The east neighbour's end wall (Street View close-up): grey tiled panels with vertical
   // reveals, a single column of slit windows between columns of small fixings, then a deep
   // vertical recess and a pale pilaster. No glazed bays.
-  endwall(width,height,seed){const c=canvas(width,height),fh=SITE.floorHeight;c.fill(0,0,width,height,'#9a9b97');
-    for(let x=.6;x<width;x+=1.2)c.fill(x,0,x+.05,height,'#828487');
-    c.fill(8.6,0,9.3,height,'#6b6e70');c.fill(9.3,0,10.1,height,'#b9bab6');
+  endwall(width,height,seed){const c=canvas(width,height),fh=SITE.floorHeight;
+    // Fine vertical ceramic tiles, warmer than the stone cladding across the street.
+    // Subpixel grout coverage prevents a 6 mm joint becoming a whole coarse texel.
+    const dx=width/c.w,dy=height/c.h;
+    for(let y=0;y<c.h;y++)for(let x=0;x<c.w;x++){
+      const u=(x+.5)*dx,v=(y+.5)*dy,col=Math.floor(u/.10),row=Math.floor(v/.40);
+      const mx=u%.10,my=v%.40;
+      const gx=Math.max(0,Math.min(1,(.003+dx/2-Math.min(mx,.10-mx))/dx));
+      const gy=Math.max(0,Math.min(1,(.003+dy/2-Math.min(my,.40-my))/dy));
+      const grain=hash(col,row,seed)*5-2.5,shade=8*Math.max(gx,gy),k=(y*c.w+x)*4;
+      c.albedo[k]=146+grain-shade;c.albedo[k+1]=142+grain-shade;c.albedo[k+2]=135+grain-shade;c.albedo[k+3]=255;
+    }
+    for(const x of eastReveals){c.fill(x-.08,0,x+.035,height,'#76716b');c.fill(x+.035,0,x+.13,height,'#a09b91');}
+    c.fill(8.6,0,9.3,height,'#646563');c.fill(9.3,0,10.1,height,'#b4b3aa');
     for(let f=0,y=0;y<height;f++,y+=fh){
-      c.fill(5.2,y+.9,5.52,y+2.3,'#3e464b');nightWindow(c,5.2,y+.9,5.52,y+2.3,f,1,seed);
-      for(const x of[3.4,7.1])c.fill(x,y+1.6,x+.12,y+1.72,'#7c7f7e');}
+      c.fill(5.15,y+.82,5.63,y+2.35,'#686967');
+      c.fill(5.21,y+.88,5.57,y+2.29,'#333d42');
+      c.fill(5.25,y+.94,5.53,y+1.54,'#4b5961');
+      nightWindow(c,5.25,y+.94,5.53,y+2.23,f,1,seed);
+      for(const x of[3.4,7.1]){c.fill(x-.03,y+1.56,x+.22,y+1.83,'#7c7872');c.fill(x,y+1.54,x+.16,y+1.68,'#a5a099');}
+    }
+    weather(c,width,height,seed,2.0);
     return c;},
   // Crown on the tower opposite: a dark band pierced by a row of tall elliptical openings.
   crown(width,height){const c=canvas(width,height);c.fill(0,0,width,height,'#2f3437');const n=7,step=width/n;
@@ -84,6 +131,63 @@ export function paintFacade(tower,width,height,style=tower.style){
   const seed=[...tower.id].reduce((s,ch)=>Math.imul(s,31)+ch.charCodeAt(0)|0,5);
   const c=painters[style](width,height,seed);
   return {width:c.w,height:c.h,albedo:c.albedo,glow:c.glow};
+}
+
+// Local facade coordinates: u along the wall, y above A7's floor, d towards A7.
+// Repeated solids are instanced by colour in scene.js; they add no lights or shadows.
+export function facadeRelief(t){
+  const parts=[],fh=SITE.floorHeight,height=t.top-SITE.ground;
+  const box=(kind,u,y,d,w,h,depth,color,shape='box')=>parts.push({kind,u,y,d,w,h,depth,color,shape});
+  if(t.style==='louvre'){
+    const scale=(t.x1-t.x0)/25.5;
+    for(const [a,b]of northPiers){
+      box('pier',(a+b)/2*scale,SITE.ground+height/2,-.56,(b-a)*scale,height,1.48,'#858c87');
+      for(let y=SITE.ground+.65;y<t.top;y+=.65)box('stone-joint',(a+b)/2*scale,y,.182,(b-a)*scale,.014,.008,'#6d7771');
+    }
+    for(const [a,b]of northScreens){
+      box('screen-back',(a+b)/2*scale,SITE.ground+height/2,-.08,(b-a)*scale,height,.15,'#302c29');
+      for(let u=a*scale+.045;u<b*scale;u+=.115)box('louvre',u,SITE.ground+height/2,.075,.045,height,.25,'#716255');
+    }
+    for(let y=SITE.ground;y<t.top-.1;y+=fh){
+      for(const [i,[a,b]]of northBays.entries()){
+        const u=(a+b)/2*scale,w=(b-a)*scale;
+        box('balcony-slab',u,y+.13,-.5,w,.26,1.7,'#78746c');
+        box('parapet',u,y+.52,-.09,w,.67,.18,'#635950');
+        box('rail',u,y+1.04,.035,w,.055,.09,'#98998f');
+        box('rail-lower',u,y+.88,.02,w,.035,.06,'#555651');
+        for(let x=a*scale+.18;x<b*scale;x+=.72)box('rail-post',x,y+.96,.02,.032,.19,.055,'#6d706b');
+        for(let x=a*scale+.12;x<b*scale;x+=(b-a)*scale/3)box('window-frame',x,y+1.73,-1.21,.047,2.7,.065,'#51544f');
+        if(i===northBays.length-1){
+          box('planter',u,y+.85,-.25,w*.78,.25,.38,'#777568');
+          for(let k=0;k<12;k++){
+            const r=hash(k,Math.round(y*10),31),x=a*scale+.12+(w-.24)*hash(k,3,11);
+            box('plant',x,y+1.02+r*.22,-.25,.18+r*.15,.20+r*.25,.18+r*.12,k%3===0?'#6e7950':k%3===1?'#4b5b3e':'#89905d','leaf');
+          }
+        }
+      }
+    }
+    box('roof-edge',(t.x1-t.x0)/2,t.top+.12,-.55,t.x1-t.x0,.24,1.75,'#666b65');
+  }
+  if(t.style==='endwall'){
+    for(const u of eastReveals){
+      box('reveal-side',u+.09,SITE.ground+height/2,.055,.085,height,.11,'#a09b91');
+      box('reveal-shadow',u-.055,SITE.ground+height/2,.014,.065,height,.027,'#77716b');
+    }
+    box('endwall-pilaster',9.7,SITE.ground+height/2,.23,.8,height,.46,'#b4b3aa');
+    for(let y=SITE.ground;y<t.top-.1;y+=fh){
+      // Paint coordinates start at the roof; these offsets are their ground-up equivalent.
+      const sill=y+fh-2.35,head=y+fh-.82,cy=(sill+head)/2;
+      for(const u of[5.175,5.605])box('slit-jamb',u,cy,.065,.05,head-sill,.13,'#787b77');
+      box('slit-head',5.39,head,.06,.48,.045,.12,'#858580');
+      box('slit-sill',5.39,sill,.10,.51,.065,.20,'#a39f94');
+      box('slit-mullion',5.39,y+fh-1.58,.012,.34,.036,.024,'#777d7c');
+      for(const u of[3.48,7.18]){
+        box('wall-fitting',u,y+fh-1.62,.105,.16,.14,.21,'#aaa59b');
+        box('fitting-underside',u,y+fh-1.70,.095,.12,.026,.19,'#615f5a');
+      }
+    }
+  }
+  return parts;
 }
 
 // The lift lobby (梯廳) from the 5/7/9/11F plan, scaled by A7's width: an east-west corridor

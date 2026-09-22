@@ -84,3 +84,20 @@ test('the east end wall has one column of slit windows and no glazed bay',()=>{
  const runs=dark.filter((x,i)=>i===0||x!==dark[i-1]+1).length;
  assert.equal(runs,1,'one run of dark window pixels across a floor');
 });
+
+// A ray from A7 must reach the balcony's back wall farther away than its stone piers.
+// This catches a solid tower box accidentally filling the newly recessed balcony space.
+test('north balconies have real depth and east fixtures stay on the facing side',()=>{
+ const s=Object.create(SpaceScene.prototype);
+ Object.assign(s,{scene:new THREE.Scene(),mode:'walk',night:false,camera:{position:new THREE.Vector3()}});
+ s.buildSurroundings();s.surroundings.updateMatrixWorld(true);
+ const hit=(origin,direction)=>new THREE.Raycaster(new THREE.Vector3(...origin),new THREE.Vector3(...direction),0,30).intersectObjects(s.surroundings.children,true)[0];
+ const bay=hit([1.8,1.8,0],[0,0,-1]),pier=hit([4.3,1.8,0],[0,0,-1]);
+ assert(bay&&pier);
+ assert(bay.distance-pier.distance>1.3,'balcony glazing is behind the projecting stone frame');
+ const slit=hit([SITE.eastFace,1.5,4.89],[1,0,0]);
+ const fitting=hit([SITE.eastFace,1.58,2.98],[1,0,0]);
+ assert(slit&&fitting);
+ assert(fitting.distance<slit.distance-.15,'small wall fixtures project towards A7');
+ assert(slit.distance>7.8,'east window remains near the estimated eight-metre gap');
+});

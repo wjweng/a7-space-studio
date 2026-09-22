@@ -2,7 +2,7 @@ import * as T from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {BOARD,finishByCode,finishPixels} from './finishes.js';
-import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade} from './surroundings.js';
+import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight} from './model.js';
 import {doorRects,visualDoorInset,visualLeafWidth,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
 const BEAM_FLUSH_SNAP=.005;
@@ -189,10 +189,37 @@ export class SpaceScene{
   const side=material('#4a4e51'),roof=material('#5a5e61');
   const painted=(paint)=>{const night=new Uint8ClampedArray(paint.albedo.length);for(let k=0;k<night.length;k+=4){const lit=paint.glow[k]+paint.glow[k+1]+paint.glow[k+2]>0;for(let ch=0;ch<3;ch++)night[k+ch]=lit?paint.glow[k+ch]*.72:paint.albedo[k+ch]*.1;night[k+3]=255;}
    const m=material('#ffffff');m.userData.dayMap=texture(paint.albedo,paint.width,paint.height);m.userData.nightMap=texture(night,paint.width,paint.height);m.userData.night=new T.Color('#ffffff');m.map=m.userData.dayMap;return m;};
+  // Face shading is baked into vertex colours: neighbours keep depth without adding
+  // shadow maps or allowing indoor light to illuminate their exterior.
+  const addRelief=t=>{
+   const batches=new Map;
+   for(const part of facadeRelief(t)){const key=part.shape+part.color;if(!batches.has(key))batches.set(key,[]);batches.get(key).push(part);}
+   const transform=new T.Object3D;
+   for(const parts of batches.values()){
+    const first=parts[0],leaf=first.shape==='leaf',geo=leaf?new T.IcosahedronGeometry(.5,0):new T.BoxGeometry(1,1,1);
+    const normals=geo.attributes.normal,colors=[];
+    for(let i=0;i<normals.count;i++){
+     const shade=normals.getY(i)>.5?1:normals.getY(i)<-.5?.51:Math.abs(normals.getX(i))>.5?.73:.91;
+     colors.push(shade,shade,shade);
+    }
+    geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));
+    const mat=material(first.color);mat.vertexColors=true;
+    const mesh=new T.InstancedMesh(geo,mat,parts.length);mesh.name=t.id+'-'+first.shape+'-'+first.color;
+    parts.forEach((part,i)=>{
+     const west=t.faces==='west';
+     transform.position.set(west?t.x0-part.d:t.x0+part.u,part.y,west?t.z0+part.u:t.z1+part.d);
+     transform.scale.set(west?part.depth:part.w,part.h,west?part.w:part.depth);
+     transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();g.add(mesh);
+   }
+  };
   for(const t of towers){
    const w=t.x1-t.x0,d=t.z1-t.z0,h=t.top-SITE.ground,west=t.faces==='west',faceWidth=west?d:w,front=painted(paintFacade(t,faceWidth,h));
    const faces=[side,side,roof,side,side,side];faces[west?1:4]=front;
-   const box=new T.Mesh(new T.BoxGeometry(w,h,d),faces);box.position.set((t.x0+t.x1)/2,SITE.ground+h/2,(t.z0+t.z1)/2);g.add(box);
+   const recess=t.style==='louvre'?1.35:0;
+   const box=new T.Mesh(new T.BoxGeometry(w,h,d-recess),faces);box.position.set((t.x0+t.x1)/2,SITE.ground+h/2,(t.z0+t.z1-recess)/2);g.add(box);
+   addRelief(t);
    if(t.crown){const cw=t.crown.w,ch=t.crown.h,crownFaces=[side,side,roof,roof,side,side];crownFaces[4]=painted(paintFacade(t,cw,ch,'crown'));const crown=new T.Mesh(new T.BoxGeometry(cw,ch,1.2),crownFaces);crown.position.set((t.x0+t.x1)/2,t.top+ch/2,t.z1-.6);g.add(crown);}
    // Balcony slabs or fins along part of the facing side, one per floor.
    if(t.slabs){const {depth,from=0,to=faceWidth}=t.slabs,len=to-from,slab=material('#9d948a'),edge=material('#8a827a'),under=material('#5c5650'),sf=[edge,edge,slab,under,edge,edge];
