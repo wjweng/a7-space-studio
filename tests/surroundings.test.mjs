@@ -1,7 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {SITE,towers,paintFacade,northFacade,eastFacade,corridor} from '../dist/surroundings.js';
+import {SITE,towers,paintFacade,northFacade,eastFacade,corridor,facadeRelief,eastVents} from '../dist/surroundings.js';
+import {roofCanopyGeometry} from '../dist/facade-geometry.js';
 import {walls,doors} from '../dist/model.js';
 import {doorRects,visualLeafWidth} from '../dist/spatial.js';
 import {SpaceScene} from '../dist/scene.js';
@@ -100,4 +101,39 @@ test('north balconies have real depth and east fixtures stay on the facing side'
  assert(slit&&fitting);
  assert(fitting.distance<slit.distance-.15,'small wall fixtures project towards A7');
  assert(slit.distance>7.8,'east window remains near the estimated eight-metre gap');
+});
+
+
+test('roof ornament lies horizontally and its elliptical openings are real holes',()=>{
+ const spec=towers.find(t=>t.crown).crown,geo=roofCanopyGeometry(spec);
+ geo.computeBoundingBox();const size=geo.boundingBox.getSize(new THREE.Vector3());
+ assert(size.y<.3&&size.z>4,'thin roof plane, not a standing billboard');
+ const mesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({side:THREE.DoubleSide}));mesh.updateMatrixWorld();
+ const ray=x=>new THREE.Raycaster(new THREE.Vector3(x,2,.12),new THREE.Vector3(0,-1,0)).intersectObject(mesh);
+ const step=spec.w/spec.holes;
+ for(let i=0;i<spec.holes;i++)assert.equal(ray(-spec.w/2+step*(i+.5)).length,0,'each hole admits a ray');
+ assert(ray(-spec.w/2+.02).length>0,'solid edge remains around the holes');
+});
+
+test('rings face the alley, with three vent columns and a recessed platform stack to the east',()=>{
+ const s=Object.create(SpaceScene.prototype);
+ Object.assign(s,{scene:new THREE.Scene(),mode:'walk',night:false,camera:{position:new THREE.Vector3()}});
+ s.buildSurroundings();s.surroundings.updateMatrixWorld(true);
+ const rings=s.surroundings.getObjectByName('north-east-alley-rings'),tower=towers.find(t=>t.ringSide);
+ assert(rings?.isInstancedMesh);rings.geometry.computeBoundingBox();
+ const size=rings.geometry.boundingBox.getSize(new THREE.Vector3());
+ assert(size.x<.11&&size.z>1.9,'ring plane faces west, not south');
+ const matrix=new THREE.Matrix4,position=new THREE.Vector3;
+ for(let i=0;i<rings.count;i++){rings.getMatrixAt(i,matrix);position.setFromMatrixPosition(matrix);assert(position.x<tower.x0&&position.z<tower.z1-2,'all rings sit on the alley-facing wall');}
+ const east=towers.find(t=>t.style==='endwall');
+ const vents=facadeRelief(east).filter(p=>p.kind==='wall-fitting');
+ assert.equal(new Set(vents.map(p=>p.u)).size,3);
+ assert.deepEqual([...new Set(vents.map(p=>p.u))],eastVents);
+ assert.equal(vents.length,3*Math.round((east.top-SITE.ground)/SITE.floorHeight),'three fittings on each storey');
+ const ray=z=>new THREE.Raycaster(new THREE.Vector3(SITE.eastFace,1.8,z),new THREE.Vector3(1,0,0),0,20).intersectObjects(s.surroundings.children,true)[0];
+ assert(ray(11).distance>ray(5).distance+1,'right-hand platforms are set back from the wall facing A7');
+ const paint=paintFacade(east,east.z1-east.z0,east.top-SITE.ground);
+ const pixel=u=>paint.albedo.slice((Math.floor(paint.height*.013)*paint.width+Math.floor(u/(east.z1-east.z0)*paint.width))*4).slice(0,3);
+ const pale=pixel(1),warm=pixel(4);
+ assert(pale[0]>warm[0]+25&&pale[1]>warm[1]+25,'central tiled strip is visibly darker than flanking tiles');
 });
