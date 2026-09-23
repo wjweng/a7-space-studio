@@ -21,7 +21,7 @@ The sections below preserve each stage's results. Earlier test counts, rendering
 - Local HTTP entrypoint returned 200.
 - No browser visual or interaction QA was performed in this run. Cross-device performance, perceived lighting quality, touch usability and persistence interaction should be reviewed in use.
 - Optional WebMCP support is feature-detected; no supported model-context test session was available. The optional tool contracts were not verified in a live context.
-- This is an approximate traced model. 2.79 m ceiling height is user-provided; other vertical dimensions and inferred horizontal chains are documented assumptions. Collision checks are approximate 2D extents and sampled opening sweeps, not construction certification.
+- This is an approximate traced model. 3.00 m ceiling height is user-provided (2.79 m before 2026-09-24); other vertical dimensions and inferred horizontal chains are documented assumptions. Collision checks are approximate 2D extents and sampled opening sweeps, not construction certification.
 
 ## Navigation update
 

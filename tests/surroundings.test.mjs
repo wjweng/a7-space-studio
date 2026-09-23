@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {SITE,towers,paintFacade,northFacade,eastFacade,corridor,facadeRelief,eastVents,facadeRecess,ringSideLayout} from '../dist/surroundings.js';
 import {roofCanopyGeometry} from '../dist/facade-geometry.js';
-import {walls,doors} from '../dist/model.js';
+import {walls,doors,HEIGHT} from '../dist/model.js';
 import {doorRects,visualLeafWidth} from '../dist/spatial.js';
 import {SpaceScene} from '../dist/scene.js';
 
@@ -12,7 +12,7 @@ test('neighbouring towers stand at the estimated distances and rise above the 14
  assert(Math.abs(northFacade-(SITE.northFace-18))<1e-9,'the tower opposite is 18 m north');
  assert(Math.abs(eastFacade-(SITE.eastFace+8))<1e-9,'the neighbour is 8 m east');
  for(const t of towers){
-  assert(t.top>2.79,t.id+' is taller than A7');
+  assert(t.top>HEIGHT,t.id+' is taller than A7');
   if(t.faces==='south')assert(t.z1<=northFacade+1.5+1e-9,t.id+' stays across the lane');
   else assert(t.x0>=eastFacade-1e-9,t.id+' stays east of the gap');
  }

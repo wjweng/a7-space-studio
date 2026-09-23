@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {initialFurniture,issues,validateFurniture,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,migrateLayout,LAYOUT_REVISION} from '../dist/model.js';
+import {initialFurniture,issues,validateFurniture,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,migrateLayout,LAYOUT_REVISION,HEIGHT} from '../dist/model.js';
 import {furnitureInterference,tableChairInterference} from '../dist/geometry.js';
 import {SpaceScene} from '../dist/scene.js';
 import {constrainMove} from '../dist/spatial.js';
@@ -40,7 +40,7 @@ test('revision 14 migrates untouched chair defaults, keeps custom chair edits an
  const custom=old.map(f=>f.id==='chair1'?({...f,x:1.9}):f);
  assert.equal(migrateLayout(custom,14).find(f=>f.id==='chair1').x,1.9);
  const light=normalizeLight({lightKind:'spot',shape:'invalid',colorTemperature:'invalid',lumens:99999,dimming:-2,pendantLength:99,on:false});
- assert.deepEqual(light,{lightKind:'ceiling',shape:'round',colorTemperature:'white',lumens:10000,dimming:0,pendantLength:2.67,on:false});
+ assert.deepEqual(light,{lightKind:'ceiling',shape:'round',colorTemperature:'white',lumens:10000,dimming:0,pendantLength:HEIGHT-.12,on:false});
  assert.equal(migrated.find(f=>f.id==='light-living').colorTemperature,'white');
  const legacy={...initialFurniture.find(f=>f.id==='light-living'),brightness:50,watts:24};delete legacy.lumens;delete legacy.dimming;delete legacy.shape;delete legacy.pendantLength;
  const migratedLight=migrateLayout([legacy],12)[0];assert.deepEqual({lumens:migratedLight.lumens,dimming:migratedLight.dimming,shape:migratedLight.shape},{lumens:1200,dimming:50,shape:'round'});

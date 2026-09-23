@@ -116,11 +116,13 @@ export function fitResize(f,next,items){
  }
  return best.p;
 }
-export function resizeAtHandle(f,axis,sign,target){
- const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=target.x-f.x,dz=target.z-f.z,local=axis==='w'?dx*c-dz*s:dx*s+dz*c,start=axis==='w'?f.w:f.d,min=minimumsFor(f)?.[axis==='w'?0:1]??.1,fixed=-sign*start/2;
+// With keepRatio the other plan dimension scales along, centred, so width/depth keep their ratio.
+export function resizeAtHandle(f,axis,sign,target,keepRatio=false){
+ const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=target.x-f.x,dz=target.z-f.z,local=axis==='w'?dx*c-dz*s:dx*s+dz*c,start=axis==='w'?f.w:f.d,other=axis==='w'?'d':'w',limits=minimumsFor(f)||[.1,.1],fixed=-sign*start/2;
+ const min=Math.max(limits[axis==='w'?0:1]??.1,keepRatio?(limits[axis==='w'?1:0]??.1)*start/f[other]:0),sized=size=>keepRatio?{[axis]:size,[other]:f[other]*size/start}:{[axis]:size};
  let desired=Math.max(min,sign*(local-fixed));const centerFor=size=>{const shift=fixed+sign*size/2;return{x:f.x+shift*(axis==='w'?c:s),z:f.z+shift*(axis==='w'?-s:c)}};
- if(f.type==='beam'){const build=size=>({...f,...centerFor(size),[axis]:size});let fitted=build(desired);if(beamResizeClear(fitted))return{item:fitted,blocked:false,clamped:false};let lo=min,hi=desired,best=null;for(let i=0;i<28;i++){const mid=(lo+hi)/2,candidate=build(mid);if(beamResizeClear(candidate)){best=candidate;lo=mid;}else hi=mid;}return best?{item:best,blocked:false,clamped:true}:{item:f,blocked:true,clamped:true};}
- const direction=resizeDirection(f,axis,sign),build=size=>shiftedResize({...f,...centerFor(size),[axis]:size},direction);
+ if(f.type==='beam'){const build=size=>({...f,...centerFor(size),...sized(size)});let fitted=build(desired);if(beamResizeClear(fitted))return{item:fitted,blocked:false,clamped:false};let lo=min,hi=desired,best=null;for(let i=0;i<28;i++){const mid=(lo+hi)/2,candidate=build(mid);if(beamResizeClear(candidate)){best=candidate;lo=mid;}else hi=mid;}return best?{item:best,blocked:false,clamped:true}:{item:f,blocked:true,clamped:true};}
+ const direction=resizeDirection(f,axis,sign),build=size=>shiftedResize({...f,...centerFor(size),...sized(size)},direction);
  let fitted=build(desired);if(fitted)return{item:fitted,blocked:false,clamped:false};
  let lo=min,hi=desired,best=null;for(let i=0;i<28;i++){const mid=(lo+hi)/2,candidate=build(mid);if(candidate){best=candidate;lo=mid;}else hi=mid;}
  return best?{item:best,blocked:false,clamped:true}:{item:f,blocked:true,clamped:true};

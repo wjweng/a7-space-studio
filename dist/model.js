@@ -16,7 +16,9 @@ export const structuralBlocks=[
  {id:'balcony-north-block',x:7.975,z:4.625,w:.65,d:.45,rot:0}
 ];
 export const structuralSolids=[...columns,...structuralBlocks];
-export const HEIGHT=2.79;
+// Clear floor-to-ceiling height. Doors and windows keep their own absolute heights; the
+// balcony opening, curtains, beams and lights follow the ceiling.
+export const HEIGHT=3;
 // Metres. A7 raster tracing calibrated against 2.24 / 2.62 / 2.61 m room dimensions.
 // Unclosed drawing chains are approximations, not survey coordinates.
 export const outline=[[0,0],[8.3,0],[8.3,2.7],[8.85,2.7],[8.85,4.4],[8.3,4.4],[8.3,6.46],[8.95,6.46],[8.95,7.31],[8.1,7.31],[8.1,7.25],[1.85,7.25],[1.85,8.53],[-.45,8.53],[-.45,6.65],[0,6.65]];
@@ -30,7 +32,7 @@ export const walls=[
  {id:'window-master',a:[5.18,0],b:[8.3,0],opening:[1.27,1.63,.9,1.5]},
  {a:[0,0],b:[0,6.71]}, {a:[8.3,0],b:[8.3,2.7]},
  {a:[8.3,2.7],b:[8.85,2.7]},{id:'window-bathB',a:[8.85,2.7],b:[8.85,4.4],opening:[.85,.72,1.5,.7]},
- {a:[8.85,4.4],b:[8.3,4.4]},{id:'balcony-railing',a:[8.3,4.4],b:[8.3,6.46],opening:[.67,1.34,.1,2.69],openingType:'railing'},
+ {a:[8.85,4.4],b:[8.3,4.4]},{id:'balcony-railing',a:[8.3,4.4],b:[8.3,6.46],opening:[.67,1.34,.1,HEIGHT-.1],openingType:'railing'},
  {a:[8.1,7.25],b:[1.85,7.25]}, {a:[1.85,7.25],b:[1.85,8.53]},
  {a:[1.85,8.53],b:[-.45,8.53]}, {a:[-.45,8.53],b:[-.45,6.71],opening:[0,1.04,0,2.1]},
  {a:[-.45,6.71],b:[0,6.71]},
