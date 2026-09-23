@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {SITE,towers,paintFacade,northFacade,eastFacade,corridor,facadeRelief,eastVents,facadeRecess,ringSideLayout} from '../dist/surroundings.js';
 import {roofCanopyGeometry} from '../dist/facade-geometry.js';
-import {walls,doors,HEIGHT} from '../dist/model.js';
-import {doorRects,visualLeafWidth} from '../dist/spatial.js';
+import {walls,doors,HEIGHT,WALL_THICKNESS} from '../dist/model.js';
+import {doorRects,doorLeaf,JAMB_WIDTH} from '../dist/spatial.js';
 import {SpaceScene} from '../dist/scene.js';
 
 test('neighbouring towers stand at the estimated distances and rise above the 14th floor',()=>{
@@ -48,7 +48,7 @@ test('the front door hinges on the south jamb and opens inward, handle on the ri
  assert(Math.abs(entry.z-8.53)<1e-9,'hinge at the south end of the opening');
  assert(open.x>entry.x,'swings into the flat');
  assert(closed[1].z<closed[0].z,'handle towards the north: the right-hand side facing the door from inside');
- assert(visualLeafWidth(entry)>entry.width-.04,'the leaf fills the opening instead of leaving a see-through gap');
+ const leaf=doorLeaf(entry);assert(leaf.x<=WALL_THICKNESS/2+.0021&&entry.width-JAMB_WIDTH/2-(leaf.x+leaf.width)<=.0021,'the leaf runs from the south wall face to the north jamb instead of leaving a see-through gap');
 });
 
 test('outside is unlit, shown only in walk view, and switches to its night look',()=>{

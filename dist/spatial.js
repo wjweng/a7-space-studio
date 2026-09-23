@@ -1,13 +1,31 @@
-import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues} from './model.js';
+import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,WALL_THICKNESS} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference} from './geometry.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
 // Collision leaves retain their surveyed swing clearance. Their rendered
 // faces use a separate close-fitting finish panel below.
-const tightClosingDoor=d=>['door-0','door-3','door-4','door-5'].includes(d.id);
 export const leafWidth=d=>d.width-(d.id==='door-0'?.18:.13);
 export const doorInset=d=>d.id==='door-0'?.10:.085;
-export const visualLeafWidth=d=>d.width-(tightClosingDoor(d)?.025:.13);
-export const visualDoorInset=d=>tightClosingDoor(d)?.015:.085;
+// The rendered leaf, in the door group's frame: x runs along the opening from the hinge jamb,
+// z across the wall. It closes inside the frame, flush with the wall face on its swing side,
+// and turns about its hinge-side corner on that face, as butt hinges do. The hinge edge then
+// stays put and the leaf never sweeps through the jamb. Every leaf fills its frame, stopping
+// 2 mm short of each jamb face. Some openings start at a perpendicular wall, so the jamb face
+// there is that wall's face, found by probing the opening for wall.
+export const JAMB_WIDTH=.055,LEAF_THICKNESS=.045;
+const leafCache=new Map;
+function clearSpan(d){
+ const ca=Math.cos(d.angle),sa=Math.sin(d.angle),step=.0025,solid=wallRects();
+ const blocked=x=>{const probe={x:d.x+x*ca,z:d.z-x*sa,w:step,d:WALL_THICKNESS*.98,rot:d.angle*180/Math.PI};return solid.some(w=>overlaps(probe,w,1e-6));};
+ let start=JAMB_WIDTH/2,end=d.width-JAMB_WIDTH/2;
+ while(start<d.width/2&&blocked(start+step/2))start+=step;
+ while(end>d.width/2&&blocked(end-step/2))end-=step;
+ return[start,end];
+}
+export function doorLeaf(d){
+ if(!leafCache.has(d.id)){const[start,end]=clearSpan(d);leafCache.set(d.id,{x:start+.002,width:end-start-.004});}
+ const{x,width}=leafCache.get(d.id);
+ return{x,z:-d.swing*WALL_THICKNESS/2,width,thickness:LEAF_THICKNESS,side:-d.swing};
+}
 export function doorRects(d,amount=1,maxAngle=d.maxAngle??90){
  const inset=doorInset(d),offset=-d.swing*.055,ca=Math.cos(d.angle),sa=Math.sin(d.angle),hx=d.x+inset*ca+offset*sa,hz=d.z-inset*sa+offset*ca,angle=d.angle+d.swing*amount*maxAngle*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),w=leafWidth(d);
  const rect=(x,z,width,depth)=>({x:hx+x*c+z*s,z:hz-x*s+z*c,w:width,d:depth,rot:angle*180/Math.PI});
