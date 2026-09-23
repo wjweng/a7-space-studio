@@ -1,4 +1,20 @@
-# Validation — first release
+# Validation and work history
+
+## Latest verified state — 2026-09-23
+
+The application changes through `c402611` passed all 101 automated tests. Cloudflare Pages deployment succeeded, and the changed live JavaScript files were compared byte-for-byte with the local files. No application code changed in the subsequent documentation audit.
+
+Desktop (1440 x 960) and mobile (390 x 844) screenshots were checked using the owner's exported furniture layout. The checks include all five window positions across the three rounds, plus roof/up, alley-side rings, the living room turned right and the work balcony turned right. Browser runs reported no console or shader errors. Dimensions, neighbouring floor alignment and colours remain estimates from ground-level photographs; exact matching to a real 14F view and target-device performance remain unverified.
+
+| Application commit | Work completed | Comparison folder in the linked Dropbox project |
+| --- | --- | --- |
+| `07b4ab5` | Recessed north balconies and detailed east wall; initial version with two fitting columns | `window-view-review/` (historical) |
+| `6e1ba50` | Horizontal perforated canopy, alley-side rings, three fitting columns, tile contrast and right-hand platform stack | `window-detail-review/` (historical; rings still near the corner) |
+| `c402611` | Ring band centred on the actual side wall; broad openings and projecting floor details on both sides | `window-side-review/` (latest side-wall comparison) |
+
+The sections below preserve each stage's results. Earlier test counts, rendering timings, assumptions and descriptions apply only to that stage; they are not the current specification. Current behaviour is documented in README.md and AGENTS.md. The two older comparison folders retain useful roof/east-wall views, but their right-tower ring placement has been superseded.
+
+## First release (historical)
 
 - Seven automated checks pass: import schema rejection, rotated collision detection, door-gap geometry, initial furniture placement, initial/minimum furniture geometry generation, resized cabinet pivots, walking collisions with extended drawers.
 - JavaScript syntax and static local asset / HTML control references checked.
@@ -55,7 +71,7 @@ Lighting now uses lumens plus dimming percentage for the relative scene-light es
 
 Default lights now use white light, while the inspector offers white, natural and warm/yellow temperatures. The fixture models use a smooth white body and diffuser without a dark centre. Top-view resizing no longer renders corner blocks: moving over a selected object edge changes to the corresponding resize cursor, and its geometry updates during the drag. Exterior-wall contact is valid when extending the opposite edge. Beam resizing preserves the opposite endpoint, may cross interior partitions, and remains constrained by the exterior shell. In orbit view with cutaway enabled, beams and their selection outline are hidden. All eight automated test files pass, including white-light migration, selected colour rendering, exterior-contact resizing, cross-partition beam resizing and cutaway beam visibility.
 
-## Current editor and rendering follow-up
+## Editor and rendering follow-up (historical)
 
 All eight automated test files pass (`npm test`), including exterior-shell placement and boundary sliding, ceiling/floor layer separation, light-to-wall warnings, beam interior-partition traversal, 5 cm beam minimum dimensions, draft ceiling-object overlap, and fixed-door sweep clearance. The test suite also covers import validation, navigation, scene geometry, static assets and legacy layout migration.
 
@@ -86,7 +102,7 @@ The view outside. Neighbouring towers stand at the owner's estimated distances (
 Not verified. All rendering judgements come from the software renderer and the owner's screenshots; the facades, lobby fittings, tower heights and window counts are estimates, and finish grain is not the real board. Shadow and lamp costs at the target GPU, and the perceived floor brightness after the ambient change, still need the owner's eye.
 
 
-## Window facade depth and detail (2026-09-23)
+## Window facade depth and detail (2026-09-23, `07b4ab5`; historical)
 
 All ten test files pass (`npm test`), including a new raycast regression verifying that the north balcony back wall is more than 1.3 m behind the projecting stone pier and that the east wall fittings project towards A7 without moving the eight-metre base wall. Existing tests still verify the three north windows' alignment with the tower's right third, estimated gaps, unlit materials, day/night switching and deterministic window illumination. `git diff --check` passes.
 
@@ -97,7 +113,7 @@ Headless Chromium with software WebGL rendered the owner's exported layout at 14
 The 18 m / 8 m gaps, 3.2 m storey spacing and 41.6 m ground offset are retained. Tower heights, opening widths, balcony depths and floor-to-floor alignment are inferred, not surveyed. Ground-level photographs cannot establish the exact 14F view; final visual matching needs the owner's assessment or a photograph from that floor. Night window occupancy is illustrative.
 
 
-## Facade reference corrections (2026-09-23)
+## Facade reference corrections (2026-09-23, `6e1ba50`; ring placement superseded)
 
 The north roof decoration is now a horizontal, 22 cm thick canopy with seven real elliptical openings, replacing the upright sky-painted panel. The right tower's rings are shallow annular geometry on its west wall facing the alley between the towers; the street-facing facade has recessed glazing, vertical fins and projecting floor blades. Ring placement is grouped in threes with a storey gap, inferred from the reference photograph.
 
@@ -106,7 +122,7 @@ The east neighbour now separates the warm darker central tiled band from pale fl
 Additional tests shoot rays through each canopy opening, check its horizontal bounds, verify rings lie on the alley wall, count three fittings per storey, compare centre/side tile pixels and measure the platform setback. Full `npm test` and `git diff --check` pass. Headless Chromium software-WebGL captures at 1440 x 960 and 390 x 844 used the owner's exported configuration, identical before/after camera poses, and open curtains. Reviewed all five window positions plus roof/up, right-tower side, balcony/right, mobile and night views with no console or shader errors. Images and the comparison page are in the Dropbox project's `window-detail-review/`; the preceding `window-view-review/` remains the earlier version.
 
 
-## Centred ring band on the right tower's side wall (2026-09-23)
+## Centred ring band on the right tower's side wall (2026-09-23, `c402611`)
 
 The preceding side-wall correction still placed the rings 3.5 m from the street corner. The ring geometry and dark slatted band now share the centre of the actual exposed side wall, accounting for the 1.05 m front-facade recess. The previous grid of small side windows is replaced by two broad stacks of dark openings flanking the centre band, with stone piers, projecting floor blades, parapets and sills. Paint and geometry share one side-layout calculation.
 
