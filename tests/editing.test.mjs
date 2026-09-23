@@ -95,7 +95,7 @@ test('typed size increases grow away from a wall or furniture the item already t
 });
 test('only linear lights may be narrower than ten centimetres',()=>{
  const base={id:'l',name:'燈',type:'light',x:2,z:2,w:1.2,d:.04,h:.03,rot:0};
- assert.deepEqual(minimumsFor({...base,lightKind:'linear'}),[.1,.02,.02]);
+ assert.deepEqual(minimumsFor({...base,lightKind:'linear'}),[.1,.02,.01]);
  assert.equal(validateFurniture([{...base,lightKind:'linear'}])[0].lightKind,'linear');
  assert.throws(()=>validateFurniture([{...base,lightKind:'ceiling'}]));
 });

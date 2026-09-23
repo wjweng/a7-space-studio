@@ -29,3 +29,13 @@
 #floorList{display:grid;gap:4px;margin-top:8px}.floorRow{display:flex;align-items:center;gap:9px;width:100%;padding:5px 8px;text-align:left;background:#fff;border:1px solid var(--line);border-radius:7px;font-size:13px}.floorRow canvas{width:14px;height:28px;border-radius:2px;border:1px solid var(--line);flex:none}.floorRow span{flex:1;min-width:0}.floorRow small{color:#78877d;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
 .floorPanel{margin-top:18px;flex-shrink:0}.floorPanel summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-weight:600;font-size:13px;list-style:none}.floorPanel summary::-webkit-details-marker{display:none}.floorPanel summary>span:first-child::before{content:'\25B8';display:inline-block;width:14px;color:#78877d;transition:transform .15s}.floorPanel[open] summary>span:first-child::before{transform:rotate(90deg)}.floorPanel #floorList{max-height:220px;overflow:auto}.sidefoot{flex-shrink:0}
 /* The sidebar scrolls as a whole once its settings outgrow the height; the object list keeps a usable height and the add / assumptions buttons stay pinned to the bottom. */#sidebar{overflow-y:auto;padding-bottom:0}#objects{flex:1 0 220px}#sidebar .sidefoot{position:sticky;bottom:0;background:#fff;padding-bottom:14px;z-index:1}
+.fabricSwatches{display:flex;flex-wrap:wrap;gap:6px}
+.fabricSwatch{position:relative;width:26px;height:26px;padding:0;border:1px solid var(--line);border-radius:6px;cursor:pointer;overflow:hidden}
+.fabricSwatch.fabricDefault{width:auto;padding:0 7px;font-size:11px;color:#3d4a42}
+.fabricSwatch.active{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--accent)}
+.fabricCustom{background:conic-gradient(#e0605a,#e0c35a,#6ac27a,#5aa9e0,#9a6ae0,#e0605a)}
+.fabricCustom input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+#recovery{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;width:min(560px,calc(100% - 32px));padding:10px 14px;background:#fff6e5;border:1px solid #d9a441;border-radius:8px;font-size:13px;color:#4a3b1c;box-shadow:0 4px 14px #0002}
+#recovery[hidden]{display:none}
+#recovery span{flex:1 1 260px}
+#recovery div{display:flex;gap:6px}
