@@ -21,9 +21,17 @@ const top=floors=>SITE.ground+floors*SITE.floorHeight;
 export const towers=[
   {id:'north-west',style:'slab-brown',x0:-40,x1:-18,z0:northFacade-16,z1:northFacade-1,top:top(19),faces:'south',slabs:{depth:.8}},
   {id:'north-centre',style:'louvre',x0:-16.5,x1:9,z0:northFacade-18,z1:northFacade,top:top(20),faces:'south',crown:{w:10,depth:4.5,thickness:.22,holes:7}},
-  {id:'north-east',style:'rings',x0:15,x1:34,z0:northFacade-16,z1:northFacade+1.5,top:top(19),faces:'south',slabs:{depth:1.05},ringSide:{width:3.1,offset:3.5}},
+  {id:'north-east',style:'rings',x0:15,x1:34,z0:northFacade-16,z1:northFacade+1.5,top:top(19),faces:'south',slabs:{depth:1.05},ringSide:{width:3.6}},
   {id:'east',style:'endwall',x0:eastFacade,x1:eastFacade+24,z0:-.5,z1:24,top:top(18),faces:'west'}
 ];
+
+export const facadeRecess=t=>t.style==='louvre'?1.35:t.style==='rings'?1.05:0;
+// Use the actual exposed side-wall width, excluding the recessed front facade.
+// The ring band is centred between the wall's two ends, not measured from a corner.
+export function ringSideLayout(width,bandWidth=3.6){
+  const centre=width/2,a=centre-bandWidth/2,b=centre+bandWidth/2;
+  return {centre,a,b,bays:[[.75,a-.55],[b+.55,width-.75]]};
+}
 
 const PX=.025;                                          // metres per texture pixel
 const hex=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
@@ -105,14 +113,29 @@ const painters={
       c.fill(0,y+fh-.26,width,y+fh,'#7a7c78');
     }
     weather(c,width,height,seed,2);return c;},
-  'ring-side'(width,height,seed){const c=canvas(width,height),fh=SITE.floorHeight;c.fill(0,0,width,height,'#636467');
-    for(let y=0,f=0;y<height;y+=fh,f++)for(let x=.8,b=0;x<width-5.5;x+=3.5,b++){
-      c.fill(x,y+.65,x+1.9,y+fh-.55,'#34383e');nightWindow(c,x+.1,y+.75,x+1.8,y+fh-.65,f,b,seed);
-      c.fill(x,y+fh-.6,x+2,y+fh-.45,'#777779');
+  'ring-side'(width,height,seed,tower){
+    const c=canvas(width,height),fh=SITE.floorHeight,{a,b,bays}=ringSideLayout(width,tower.ringSide.width);
+    c.fill(0,0,width,height,'#696769');
+    // Two flanking stacks of broad recessed openings, rather than a grid of small squares.
+    for(let y=0,f=0;y<height;y+=fh,f++)for(const [i,[left,right]]of bays.entries()){
+      c.fill(left,y+.30,right,y+fh-.25,'#343236');
+      c.fill(left+.22,y+.62,right-.22,y+fh-.58,'#3e4247');
+      const mid=(left+right)/2;
+      for(const [j,[x0,x1]]of [[left+.25,mid-.045],[mid+.045,right-.25]].entries()){
+        nightWindow(c,x0,y+.68,x1,y+fh-.65,f,i*2+j,seed);
+      }
+      c.fill(mid-.035,y+.63,mid+.035,y+fh-.58,'#6b6c6b');
+      c.fill(left,y+fh-.92,right,y+fh-.27,'#575054');
+      c.fill(left,y+fh-.28,right,y+fh,'#797375');
     }
-    const a=width-5.05,b=width-1.95;c.fill(a,0,b,height,'#343337');
-    for(let x=a+.04;x<b;x+=.12)c.fill(x,0,x+.035,height,'#5e5b60');
-    weather(c,width,height,seed,2);return c;},
+    c.fill(a,0,b,height,'#343137');
+    for(let x=a+.04;x<b;x+=.12)c.fill(x,0,x+.038,height,'#686169');
+    for(const x of[a-.45,b]){
+      c.fill(x,0,x+.45,height,'#777276');
+      for(let y=.7;y<height;y+=.7)c.fill(x,y,x+.45,y+.015,'#696568');
+    }
+    weather(c,width,height,seed,2);return c;
+  },
   // The east neighbour's end wall (Street View close-up): grey tiled panels with vertical
   // reveals, a single column of slit windows between columns of small fixings, then a deep
   // vertical recess and pale pilaster. The platform stack to the right is real geometry.
@@ -145,7 +168,7 @@ const painters={
 // Albedo and night-glow pixels for a tower's facade (width x height metres).
 export function paintFacade(tower,width,height,style=tower.style){
   const seed=[...tower.id].reduce((s,ch)=>Math.imul(s,31)+ch.charCodeAt(0)|0,5);
-  const c=painters[style](width,height,seed);
+  const c=painters[style](width,height,seed,tower);
   return {width:c.w,height:c.h,albedo:c.albedo,glow:c.glow};
 }
 
@@ -183,6 +206,20 @@ export function facadeRelief(t){
       }
     }
     box('roof-edge',(t.x1-t.x0)/2,t.top+.12,-.55,t.x1-t.x0,.24,1.75,'#666b65');
+  }
+  if(t.style==='ring-side'){
+    const width=t.z1-t.z0,{a,b,bays}=ringSideLayout(width,t.ringSide.width);
+    for(const [left,right]of [[0,.75],[a-.55,a],[b,b+.55],[width-.75,width]]){
+      box('side-pier',(left+right)/2,SITE.ground+height/2,.20,right-left,height,.40,'#777276');
+      for(let y=SITE.ground+.7;y<t.top;y+=.7)box('side-stone-joint',(left+right)/2,y,.402,right-left,.012,.006,'#686368');
+    }
+    for(let y=SITE.ground;y<t.top-.1;y+=fh)for(const [left,right]of bays){
+      const u=(left+right)/2,w=right-left;
+      box('side-floor-blade',u,y+.12,.21,w,.24,.66,'#7b7477');
+      box('side-parapet',u,y+.58,.08,w,.64,.16,'#5f575c');
+      box('side-sill',u,y+.93,.12,w,.055,.24,'#90878a');
+      box('side-window-mullion',u,y+1.87,.055,.055,1.65,.11,'#747274');
+    }
   }
   if(t.style==='rings'){
     const width=t.x1-t.x0;

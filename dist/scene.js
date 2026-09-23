@@ -3,7 +3,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {roofCanopyGeometry,sideRingGeometry} from './facade-geometry.js';
 import {BOARD,finishByCode,finishPixels} from './finishes.js';
-import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms} from './surroundings.js';
+import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight} from './model.js';
 import {doorRects,visualDoorInset,visualLeafWidth,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
 const BEAM_FLUSH_SNAP=.005;
@@ -218,8 +218,8 @@ export class SpaceScene{
   for(const t of towers){
    const w=t.x1-t.x0,d=t.z1-t.z0,h=t.top-SITE.ground,west=t.faces==='west',faceWidth=west?d:w,front=painted(paintFacade(t,faceWidth,h));
    const faces=[side,side,roof,side,side,side];faces[west?1:4]=front;
-   if(t.ringSide)faces[1]=painted(paintFacade(t,d,h,'ring-side'));
-   const recess=t.style==='louvre'?1.35:t.style==='rings'?1.05:0;
+   if(t.ringSide)faces[1]=painted(paintFacade(t,d-facadeRecess(t),h,'ring-side'));
+   const recess=facadeRecess(t);
    // Split the east box so the right-hand platform stack is genuinely recessed.
    if(t.style==='endwall'){
     const a=t.z0+eastPlatforms.start,b=t.z0+eastPlatforms.end;
@@ -231,7 +231,6 @@ export class SpaceScene{
     addSection(t.z0,a,0);addSection(a,b,eastPlatforms.recess);addSection(b,t.z1,0);
    }else{
     const geo=new T.BoxGeometry(w,h,d-recess);
-    if(t.ringSide)for(let i=4;i<8;i++)geo.attributes.uv.setX(i,geo.attributes.uv.getX(i)*(d-recess)/d);
     const box=new T.Mesh(geo,faces);box.position.set((t.x0+t.x1)/2,SITE.ground+h/2,(t.z0+t.z1-recess)/2);g.add(box);
    }
    addRelief(t);
@@ -241,11 +240,13 @@ export class SpaceScene{
     for(const sign of[-1,1])solid(.25,.55,.4,(t.x0+t.x1)/2+sign*(t.crown.w/2-.15),t.top+.15,t.z1,material('#74776f'));
    }
    if(t.ringSide){
+    const sideEnd=t.z1-recess,layout=ringSideLayout(sideEnd-t.z0,t.ringSide.width);
+    addRelief({...t,style:'ring-side',faces:'west',z1:sideEnd});
     const ringMat=material('#c0c1b9'),ringGeo=sideRingGeometry();
     const count=Math.round(h/SITE.floorHeight),ringLevels=Array.from({length:count},(_,i)=>i).filter(i=>i%4!==3);
     const rings=new T.InstancedMesh(ringGeo,ringMat,ringLevels.length);rings.name='north-east-alley-rings';
     const matrix=new T.Matrix4;
-    ringLevels.forEach((f,i)=>{matrix.makeTranslation(t.x0-.035,SITE.ground+(f+.55)*SITE.floorHeight,t.z1-t.ringSide.offset);rings.setMatrixAt(i,matrix);});
+    ringLevels.forEach((f,i)=>{matrix.makeTranslation(t.x0-.035,SITE.ground+(f+.55)*SITE.floorHeight,t.z0+layout.centre);rings.setMatrixAt(i,matrix);});
     rings.computeBoundingSphere();g.add(rings);
    }
    // Balcony slabs or fins along part of the facing side, one per floor.

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {SITE,towers,paintFacade,northFacade,eastFacade,corridor,facadeRelief,eastVents} from '../dist/surroundings.js';
+import {SITE,towers,paintFacade,northFacade,eastFacade,corridor,facadeRelief,eastVents,facadeRecess,ringSideLayout} from '../dist/surroundings.js';
 import {roofCanopyGeometry} from '../dist/facade-geometry.js';
 import {walls,doors} from '../dist/model.js';
 import {doorRects,visualLeafWidth} from '../dist/spatial.js';
@@ -124,7 +124,7 @@ test('rings face the alley, with three vent columns and a recessed platform stac
  const size=rings.geometry.boundingBox.getSize(new THREE.Vector3());
  assert(size.x<.11&&size.z>1.9,'ring plane faces west, not south');
  const matrix=new THREE.Matrix4,position=new THREE.Vector3;
- for(let i=0;i<rings.count;i++){rings.getMatrixAt(i,matrix);position.setFromMatrixPosition(matrix);assert(position.x<tower.x0&&position.z<tower.z1-2,'all rings sit on the alley-facing wall');}
+ for(let i=0;i<rings.count;i++){rings.getMatrixAt(i,matrix);position.setFromMatrixPosition(matrix);assert(position.x<tower.x0,'all rings sit on the alley-facing wall');assert(Math.abs(position.z-(tower.z0+tower.z1-facadeRecess(tower))/2)<1e-5,'rings are centred on the exposed side wall, not next to its front edge');}
  const east=towers.find(t=>t.style==='endwall');
  const vents=facadeRelief(east).filter(p=>p.kind==='wall-fitting');
  assert.equal(new Set(vents.map(p=>p.u)).size,3);
@@ -136,4 +136,20 @@ test('rings face the alley, with three vent columns and a recessed platform stac
  const pixel=u=>paint.albedo.slice((Math.floor(paint.height*.013)*paint.width+Math.floor(u/(east.z1-east.z0)*paint.width))*4).slice(0,3);
  const pale=pixel(1),warm=pixel(4);
  assert(pale[0]>warm[0]+25&&pale[1]>warm[1]+25,'central tiled strip is visibly darker than flanking tiles');
+});
+
+
+test('central ring band has a recessed window stack on each side',()=>{
+ const t=towers.find(t=>t.ringSide),width=t.z1-t.z0-facadeRecess(t),height=t.top-SITE.ground;
+ const {a,b,centre,bays}=ringSideLayout(width,t.ringSide.width);
+ assert.equal(centre,width/2);assert(Math.abs(a-(width-b))<1e-8);
+ assert(bays[0][1]<a&&bays[1][0]>b,'window stacks flank the centre band');
+ const paint=paintFacade(t,width,height,'ring-side');
+ const average=(left,right)=>{let sum=0,n=0;const row=Math.floor(1.3/height*paint.height);for(let x=Math.ceil(left/width*paint.width);x<right/width*paint.width;x++){sum+=paint.albedo[(row*paint.width+x)*4];n++;}return sum/n;};
+ for(const [left,right]of bays)assert(average(left+.3,right-.3)<80,'broad dark opening on each side');
+ assert(average(a-.4,a-.1)>100&&average(b+.1,b+.4)>100,'stone frames border both sides of the central strip');
+ const side=facadeRelief({...t,style:'ring-side',faces:'west',z1:t.z1-facadeRecess(t)});
+ const blades=side.filter(p=>p.kind==='side-floor-blade');
+ assert.equal(blades.length,2*Math.round(height/SITE.floorHeight));
+ assert(blades.some(p=>p.u<a)&&blades.some(p=>p.u>b),'projecting floor blades exist on both sides');
 });
