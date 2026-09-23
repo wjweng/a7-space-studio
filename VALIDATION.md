@@ -1,6 +1,19 @@
 # Validation and work history
 
-## Latest verified state — 2026-09-23
+## Latest verified state — 2026-09-24
+
+The application changes through `22b29eb` passed all 119 automated tests. Cloudflare Pages served files identical to the local `dist/` (checked by hash for the changed modules and the page).
+
+| Application commit | Work completed | How it was checked |
+| --- | --- | --- |
+| `4472a55` | Lights mount under beams; linear-light height works; fabric colours for sofas, chairs and beds (sofa board finish removed); walking passes plants; 3 mm floor-board end joints; unreadable saves set aside, persistent storage requested | Tests; browser with the owner's exported layout (beam-mounted light status, green sofa, floor joints, a deliberately corrupted save kept after the fallback overwrote the main save, discard button) |
+| `8402f19` | Clear ceiling height 3.00 m; balcony opening and curtains follow it, doors and windows keep absolute heights; ratio lock applies to handle drags; example-beam line removed from the assumptions | Tests; browser (page text, height input maximum, typed ratio lock) |
+| `ea59e21` | Door leaves hinge on the swing-side face corner and fill their frames; openings that start at a perpendicular wall use that wall's face | Tests sweeping every door 0–89° against walls; browser (front door closed, half open, open) |
+| `22b29eb` | A1, A2 and A6 lobby door handles on the left, read from the plan's swing arcs | Tests; browser view from the front door (A6, A2, A3) |
+
+Not verified in a browser: a dragged ratio-locked resize (synthetic drags could not target the handles), the paused-autosave path when storage is full, room doors other than the front door, and the A1 and A8 handles.
+
+## Earlier verified state — 2026-09-23
 
 The application changes through `c402611` passed all 101 automated tests. Cloudflare Pages deployment succeeded, and the changed live JavaScript files were compared byte-for-byte with the local files. No application code changed in the subsequent documentation audit.
 
