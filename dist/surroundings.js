@@ -263,17 +263,18 @@ export function facadeRelief(t){
 // with A7 (north half) and A8 (south half) at its east end and A3 / A2 at its west end.
 // Seen from A7's door: A6 then A5 on the right (north); on the left (south) the A2 stair,
 // the smoke lobby (排煙室, fire doors held open; its lifts face west inside, out of sight),
-// the A1 stair, then A1. x is along the corridor, z across it.
+// the A1 stair, then A1. x is along the corridor, z across it. `handle` is the side the
+// handle is on seen from the corridor, read from the swing arcs (hinge opposite the handle).
 export const corridor={x0:-19.1,x1:-.51,z0:7.26,z1:9.92,height:2.6,
   doors:[
-    {wall:'north',at:-2.78,w:1,kind:'unit',label:'A6'},
-    {wall:'north',at:-16.9,w:1,kind:'unit',label:'A5'},
+    {wall:'north',at:-2.78,w:1,kind:'unit',label:'A6',handle:'left'},
+    {wall:'north',at:-16.9,w:1,kind:'unit',label:'A5',handle:'right'},
     {wall:'south',at:-3.05,w:.95,kind:'stair',label:'A2 梯'},
     {wall:'south',at:-8.97,w:.95,kind:'stair',label:'A1 梯'},
-    {wall:'south',at:-17,w:1,kind:'unit',label:'A1'},
-    {wall:'west',at:8.01,w:1,kind:'unit',label:'A3'},
-    {wall:'west',at:9.19,w:1,kind:'unit',label:'A2'},
-    {wall:'east',at:9.19,w:1,kind:'unit',label:'A8'}
+    {wall:'south',at:-17,w:1,kind:'unit',label:'A1',handle:'left'},
+    {wall:'west',at:8.01,w:1,kind:'unit',label:'A3',handle:'right'},
+    {wall:'west',at:9.19,w:1,kind:'unit',label:'A2',handle:'left'},
+    {wall:'east',at:9.19,w:1,kind:'unit',label:'A8',handle:'right'}
   ],
   smokeLobby:{x0:-8.35,x1:-6,depth:5.2,opening:1.5,lifts:[1.4,4.1]}
 };

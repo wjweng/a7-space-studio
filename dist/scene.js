@@ -276,12 +276,12 @@ export class SpaceScene{
   wall(sl.x0-.12,sl.x0,c.z1,c.z1+sl.depth);wall(sl.x1,sl.x1+.12,c.z1,c.z1+sl.depth);wall(sl.x0,sl.x1,c.z1+sl.depth,c.z1+sl.depth+.12);
   const leafM={unit:lob(ENTRY_DOOR),stair:lob('#8b918f',{metalness:.3,roughness:.5}),lift:lob('#b5bbbe',{metalness:.7,roughness:.3})},frameM=lob('#3b3e40'),metalM=lob('#c9cdce',{metalness:.8,roughness:.3});
   // A door on a wall face; local +z points into the room it is seen from.
-  const doorAt=(x,z,turn,w,kind)=>{const d=new T.Group;d.position.set(x,0,z);d.rotation.y=turn;g.add(d);const h=kind==='lift'?2.2:2.1,part=(pw,ph,pd,px,py,pz,m)=>{const mesh=new T.Mesh(new T.BoxGeometry(pw,ph,pd),m);mesh.position.set(px,py,pz);d.add(mesh);};
+  const doorAt=(x,z,turn,w,kind,handle='right')=>{const d=new T.Group;d.position.set(x,0,z);d.rotation.y=turn;g.add(d);const h=kind==='lift'?2.2:2.1,part=(pw,ph,pd,px,py,pz,m)=>{const mesh=new T.Mesh(new T.BoxGeometry(pw,ph,pd),m);mesh.position.set(px,py,pz);d.add(mesh);};
    part(w+.12,h+.06,.03,0,(h+.06)/2,.015,frameM);
    if(kind==='lift'){for(const s of[-1,1])part(w/2-.006,h,.03,s*w/4,h/2,.04,leafM.lift);part(.14,.3,.02,w/2+.28,1.1,.01,metalM);}
-   else{part(w,h,.045,0,h/2,.05,leafM[kind]);if(kind==='stair')part(w*.8,.05,.05,0,1,.1,metalM);else part(.14,.03,.05,w/2-.12,1.05,.1,metalM);}};
+   else{part(w,h,.045,0,h/2,.05,leafM[kind]);if(kind==='stair')part(w*.8,.05,.05,0,1,.1,metalM);else part(.14,.03,.05,(handle==='left'?-1:1)*(w/2-.12),1.05,.1,metalM);}};
   const facing={north:0,south:Math.PI,west:Math.PI/2,east:-Math.PI/2};
-  for(const door of c.doors){const [x,z]=door.wall==='north'?[door.at,c.z0]:door.wall==='south'?[door.at,c.z1]:door.wall==='west'?[c.x0,door.at]:[c.x1,door.at];doorAt(x,z,facing[door.wall],door.w,door.kind);}
+  for(const door of c.doors){const [x,z]=door.wall==='north'?[door.at,c.z0]:door.wall==='south'?[door.at,c.z1]:door.wall==='west'?[c.x0,door.at]:[c.x1,door.at];doorAt(x,z,facing[door.wall],door.w,door.kind,door.handle);}
   for(const at of sl.lifts)doorAt(sl.x1,c.z1+at,facing.east,1,'lift');
   // The smoke lobby's fire doors are held open against its side walls.
   for(const [hinge,sign]of[[gap0,1],[gap1,-1]]){const leaf=new T.Mesh(new T.BoxGeometry(.045,2.1,sl.opening/2-.01),leafM.stair);leaf.position.set(hinge+sign*.03,1.05,c.z1+.12+sl.opening/4);g.add(leaf);}

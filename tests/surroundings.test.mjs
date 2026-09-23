@@ -153,3 +153,8 @@ test('central ring band has a recessed window stack on each side',()=>{
  assert.equal(blades.length,2*Math.round(height/SITE.floorHeight));
  assert(blades.some(p=>p.u<a)&&blades.some(p=>p.u>b),'projecting floor blades exist on both sides');
 });
+
+test('neighbours\' front-door handles follow the plan\'s swing arcs',()=>{
+ const side=Object.fromEntries(corridor.doors.filter(d=>d.kind==='unit').map(d=>[d.label,d.handle]));
+ assert.deepEqual(side,{A6:'left',A5:'right',A1:'left',A3:'right',A2:'left',A8:'right'});
+});
