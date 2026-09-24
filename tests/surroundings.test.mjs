@@ -42,6 +42,8 @@ test('the lobby matches the floor plan as seen from A7\'s front door',()=>{
  assert(at('west','A3').at<at('west','A2').at);
  assert(at('east','A8').at>opening[1],'A8 is beside A7, south of its door');
  assert(corridor.smokeLobby.lifts.length===2,'the lifts are inside the smoke lobby, not on the corridor');
+ // On the plan A6 and the A2 stair open right beside A7's end wall (about 1.2 m to their centres).
+ for(const d of[at('north','A6'),at('south','A2 梯')])assert(corridor.x1-d.at<1.5,d.label+' sits next to A7\'s door');
 });
 test('the front door hinges on the south jamb and opens inward, handle on the right from inside',()=>{
  const entry=doors.find(d=>d.name==='玄關大門'),open=doorRects(entry,1,entry.maxAngle)[0],closed=doorRects(entry,0);
