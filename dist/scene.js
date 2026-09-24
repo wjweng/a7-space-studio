@@ -7,6 +7,7 @@ import {flooringByCode,flooringPixels} from './floorings.js';
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeFabric,lightMountDrop} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
+import {cabinetCells,cabinetColumns} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
 // A flush fitting sends all of its light downward and glows like a panel, so straight below
 // it is several times brighter than under a bare bulb of the same output.
@@ -333,6 +334,52 @@ export class SpaceScene{
   return this.fabricMaterials.get(color);
  }
  makeFurniture(g,f){const fabric=normalizeFabric(f.fabric);this.woodOverride=f.finish?this.finishMaterial(f.finish):null;this.fabricOverride=fabric?this.fabricMaterial(fabric):null;try{return this.makeFurnitureParts(g,f);}finally{this.woodOverride=null;this.fabricOverride=null;}}
+ makeModularCabinet(g,f,box){
+  const t=.018,d=f.d,parts=[];
+  for(const column of cabinetColumns(f)){
+   const{width,bottom,x}=column,bodyHeight=f.h-bottom;
+   box(width,bodyHeight,t,x,bottom+bodyHeight/2,-d/2+t/2);
+   for(const side of[-1,1])box(t,bodyHeight,d,x+side*(width/2-t/2),bottom+bodyHeight/2,0);
+  }
+  for(const cell of cabinetCells(f)){
+   const{x,y,w,h,bottom,front,id}=cell,innerW=Math.max(.02,w-2*t),frontW=Math.max(.02,innerW-.006),frontH=Math.max(.02,h-2*t-.006);
+   box(w,t,d,x,bottom+t/2,0);
+   if(Math.abs(bottom+h-f.h)<.001)box(w,t,d,x,bottom+h-t/2,0);
+   if(front==='open')continue;
+   const addDoor=(hinge,sign,width)=>{
+    const pivot=new T.Group;
+    pivot.position.set(hinge,y,d/2+.012);
+    g.add(pivot);
+    this.box(pivot,width,frontH,.018,sign*width/2,0,0,'wood',.003);
+    this.box(pivot,.013,.09,.022,sign*(width-.045),0,.02,'metal',.003);
+    parts.push({id,kind:'door',pivot,sign});
+   };
+   if(front==='left')addDoor(x-w/2+t,1,frontW);
+   if(front==='right')addDoor(x+w/2-t,-1,frontW);
+   if(front==='double'){
+    addDoor(x-w/2+t,1,frontW/2);
+    addDoor(x+w/2-t,-1,frontW/2);
+   }
+   if(front==='drawers'){
+    const pivot=new T.Group;
+    pivot.position.set(x,y,d/2+.012);
+    g.add(pivot);
+    this.box(pivot,frontW,frontH,.018,0,0,0,'wood',.003);
+    this.box(pivot,Math.min(.16,frontW*.35),.015,.025,0,0,.02,'metal',.003);
+    parts.push({id,kind:'drawer',pivot,base:pivot.position.z,travel:d*.55});
+   }
+   if(front==='sliding'){
+    for(const sign of[-1,1]){
+     const pivot=new T.Group;
+     pivot.position.set(x+sign*frontW/4,y,d/2+(sign>0?.022:.012));
+     g.add(pivot);
+     this.box(pivot,frontW/2+.01,frontH,.018,0,0,0,'wood',.003);
+     parts.push({id,kind:'slide',pivot,base:pivot.position.x,travel:-sign*frontW*.45});
+    }
+   }
+  }
+  if(parts.length)this.actions.set(f.id,{type:'modularCabinet',item:f,parts,amount:0});
+ }
  makeFurnitureParts(g,f){let{w,d,h,type}=f;const box=(ww,hh,dd,x,y,z,m='wood',r=0)=>this.box(g,ww,hh,dd,x,y,z,m,r);const legs=(height,offset=.07)=>{for(let x of[-w/2+offset,w/2-offset])for(let z of[-d/2+offset,d/2-offset])box(.045,height,.045,x,height/2,z,'wood',.008);};
  if(type==='rug'){box(w,.01,d,0,.012,0,'accent',.005);return}
  if(type==='beam'){const pieces=beamVisiblePieces(f),clipped=Math.abs(pieces.reduce((sum,piece)=>sum+Math.abs(polygonArea(piece)),0)-w*d)>1e-9;let geo;if(clipped)geo=beamGeometry(f,pieces);else{geo=new T.BoxGeometry(w,h,d);geo.clearGroups();for(const face of[0,1,3,4,5])geo.addGroup(face*6,6,0);}const beam=new T.Mesh(geo,this.m.wall);beam.position.y=HEIGHT-h/2;beam.castShadow=false;beam.receiveShadow=true;g.add(beam);const hitMaterial=new T.MeshBasicMaterial();hitMaterial.colorWrite=false;hitMaterial.depthWrite=false;hitMaterial.depthTest=false;const hit=new T.Mesh(new T.BoxGeometry(Math.max(w,.3),.02,Math.max(d,.3)),hitMaterial);hit.position.y=HEIGHT-h/2;hit.castShadow=false;hit.receiveShadow=false;g.add(hit);return;}
@@ -341,6 +388,39 @@ export class SpaceScene{
  if(type==='sofa'){g.scale.y=h/.84;h=.84;legs(.12,.12);box(w,.23,d,0,.22,0,'fabric',.07);box(w,h-.22,.16,0,(h+.22)/2,-d/2+.08,'fabric',.055);for(let x of[-w/2+.09,w/2-.09])box(.18,h*.68,d,x,h*.34+.1,0,'fabric',.055);for(let i=0;i<3;i++){let x=-w/2+.23+(w-.46)/6+i*(w-.46)/3;box((w-.49)/3,.18,d-.22,x,.425,.06,'fabric',.07);box((w-.5)/3,.3,.17,x,.64,-d/2+.2,'fabric',.06);}let pillow=box(.3,.3,.11,w*.31,.59,-.12,'accent',.065);pillow.rotation.z=-.18;return;}
  if(['table','desk'].includes(type)){legs(h-.04);let top=box(w,.045,d,0,h-.022,0,'wood',type==='table'?.08:.01);if(type==='desk'){const drawer=new T.Group;drawer.position.set(0,h-.12,d/2-.16);g.add(drawer);this.box(drawer,w*.65,.13,.3,0,0,0,'wood');this.box(drawer,.16,.018,.02,0,0,.16,'metal');this.actions.set(f.id,{type:'drawer',pivot:drawer,base:drawer.position.z,travel:.3,item:f,amount:f.open||0});}return;}
  if(type==='chair'){legs(h*.52);box(w,.065,d,0,h*.52,0,'fabric',.03);box(w,h*.43,.055,0,h*.75,-d/2+.02,'wood',.035);return;}
+ if(type==='television'){
+  box(w,h,Math.max(.035,d*.7),0,f.elevation+h/2,0,'dark',.012);
+  box(w*.96,h*.94,.008,0,f.elevation+h/2,d*.36,'accent',.007);
+  if(f.tvMount==='cabinet'){box(.07,.07,.06,0,f.elevation-.03,0,'dark');box(Math.min(.4,w*.4),.018,.16,0,f.elevation-.065,.02,'dark',.008);}
+  return;
+ }
+ if(type==='mediaWall'){
+  const media=f.mediaWall,back=-d/2+.012;
+  const panel=media.panel;
+  box(panel.w,panel.h,panel.thickness,panel.x,panel.y+panel.h/2,back+panel.thickness/2,panel.finish?this.finishMaterial(panel.finish)||'wood':'wood');
+  for(const module of[media.base,media.upper]){
+   if(!module)continue;
+   const child=new T.Group;
+   child.position.set(module.x,module.y,module===media.base?0:back+module.d/2+panel.thickness);
+   g.add(child);
+   const moduleBox=(ww,hh,dd,x,y,z,mat='wood',r=0)=>this.box(child,ww,hh,dd,x,y,z,mat,r);
+   this.makeModularCabinet(child,module,moduleBox);
+  }
+  const tv=media.tv,tvZ=tv.mount==='wall'?back+panel.thickness+.035:d/2+.055;
+  box(tv.w,tv.h,.04,tv.x,tv.y+tv.h/2,tvZ,'dark',.015);
+  box(tv.w*.96,tv.h*.94,.008,tv.x,tv.y+tv.h/2,tvZ+.025,'accent',.008);
+  if(tv.mount==='base')box(.08,Math.max(.04,tv.y-(media.base?.y||0)-(media.base?.h||0)+.04),.1,tv.x,tv.y-.02,tvZ-.045,'dark');
+  const markers=new T.Group;markers.name='media-markers';markers.visible=!!this.showMediaMarkers;g.add(markers);
+  for(const outlet of media.outlets){const color=outlet.kind==='power'?'metal':outlet.kind==='data'?'accent':'stone';this.box(markers,.07,.07,.01,outlet.x,outlet.y,back+panel.thickness+.015,color,.008);}
+  for(const conduit of media.conduits)for(let i=1;i<conduit.points.length;i++){
+   const a=conduit.points[i-1],b=conduit.points[i],length=Math.hypot(b.x-a.x,b.y-a.y);
+   if(length<.005)continue;
+   const tube=this.cyl(markers,.006,.006,length,(a.x+b.x)/2,(a.y+b.y)/2,back+panel.thickness+.02,'metal');
+   tube.rotation.z=Math.atan2(a.x-b.x,b.y-a.y);
+  }
+  return;
+ }
+ if(['wardrobe','console'].includes(type)&&f.cabinetDesign){this.makeModularCabinet(g,f,box);return;}
  if(['wardrobe','drawer','console','kitchen','fridge'].includes(type)){const bodyMat=type==='fridge'?'white':'wood';box(w,h,.025,0,h/2,-d/2,bodyMat);for(let x of[-w/2+.012,w/2-.012])box(.024,h,d,x,h/2,0,bodyMat);for(let y of[.04,h-.015])box(w,.028,d,0,y,0,bodyMat);for(let y=.45;y<h-.1;y+=.45)box(w-.05,.02,d-.04,0,y,0,'white');const layout=type==='drawer'?{doors:[],drawers:[{x:0,width:w-.03,rows:3}],slides:[]}:cabinetLayout(f),pivots=[],drawers=[],slides=[];for(const leaf of layout.doors){const p=new T.Group;p.position.set(leaf.hinge,h/2,d/2);p.userData.swing=-leaf.sign;g.add(p);this.box(p,leaf.width-.008,h-.065,.025,leaf.sign*leaf.width/2,0,0,bodyMat,.006);this.box(p,.018,.12,.028,leaf.sign*(leaf.width-.055),0,.03,'metal',.006);pivots.push(p);}for(const front of layout.drawers){const rows=front.rows||3;for(let row=0;row<rows;row++){const p=new T.Group;p.position.set(front.x,(row+.5)*h/rows,d/2);g.add(p);this.box(p,front.width-.008,h/rows-.018,.025,0,0,0,bodyMat,.006);this.box(p,Math.min(.18,front.width*.35),.018,.03,0,0,.03,'metal',.006);drawers.push(p);}}for(const front of layout.slides){const p=new T.Group;p.position.set(front.x,h/2,d/2+(front.sign>0?.012:.027));p.userData.baseX=front.x;p.userData.travelX=front.sign*front.width*.82;g.add(p);this.box(p,front.width,h-.065,.025,0,0,0,bodyMat,.006);this.box(p,.018,.12,.03,-front.sign*(front.width/2-.035),0,.03,'metal',.006);slides.push(p);}this.actions.set(f.id,{type:type==='drawer'?'cabdrawer':'cabinet',pivots,drawers,slides,item:f,travel:d*(type==='drawer'?.75:.55),base:d/2,amount:f.open||0});if(type==='console'){box(w*.78,.72,.04,0,h+.48,-d*.3,'dark',.025);box(w*.74,.66,.01,0,h+.48,-d*.3+.027,'accent');box(.05,.12,.1,0,h+.08,-d*.3,'dark');}
  if(type==='kitchen'){const parts=normalizeKitchenParts(f),sink=parts.sink,cooktop=parts.cooktop,sinkX=w*.23,cooktopX=-w*.30;box(w+.03,.04,d+.03,0,h,0,'stone',.008);box(sink.w,.015,sink.d,sinkX,h+.028,0,'metal',Math.min(.05,sink.w/4,sink.d/4));box(Math.max(.04,sink.w-.1),.018,Math.max(.04,sink.d-.09),sinkX,h+.037,0,'dark',.05);let faucet=this.cyl(g,.016,.016,.25,sinkX,h+.13,-Math.min(d*.29,sink.d*.35),'metal');box(.02,.025,.15,sinkX,h+.25,-Math.min(d*.18,sink.d*.24),'metal',.01);box(cooktop.w,.018,cooktop.d,cooktopX,h+.035,0,'dark',.03);for(let x of[cooktopX-cooktop.w*.27,cooktopX+cooktop.w*.27])this.cyl(g,Math.min(.09,cooktop.w*.14),Math.min(.09,cooktop.w*.14),.015,x,h+.055,0,'metal');}
  return;}
@@ -459,7 +539,7 @@ export class SpaceScene{
   return true;
  }
  frame(){let dt=Math.min(this.clock.getDelta(),.04);if(this.mode==='orbit')this.controls.update();if(this.mode==='walk'){this.ensureSafeCamera();this.followTour(dt);const forward=(this.keys.has('KeyW')||this.keys.has('ArrowUp')?1:0)-(this.keys.has('KeyS')||this.keys.has('ArrowDown')?1:0),side=(this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0),norm=Math.max(1,Math.hypot(forward,side)),speed=dt*1.5/norm;this.walkYaw+=((this.keys.has('ArrowLeft')?1:0)-(this.keys.has('ArrowRight')?1:0))*dt*1.3;let dx=(-Math.sin(this.walkYaw)*forward+Math.cos(this.walkYaw)*side)*speed,dz=(-Math.cos(this.walkYaw)*forward-Math.sin(this.walkYaw)*side)*speed;let p=this.camera.position;if(this.canWalk(p.x+dx,p.z))p.x+=dx;if(this.canWalk(p.x,p.z+dz))p.z+=dz;p.y=this.eye;this.camera.rotation.order='YXZ';this.camera.rotation.set(this.walkPitch,this.walkYaw,0);}
- let moving=false;for(const [id,a]of this.actions){let target=a.item?a.item.open||0:this.openStates[id]||0;if(Math.abs(a.amount-target)>1e-4)moving=true;a.amount=T.MathUtils.damp(a.amount,target,7,dt);if(a.type==='door')a.pivot.rotation.y=a.def.swing*a.amount*(a.def.maxAngle??89)*Math.PI/180;if(a.type==='shower')a.pivot.rotation.y=a.base+a.swing*a.amount*Math.PI/2;if(a.type==='washer')a.pivot.rotation.y=-a.amount*Math.PI*.5;if(a.type==='cabinet'){a.pivots.forEach(p=>p.rotation.y=(p.userData.swing??-1)*a.amount*Math.PI*.5);a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);a.slides.forEach(p=>p.position.x=p.userData.baseX+p.userData.travelX*a.amount);}if(a.type==='cabdrawer')a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);if(a.type==='drawer')a.pivot.position.z=a.base+a.amount*a.travel;if(a.type==='curtain')for(const p of a.panels){let factor=1-.8*a.amount;p.g.scale.x=factor;p.g.position.x=p.sign<0?-a.width/2:a.width/2-a.width/2*factor;}}
+ let moving=false;for(const [id,a]of this.actions){let target=a.item?a.item.open||0:this.openStates[id]||0;if(Math.abs(a.amount-target)>1e-4)moving=true;a.amount=T.MathUtils.damp(a.amount,target,7,dt);if(a.type==='door')a.pivot.rotation.y=a.def.swing*a.amount*(a.def.maxAngle??89)*Math.PI/180;if(a.type==='shower')a.pivot.rotation.y=a.base+a.swing*a.amount*Math.PI/2;if(a.type==='washer')a.pivot.rotation.y=-a.amount*Math.PI*.5;if(a.type==='cabinet'){a.pivots.forEach(p=>p.rotation.y=(p.userData.swing??-1)*a.amount*Math.PI*.5);a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);a.slides.forEach(p=>p.position.x=p.userData.baseX+p.userData.travelX*a.amount);}if(a.type==='modularCabinet')for(const part of a.parts){const goal=a.item.openCells?.[part.id]?1:0;const amount=part.amount||0;if(Math.abs(amount-goal)>1e-4)moving=true;part.amount=T.MathUtils.damp(amount,goal,7,dt);if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+part.amount*part.travel;}if(a.type==='cabdrawer')a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);if(a.type==='drawer')a.pivot.position.z=a.base+a.amount*a.travel;if(a.type==='curtain')for(const p of a.panels){let factor=1-.8*a.amount;p.g.scale.x=factor;p.g.position.x=p.sign<0?-a.width/2:a.width/2-a.width/2*factor;}}
  if(this.surroundings){this.surroundings.visible=this.mode==='walk';if(this.sky)this.sky.position.copy(this.camera.position);}
  const focus=this.viewFocus?.();if(focus&&(!this.shadowFocus||Math.hypot(focus.x-this.shadowFocus.x,focus.z-this.shadowFocus.z)>.5))this.assignLampShadows();
  const shadowMap=this.renderer.shadowMap;if(shadowMap&&(this.shadowsDirty||moving)){shadowMap.needsUpdate=true;this.shadowsDirty=false;}

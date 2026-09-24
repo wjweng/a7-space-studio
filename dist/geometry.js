@@ -1,3 +1,4 @@
+import {cabinetOccupiedRects} from './cabinet-design.js';
 export const EPS=1e-7;
 export function roomAt(x,z){
  if(x>=2.82&&x<=5.18&&z<=2.78)return '臥室 A';
@@ -33,4 +34,16 @@ const localRect=(f,x,z,w,d)=>{const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin
 export function tableLegRects(f){const leg=Math.min(.09,Math.max(.045,Math.min(f.w,f.d)*.12)),ox=Math.max(0,f.w/2-leg*.95),oz=Math.max(0,f.d/2-leg*.95);return[[-ox,-oz],[ox,-oz],[-ox,oz],[ox,oz]].map(([x,z])=>localRect(f,x,z,leg,leg));}
 export function chairBackRect(f){const depth=Math.min(.12,f.d*.28);return localRect(f,0,-f.d/2+depth/2,Math.max(.05,f.w*.9),depth);}
 export function tableChairInterference(chair,table){if(!isTableLike(table))return false;return overlaps(chairBackRect(chair),table,EPS)||tableLegRects(table).some(leg=>overlaps(chair,leg,EPS));}
-export function furnitureInterference(a,b){if(['rug','light','beam'].includes(a.type)||['rug','light','beam'].includes(b.type))return false;if(a.type==='chair'&&isTableLike(b))return tableChairInterference(a,b);if(b.type==='chair'&&isTableLike(a))return tableChairInterference(b,a);return signedDistance(a,b)<-EPS;}
+export function furnitureInterference(a,b){
+ const ay=a.type==='television'?a.elevation||0:0,by=b.type==='television'?b.elevation||0:0;
+ if(ay+a.h<=by+EPS||by+b.h<=ay+EPS)return false;
+ if(['rug','light','beam'].includes(a.type)||['rug','light','beam'].includes(b.type))return false;
+ if(a.cabinetDesign||b.cabinetDesign){
+  const aa=a.cabinetDesign?cabinetOccupiedRects(a):[{...a,yMin:ay,yMax:ay+a.h}];
+  const bb=b.cabinetDesign?cabinetOccupiedRects(b):[{...b,yMin:by,yMax:by+b.h}];
+  return aa.some(left=>bb.some(right=>left.yMin<right.yMax-EPS&&right.yMin<left.yMax-EPS&&signedDistance(left,right)<-EPS));
+ }
+ if(a.type==='chair'&&isTableLike(b))return tableChairInterference(a,b);
+ if(b.type==='chair'&&isTableLike(a))return tableChairInterference(b,a);
+ return signedDistance(a,b)<-EPS;
+}

@@ -1,5 +1,13 @@
 # Validation and work history
 
+## Modular cabinets and TV walls — 2026-09-24
+
+The new cabinet editor supports template layouts, independent column widths and bottom clearances, adjustable shelf heights, per-cell open/door/drawer fronts, and a draggable elevation divider. TV cabinets can keep a TV as a separately positioned wall-mounted or cabinet-supported object. A TV wall combines a backboard, lower and upper cabinets, a TV, a wall anchor, and editable outlet/conduit records; it exports an elevation SVG and a text schedule.
+
+All 17 automated test files pass (`npm test`). The new tests cover cabinet dimensions, resize and clearance geometry, TV-wall validation and resizing, outlet/conduit records, wall anchoring, SVG draft labels, standalone TVs and legacy consoles. `git diff --check` is clean. Headless Chrome with software WebGL loaded a saved layout containing a modular storage cabinet, a TV wall and a legacy console; the cabinet editor changed column width and added a shelf, the TV-wall editor selected a wall and added an outlet and conduit, the nested lower cabinet editor opened, and the legacy console converted to a modular cabinet plus a separate TV. Moving the converted console through the inspector moved its supported TV with it. Desktop (1280 × 900) and mobile (390 × 844) dialog screenshots were reviewed. The new editors were usable and scrollable at both sizes; detailed elevations require scrolling.
+
+All TV-wall exports visibly say **草案：未經現場核對，不可直接施工**. There are no measured wall, power or structural records for this project, so conduit specifications and positions are user-entered proposals. No construction compliance or site fit is certified. The remaining target-device checks are divider dragging, sliding an anchored TV wall along its chosen wall, and electrical/structural review against actual survey data.
+
 ## Latest verified state — 2026-09-24
 
 The application changes through `ca82a30` passed all 123 automated tests. Cloudflare Pages served files identical to the local `dist/` (checked by hash for the changed modules).

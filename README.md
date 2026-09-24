@@ -8,6 +8,8 @@ Run `node server.mjs` to preview at http://127.0.0.1:4173. Run `npm test` for mo
 
 - Orbit overview, top-down editing and first-person indoor navigation.
 - Add, rename, duplicate, resize, rotate and move furniture; top-view edge dragging resizes an object while preserving the opposite edge. With the plan-ratio lock ticked, both typed and dragged width/depth changes scale the other plan dimension too; the lock starts unticked and clears whenever another item is selected.
+- Storage and TV cabinets offer starter layouts whose columns, shelf heights, open niches, bottom clearance and individual front types can be edited in an elevation view. Existing consoles can be converted without losing their TV: the TV becomes a separate object that can sit on a cabinet or mount on a wall.
+- A TV-wall object combines a backboard, lower and upper cabinets, TV placement, finish and optional outlet/conduit layout. It can snap to a selected wall; the editor exports an annotated elevation SVG and a text specification. Survey, wall structure and existing electrical data must be entered and checked on site. Every export is marked **draft, not for construction** until that verification is complete.
 - A7 exterior walls are hard movement boundaries. Interior collisions remain editable drafts so overlapping objects can be brought to the foreground and moved apart; table and desk tops allow chairs to tuck underneath while protecting legs and backs.
 - Fixed doors, curtains, cabinet fronts, washer doors and both shower doors can be opened for a simplified sweep/interference check. Door leaves fill their frames and turn about a hinge on the swing-side wall face, so the hinge edge never moves. Walking passes through plants.
 - Typed width/depth changes grow away from a wall or furniture the item already touches instead of being rejected.
@@ -17,7 +19,7 @@ Run `node server.mjs` to preview at http://127.0.0.1:4173. Run `npm test` for mo
 - Walk view looks out on the neighbouring towers (north across the lane, east next door, modelled on 2025 Street View), the street below and the sky, and through the front door onto the lift lobby of the 5/7/9/11F plan. The north tower uses recessed balconies, projecting stone piers, bronze louvres and a horizontal roof canopy with real elliptical openings. The right tower has a centred ring-and-louvre band on its alley-facing side wall, flanked by two stacks of windows and projecting floor blades. The east neighbour has a darker central tiled band, pale flanking tiles, one slit-window column, three exhaust-fitting columns and a recessed platform stack visible when looking right from the work balcony. Night darkens the sky and lights some windows.
 - Local named scenarios can be saved, loaded and deleted. The current working layout is the non-deletable baseline. JSON export/import transfers the browser-local state.
 
-The collision and clearance labels are planning aids: they use 2D oriented-rectangle geometry and do not replace site measurement or construction coordination.
+The collision and clearance labels are planning aids: they use oriented-rectangle geometry, height-aware checks for modular cabinets and TVs, and sampled opening sweeps. They do not replace site measurement or construction coordination.
 
 ## Cloudflare
 

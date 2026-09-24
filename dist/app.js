@@ -1,16 +1,23 @@
 import {SpaceScene} from './scene.js';
-import {VERSION,LAYOUT_REVISION,migrateLayout,HEIGHT,outline,initialFurniture,palettes,rooms,doors,curtains,clone,issues,overlaps,wallRects,validateFurniture,normalizeSinkBasin,normalizeKitchenParts,normalizeLight,lightKinds,lightShapes,lightColorTemperatures,corners,inside} from './model.js';
+import {VERSION,LAYOUT_REVISION,migrateLayout,HEIGHT,outline,walls,initialFurniture,palettes,rooms,doors,curtains,clone,issues,overlaps,wallRects,validateFurniture,normalizeSinkBasin,normalizeKitchenParts,normalizeLight,lightKinds,lightShapes,lightColorTemperatures,corners,inside,insideShell} from './model.js';
 import {minimumsFor,linearLightDefaults,wetRooms,normalizeFloors,fabricTypes,fabricColors,mountedOn} from './model.js';
 import {finishes,finishFamilies,finishByCode,finishableTypes,finishPixels} from './finishes.js';
 import {floorings,flooringSeries,flooringByCode,flooringPixels} from './floorings.js';
 import {exteriorWallRects} from './model.js';
+import {makeCabinetDesign,resizeCabinetDesign,cabinetCells,modularCabinetRects} from './cabinet-design.js';
+import {createCabinetEditor} from './cabinet-ui.js';
+import {makeMediaWall,resizeMediaWall} from './media-wall.js';
+import {createMediaWallEditor} from './media-wall-ui.js';
+import {anchorMediaWall,mediaWallChoices} from './wall-anchor.js';
 import {readRecovered,setAside,discardRecovered,requestPersistentStorage} from './recovery.js';
 import {sameRoom,roomAt,signedDistance,distanceLabel,doorRects,EPS,constrainMove,placeAtTarget,cabinetRects,showerDoorRects,fitResize} from './spatial.js';
 function ensureComponentControls(){if($('componentControls'))return;const anchor=$('proportions').parentElement,panel=document.createElement('div');panel.id='componentControls';panel.hidden=true;panel.style.cssText='margin-top:12px';const make=(id,label)=>{const wrap=document.createElement('div');wrap.className='component';wrap.style.cssText='border:1px solid var(--line);border-radius:7px;padding:9px;margin-top:8px';const title=document.createElement('strong');title.textContent=label;title.style.fontSize='12px';const row=document.createElement('div');row.className='inputs';row.style.marginTop='7px';for(const [suffix,text]of[['W','寬'],['D','深']]){const l=document.createElement('label');l.textContent=text;const i=document.createElement('input');i.id=id+suffix;i.type='number';i.min='8';i.max='500';i.step='1';l.append(i);row.append(l)}wrap.append(title,row);return wrap};const sink=document.createElement('div');sink.id='sinkControls';sink.hidden=true;const sinkTitle=document.createElement('div');sinkTitle.className='sectiontitle space';sinkTitle.textContent='洗手台凹槽';sink.append(sinkTitle,make('sinkBasin','尺寸（cm）'));const kitchen=document.createElement('div');kitchen.id='kitchenControls';kitchen.hidden=true;const kitchenTitle=document.createElement('div');kitchenTitle.className='sectiontitle space';kitchenTitle.textContent='檯面設備尺寸';kitchen.append(kitchenTitle,make('kitchenSink','水槽（cm）'),make('kitchenCooktop','瓦斯爐（cm）'));const light=document.createElement('div');light.id='lightControls';light.hidden=true;const lightTitle=document.createElement('div');lightTitle.className='sectiontitle space';lightTitle.textContent='燈具設定';const lightGrid=document.createElement('div');lightGrid.className='inputs';const kindLabel=document.createElement('label');kindLabel.textContent='種類';const kind=document.createElement('select');kind.id='lightKind';const lightLabels={ceiling:'吸頂燈',pendant:'吊燈',linear:'線燈'};for(const value of lightKinds)kind.add(new Option(lightLabels[value],value));kindLabel.append(kind);lightGrid.append(kindLabel);const shapeLabel=document.createElement('label');shapeLabel.id='lightShapeField';shapeLabel.textContent='燈罩形狀';const shape=document.createElement('select');shape.id='lightShape';const shapeLabels={round:'圓形',square:'方形'};for(const value of lightShapes)shape.add(new Option(shapeLabels[value],value));shapeLabel.append(shape);lightGrid.append(shapeLabel);for(const [id,label,min,max,step]of[['lightLumens','光通量（lm）',100,10000,50],['lightDimming','調光比例（%）',0,100,1]]){const l=document.createElement('label');l.textContent=label;const i=document.createElement('input');i.id=id;i.type='number';i.min=min;i.max=max;i.step=step;l.append(i);lightGrid.append(l)}const dropLabel=document.createElement('label');dropLabel.id='lightDropField';dropLabel.textContent='垂吊長度（cm）';const drop=document.createElement('input');drop.id='lightDrop';drop.type='number';drop.min='5';drop.max='267';drop.step='1';dropLabel.append(drop);lightGrid.append(dropLabel);const onLabel=document.createElement('label');onLabel.className='checkline';const on=document.createElement('input');on.id='lightOn';on.type='checkbox';onLabel.append(on,document.createTextNode('此燈開啟'));light.append(lightTitle,lightGrid,onLabel);for(const p of[sink,kitchen,light]){const note=document.createElement('p');note.className='muted';note.textContent=p===light?'吸頂燈固定貼在天花板；吊燈可調整垂吊長度。':'尺寸會自動限制在檯面內。';p.append(note);panel.append(p)}anchor.before(panel)}
 const $=id=>document.getElementById(id),storageKey='a7-studio-v1';let items=clone(initialFurniture),palette='oak',floors={},selected=null,history=[],future=[],beforeDrag=null,dragBlocked=false,dragDraft=false,placementCandidate=null,foregroundDraft=null,schemes=[],scene,noticeTimer;ensureComponentControls();const lightNote=document.querySelector('#lightControls .muted');if(lightNote)lightNote.textContent='光通量 × 調光比例是相對照明估算，非實際 lux；吸頂燈固定貼在天花板，線燈嵌入天花板，吊燈可調整垂吊長度。';const temperatureLabel=document.createElement('label'),temperatureSelect=document.createElement('select'),temperatureLabels={white:'白光',natural:'自然光',warm:'黃光'};temperatureLabel.textContent='色溫';temperatureSelect.id='lightTemperature';for(const value of lightColorTemperatures)temperatureSelect.add(new Option(temperatureLabels[value],value));temperatureLabel.append(temperatureSelect);$('lightLumens').parentElement.before(temperatureLabel);
-const typeNames={sofa:'沙發',bed:'床架與寢具',wardrobe:'平開收納櫃',drawer:'抽屜櫃',console:'電視櫃',table:'桌子',desk:'書桌與抽屜',chair:'座椅',kitchen:'廚具',fridge:'冰箱',washer:'洗衣機',sink:'洗手台',shower:'乾濕分離淋浴區',toilet:'馬桶',plant:'植栽',rug:'地毯',light:'天花板燈',beam:'天花板樑'};
-const icons={sofa:'▱',bed:'▤',wardrobe:'▥',drawer:'▤',console:'▭',table:'⊓',desk:'⊓',chair:'⑁',kitchen:'▦',fridge:'▯',washer:'▣',sink:'◡',shower:'▧',toilet:'◔',plant:'♧',rug:'▧',light:'◉',beam:'━'};
+const typeNames={sofa:'沙發',bed:'床架與寢具',wardrobe:'收納櫃',drawer:'抽屜櫃',console:'電視櫃',mediaWall:'電視牆',television:'電視',table:'桌子',desk:'書桌與抽屜',chair:'座椅',kitchen:'廚具',fridge:'冰箱',washer:'洗衣機',sink:'洗手台',shower:'乾濕分離淋浴區',toilet:'馬桶',plant:'植栽',rug:'地毯',light:'天花板燈',beam:'天花板樑'};
+const icons={sofa:'▱',bed:'▤',wardrobe:'▥',drawer:'▤',console:'▭',mediaWall:'▣',television:'▰',table:'⊓',desk:'⊓',chair:'⑁',kitchen:'▦',fridge:'▯',washer:'▣',sink:'◡',shower:'▧',toilet:'◔',plant:'♧',rug:'▧',light:'◉',beam:'━'};
 const beamTemplate={id:'beam-template',type:'beam',name:'天花板樑（新增）',x:4,z:3.5,w:1.2,d:.18,h:.3,rot:0,open:0,assumed:false};
+const tvTemplate={id:'tv-template',type:'television',name:'電視（新增）',x:0,z:0,w:1.22,d:.06,h:.69,rot:0,open:0,elevation:1.3,tvMount:'wall',assumed:true};
+const mediaWallTemplate={id:'media-wall-template',type:'mediaWall',name:'電視牆（新增）',x:0,z:0,w:2.4,d:.45,h:2.6,rot:0,open:0,assumed:true};
 const lightTemplate={id:'light-template',type:'light',name:'天花板燈（新增）',x:4,z:3.5,w:.36,d:.36,h:.08,rot:0,open:0,lightKind:'ceiling',shape:'round',colorTemperature:'white',lumens:1200,dimming:75,pendantLength:.45,on:true,assumed:false};
 function notify(t){$('toast').textContent=t;$('toast').classList.add('show');clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('toast').classList.remove('show'),3400)}
 function snapshot(){return {version:VERSION,layoutRevision:LAYOUT_REVISION,furniture:clone(items),palette,floors:clone(floors),openStates:clone(scene?.openStates||{})};}
@@ -28,14 +35,14 @@ function renderRecovery(){let list=[];try{list=readRecovered(localStorage);}catc
  $('recoveryDownload').onclick=()=>{download(new Blob([entry.raw],{type:'application/json'}),'A7-讀取失敗備份-'+entry.savedAt.slice(0,19).replace(/[-:T]/g,'')+'.json');if(held){holdSaves=false;persist();renderRecovery();notify('備份已下載，自動儲存已恢復。');}};
  $('recoveryDiscard').onclick=()=>{discardRecovered(localStorage,entry.savedAt);renderRecovery();};}
 renderRecovery();requestPersistentStorage();
-try{scene=new SpaceScene($('canvasHost'),select,(id,x,z)=>{if(!beforeDrag)beforeDrag=snapshot();let f=items.find(f=>f.id===id),target={x:$('snap').checked?Math.round(x*20)/20:x,z:$('snap').checked?Math.round(z*20)/20:z};const result=placeAtTarget(f,target,items);dragBlocked=result.blocked;Object.assign(f,result.item);f.draft=issues(f,items).length>0;dragDraft=f.draft;setForegroundDraft(f.id);scene.moveItem(f);renderProps();},()=>{if(dragBlocked)notify('已貼齊 A7 戶型外框；可沿著外框繼續移動。');else if(dragDraft)notify('目前位置有干涉，已標成紅色待調整家具。');dragBlocked=dragDraft=false;if(beforeDrag){history.push(beforeDrag);future=[];beforeDrag=null;persist();renderList();updateUndo();}},operate);scene.openStates=loaded?.openStates||{};scene.palette=palette;scene.floors=floors;scene.makeMaterials();scene.buildHouse();scene.buildFurniture(items);}catch(e){$('fatal').hidden=false;$('fatal').textContent='無法啟動 3D 畫面。請使用支援 WebGL 的瀏覽器，並開啟硬體加速後重新載入。錯誤：'+e.message;throw e;}
-scene.onResize=(id,next)=>{if(!beforeDrag)beforeDrag=snapshot();const f=items.find(item=>item.id===id);if(!f)return;Object.assign(f,next);f.draft=issues(f,items).length>0;scene.resizeItem(f);renderProps();};scene.onResizeEnd=()=>{if(beforeDrag){history.push(beforeDrag);future=[];beforeDrag=null;persist();renderList();updateUndo();}};
+try{scene=new SpaceScene($('canvasHost'),select,(id,x,z)=>{if(!beforeDrag)beforeDrag=snapshot();let f=items.find(f=>f.id===id),target={x:$('snap').checked?Math.round(x*20)/20:x,z:$('snap').checked?Math.round(z*20)/20:z};let alignedAnchor=null;if(f.type==='mediaWall'&&f.wallAnchor){const aligned=anchorMediaWall({...f,...target},{index:f.wallAnchor.index,side:f.wallAnchor.side},walls);target={x:aligned.x,z:aligned.z};alignedAnchor=aligned.wallAnchor;}const result=placeAtTarget(f,target,items);dragBlocked=result.blocked;if(alignedAnchor&&result.item)Object.assign(result.item,anchorMediaWall(result.item,{index:alignedAnchor.index,side:alignedAnchor.side},walls));Object.assign(f,result.item);if(['console','wardrobe'].includes(f.type))syncSupportedTvs(f);f.draft=issues(f,items).length>0;dragDraft=f.draft;setForegroundDraft(f.id);scene.moveItem(f);if(['console','wardrobe'].includes(f.type))for(const tv of items)if(tv.type==='television'&&tv.supportId===f.id)scene.moveItem(tv);renderProps();},()=>{if(dragBlocked)notify('已貼齊 A7 戶型外框；可沿著外框繼續移動。');else if(dragDraft)notify('目前位置有干涉，已標成紅色待調整家具。');dragBlocked=dragDraft=false;if(beforeDrag){history.push(beforeDrag);future=[];beforeDrag=null;persist();renderList();updateUndo();}},operate);scene.openStates=loaded?.openStates||{};scene.palette=palette;scene.floors=floors;scene.makeMaterials();scene.buildHouse();scene.buildFurniture(items);}catch(e){$('fatal').hidden=false;$('fatal').textContent='無法啟動 3D 畫面。請使用支援 WebGL 的瀏覽器，並開啟硬體加速後重新載入。錯誤：'+e.message;throw e;}
+scene.onResize=(id,next)=>{if(!beforeDrag)beforeDrag=snapshot();const f=items.find(item=>item.id===id);if(!f)return;if(f.cabinetDesign&&(f.w!==next.w||f.h!==next.h))next={...next,cabinetDesign:resizeCabinetDesign(f.cabinetDesign,{w:f.w,h:f.h},{w:next.w,h:next.h})};if(f.type==='mediaWall'&&(f.w!==next.w||f.h!==next.h))next={...next,mediaWall:resizeMediaWall(f.mediaWall,{w:f.w,h:f.h},{w:next.w,h:next.h})};if(f.type==='mediaWall'&&f.wallAnchor)next=anchorMediaWall(next,f.wallAnchor,walls);try{validateFurniture([next]);}catch{return;}Object.assign(f,next);if(['console','wardrobe'].includes(f.type))syncSupportedTvs(f);f.draft=issues(f,items).length>0;scene.buildFurniture(items);renderProps();};scene.onResizeEnd=()=>{if(beforeDrag){history.push(beforeDrag);future=[];beforeDrag=null;persist();renderList();updateUndo();}};
 function select(id){scene.keys.clear();if(id!==selected)$('proportions').checked=false;scene.keepRatio=$('proportions').checked;selected=id;scene.highlight(id);$('inspector').classList.toggle('open',!!id);$('sidebar').classList.remove('open');renderProps();renderList();}
-function operationIssues(id){let a=scene.actions.get(id);if(!a)return[];let blocks=[];const testRect=(r,name)=>{if(corners(r).some(([x,z])=>!inside(x,z)))blocks.push('開啟範圍超出戶型');if(wallRects().some(w=>signedDistance(r,w)<-EPS))blocks.push(name+'可能碰到牆面');for(const o of items)if(o.id!==id&&!['rug','light','beam'].includes(o.type)&&sameRoom(a.item||doorRects(a.def,1)[0],o)&&signedDistance(r,o)<-EPS)blocks.push(name+'可能碰到'+o.name);};
+function operationIssues(id){let a=scene.actions.get(id);if(!a)return[];let blocks=[];const testRect=(r,name)=>{if(corners(r).some(([x,z])=>!inside(x,z)))blocks.push('開啟範圍超出戶型');if(wallRects().some(w=>signedDistance(r,w)<-EPS))blocks.push(name+'可能碰到牆面');for(const o of items)if(o.id!==id&&!['rug','light','beam'].includes(o.type)&&sameRoom(a.item||doorRects(a.def,1)[0],o)&&(!Number.isFinite(r.yMin)||r.yMin<(o.elevation||0)+o.h-EPS&&(o.elevation||0)<r.yMax-EPS)&&signedDistance(r,o)<-EPS)blocks.push(name+'可能碰到'+o.name);};
  if(a.type==='door'){return[];}
- else if(a.item){const f=a.item,angle=f.rot*Math.PI/180,local=(x,z)=>({x:f.x+x*Math.cos(angle)+z*Math.sin(angle),z:f.z-x*Math.sin(angle)+z*Math.cos(angle)});if(a.type==='shower'){for(let step=0;step<=20;step++)for(const rect of showerDoorRects(f,step/20))testRect(rect,'淋浴門');}else if(['drawer','cabdrawer'].includes(a.type)){let r=local(0,f.d/2+a.travel/2);testRect({...r,w:f.w*.8,d:a.travel,rot:f.rot},'抽屜');}else if(a.type==='cabinet'){for(let step=1;step<=20;step++)for(const rect of cabinetRects(f,step/20))testRect(rect,'櫃門');}else if(a.type==='washer'){let n=a.pivots?.length||1,pw=f.w/n;for(let j=0;j<n;j++)for(let s=1;s<=10;s++){let openAngle=-s/10*Math.PI/2;let hingeX=-f.w/2+j*pw;let p=local(hingeX+Math.cos(openAngle)*pw/2,f.d/2-Math.sin(openAngle)*pw/2);testRect({...p,w:pw-.03,d:.025,rot:f.rot+openAngle*180/Math.PI},'門片');}}}
+ else if(a.item){const f=a.item,angle=f.rot*Math.PI/180,local=(x,z)=>({x:f.x+x*Math.cos(angle)+z*Math.sin(angle),z:f.z-x*Math.sin(angle)+z*Math.cos(angle)});if(a.type==='shower'){for(let step=0;step<=20;step++)for(const rect of showerDoorRects(f,step/20))testRect(rect,'淋浴門');}else if(['drawer','cabdrawer'].includes(a.type)){let r=local(0,f.d/2+a.travel/2);testRect({...r,w:f.w*.8,d:a.travel,rot:f.rot},'抽屜');}else if(a.type==='cabinet'){for(let step=1;step<=20;step++)for(const rect of cabinetRects(f,step/20))testRect(rect,'櫃門');}else if(a.type==='modularCabinet'){for(let step=1;step<=20;step++){const amounts=Object.fromEntries(Object.keys(f.openCells||{}).map(key=>[key,step/20]));for(const rect of modularCabinetRects(f,amounts))testRect(rect,'櫃門／抽屜');}}else if(a.type==='washer'){let n=a.pivots?.length||1,pw=f.w/n;for(let j=0;j<n;j++)for(let s=1;s<=10;s++){let openAngle=-s/10*Math.PI/2;let hingeX=-f.w/2+j*pw;let p=local(hingeX+Math.cos(openAngle)*pw/2,f.d/2-Math.sin(openAngle)*pw/2);testRect({...p,w:pw-.03,d:.025,rot:f.rot+openAngle*180/Math.PI},'門片');}}}
  return [...new Set(blocks)];}
-function operate(id=selected){const a=scene.actions.get(id);if(!a)return notify('這件家具沒有可開啟部件。');remember();if(a.item)a.item.open=a.item.open?0:1;else scene.openStates[id]=scene.openStates[id]?0:1;const warning=operationIssues(id);renderProps();persist();if(warning.length)notify(warning[0]+'；請查看配置檢查。');}
+function operate(id=selected){const a=scene.actions.get(id);if(!a)return notify('這件家具沒有可開啟部件。');remember();if(a.type==='modularCabinet'){a.item.open=a.item.open?0:1;a.item.openCells=Object.fromEntries(cabinetCells(a.item).filter(cell=>cell.front!=='open'&&a.item.open).map(cell=>[cell.id,1]));}else if(a.item)a.item.open=a.item.open?0:1;else scene.openStates[id]=scene.openStates[id]?0:1;const warning=operationIssues(id);renderProps();persist();if(warning.length)notify(warning[0]+'；請查看配置檢查。');}
 function renderList(){const q=$('search').value.toLowerCase();$('count').textContent=items.length+' 件家具';$('objects').replaceChildren();const list=[...items.map(f=>({id:f.id,name:f.name,room:roomAt(f.x,f.z),kind:f.type,sub:(f.draft?'待調整 · ':'')+`${Math.round(f.w*100)} × ${Math.round(f.d*100)} × ${Math.round(f.h*100)} cm`,icon:icons[f.type],warn:f.draft||issues(f,items).length>0})),...doors.map(d=>{const leaf=doorRects(d,1)[0];return{id:d.id,name:d.name,room:roomAt(leaf.x,leaf.z),kind:'door',sub:'固定位置 · 可開關',icon:'▯'}}),...curtains.map(c=>({id:c.id,name:c.name,room:roomAt(c.x,c.z),kind:'curtain',sub:'固定位置 · 可開合',icon:'▥'}))];renderFilters(list);const room=$('roomFilter').value,kind=$('kindFilter').value;let shown=0;for(const f of list){if(!f.name.toLowerCase().includes(q)||room&&f.room!==room||kind&&f.kind!==kind)continue;shown++;let b=document.createElement('button');b.className='object'+(selected===f.id?' active':'');b.setAttribute('aria-pressed',selected===f.id);let icon=document.createElement('span');icon.className='icon';icon.textContent=f.icon;let text=document.createElement('span');text.textContent=f.name;let sub=document.createElement('small');sub.textContent=f.sub;text.append(sub);b.append(icon,text);if(f.warn){let dot=document.createElement('span');dot.className='dot';dot.textContent='!';dot.title='配置有待檢查';b.append(dot);}b.onclick=()=>select(f.id);$('objects').append(b);}if(!shown){const empty=document.createElement('p');empty.className='muted';empty.textContent='沒有符合條件的物件。';$('objects').append(empty);}}
 const kindLabels={...typeNames,door:'門',curtain:'窗簾'};
 // Only offer kinds that exist, but keep a chosen value so the list does not silently reset.
@@ -47,15 +54,17 @@ function renderProps(){const f=items.find(f=>f.id===selected),a=scene.actions.ge
 function renderPalettes(){$('palettes').replaceChildren();for(const [key,p]of Object.entries(palettes)){let b=document.createElement('button');b.className='palette'+(palette===key?' active':'');b.setAttribute('aria-pressed',palette===key);let sw=document.createElement('span');sw.className='swatches';for(const color of[p.wood,p.wall,p.fabric,p.accent]){let i=document.createElement('i');i.style.background=color;sw.append(i)}b.append(sw,document.createTextNode(p.name));b.onclick=()=>{remember();palette=key;scene.setPalette(key);render();persist()};$('palettes').append(b)}$('sceneName').textContent=palettes[palette].name;}
 function renderSchemes(){let active=$('scheme').value;$('scheme').replaceChildren(new Option('目前工作配置',''));for(const s of schemes)$('scheme').add(new Option(s.name,s.id));$('scheme').value=active;}
 function render(){renderPalettes();renderFloors();renderList();renderProps();renderSchemes();updateUndo();}
-function commitFurniture(f,next,{clamp=false}={}){try{let validated=validateFurniture([next])[0];if(validated.w!==f.w||validated.d!==f.d)validated=fitResize(f,validated,items);let placed=placeAtTarget(f,validated,items);if(placed.blocked&&(!clamp||!placed.item))throw Error('家具不能超出 A7 戶型外框');validated=placed.item;validated.draft=issues(validated,items).length>0;if(validated.h<.1&&!['rug','light'].includes(f.type))throw Error('家具高度至少 10 cm');remember();Object.assign(f,validated);if(!('finish' in validated))delete f.finish;if(!('fabric' in validated))delete f.fabric;for(const item of items)if(item.draft)item.draft=issues(item,items).length>0;scene.buildFurniture(items);setForegroundDraft(f.id);render();persist();if(f.draft)notify('調整已保留，但目前有干涉；紅色標示家具不會顯示在總覽或導覽。');else if(placed.blocked)notify('已貼齊 A7 戶型外框。');}catch(e){notify(e.message);renderProps();}}
+function attachTvToSupport(tv,collection){if(tv.tvMount!=='cabinet')return tv;const support=collection.find(item=>item.id===tv.supportId&&['console','wardrobe'].includes(item.type));if(!support)throw Error('請先選擇支撐電視的櫃體');return{...tv,x:support.x,z:support.z,rot:support.rot,elevation:support.h+.07};}
+function syncSupportedTvs(support){for(const tv of items)if(tv.type==='television'&&tv.supportId===support.id&&tv.tvMount==='cabinet')Object.assign(tv,attachTvToSupport(tv,items));}
+function commitFurniture(f,next,{clamp=false}={}){try{if(next.type==='television')next=attachTvToSupport(next,items);if(f.cabinetDesign&&next.cabinetDesign&&(next.w!==f.w||next.h!==f.h))next={...next,cabinetDesign:resizeCabinetDesign(next.cabinetDesign,{w:f.w,h:f.h},{w:next.w,h:next.h})};if(f.type==='mediaWall'&&next.mediaWall&&(next.w!==f.w||next.h!==f.h))next={...next,mediaWall:resizeMediaWall(next.mediaWall,{w:f.w,h:f.h},{w:next.w,h:next.h})};if(f.type==='mediaWall'&&f.wallAnchor&&next.wallAnchor&&next.wallAnchor.index===f.wallAnchor.index&&next.wallAnchor.side===f.wallAnchor.side&&(next.x!==f.x||next.z!==f.z))next=anchorMediaWall(next,{index:f.wallAnchor.index,side:f.wallAnchor.side},walls);let validated=validateFurniture([next])[0];if((validated.w!==f.w||validated.d!==f.d)&&!(validated.type==='mediaWall'&&validated.wallAnchor))validated=fitResize(f,validated,items);let placed=placeAtTarget(f,validated,items);if(placed.blocked&&(!clamp||!placed.item))throw Error('家具不能超出 A7 戶型外框');validated=placed.item;validated.draft=issues(validated,items).length>0;if(validated.h<.1&&!['rug','light'].includes(f.type))throw Error('家具高度至少 10 cm');remember();Object.assign(f,validated);if(['console','wardrobe'].includes(f.type))syncSupportedTvs(f);if(!('finish' in validated))delete f.finish;if(!('fabric' in validated))delete f.fabric;if(!('wallAnchor' in validated))delete f.wallAnchor;if(!('supportId' in validated))delete f.supportId;for(const item of items)if(item.draft)item.draft=issues(item,items).length>0;scene.buildFurniture(items);setForegroundDraft(f.id);render();persist();if(f.draft)notify('調整已保留，但目前有干涉；紅色標示家具不會顯示在總覽或導覽。');else if(placed.blocked)notify('已貼齊 A7 戶型外框。');commitFurniture.lastError='';return true;}catch(e){commitFurniture.lastError=e.message;notify(e.message);renderProps();return false;}}
 for(const key of['x','z','w','d','h','rot'])$(key).addEventListener('change',()=>{let f=items.find(f=>f.id===selected);if(!f)return;let value=Number($(key).value)/(key==='rot'?1:100);let n=clone(f);if(['w','d'].includes(key)&&$('proportions').checked){let scale=value/f[key];for(let k of['w','d'])n[k]*=scale;}else n[key]=value;commitFurniture(f,n);$(key).value=key==='rot'?f[key]:Math.round(f[key]*1000)/10;});
 $('proportions').addEventListener('change',()=>{scene.keepRatio=$('proportions').checked;});
 $('furnitureName').addEventListener('change',()=>{const f=items.find(f=>f.id===selected),name=$('furnitureName').value.trim();if(!f)return;if(!name){$('furnitureName').value=f.name;return notify('家具名稱不能留白。');}commitFurniture(f,{...f,name});});
 $('doorStyle').onchange=()=>{const f=items.find(f=>f.id===selected);if(f)commitFurniture(f,{...f,doorStyle:$('doorStyle').value});};
 $('rotate').onclick=()=>{let f=items.find(f=>f.id===selected);if(f)commitFurniture(f,{...f,rot:(f.rot+90)%360});};
-$('align').onclick=()=>{let f=items.find(f=>f.id===selected);if(!f)return;let candidates=[],a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);for(const w of(f.type==='beam'?exteriorWallRects():wallRects())){const wallAngle=w.rot*Math.PI/180,tx=Math.cos(wallAngle),tz=-Math.sin(wallAngle);for(const sign of[-1,1]){const nx=Math.sin(wallAngle)*sign,nz=Math.cos(wallAngle)*sign,normalExtent=Math.abs(nx*c-nz*s)*f.w/2+Math.abs(nx*s+nz*c)*f.d/2,tangentExtent=Math.abs(tx*c-tz*s)*f.w/2+Math.abs(tx*s+tz*c)*f.d/2;let along=(f.x-w.x)*tx+(f.z-w.z)*tz;along=Math.max(-w.w/2+tangentExtent,Math.min(w.w/2-tangentExtent,along));let n={...f,x:w.x+tx*along+nx*(normalExtent+w.d/2),z:w.z+tz*along+nz*(normalExtent+w.d/2)};if((['light','beam'].includes(f.type)||sameRoom(f,n))&&!issues(n,items).length)candidates.push({n,dist:Math.hypot(n.x-f.x,n.z-f.z)});}}candidates.sort((a,b)=>a.dist-b.dist);if(candidates[0]){commitFurniture(f,candidates[0].n);notify('已平移到最近可用牆面；保留原本旋轉角度。')}else notify('找不到足夠寬的可用牆面。');};
+$('align').onclick=()=>{let f=items.find(f=>f.id===selected);if(!f)return;if(f.type==='mediaWall'){const choices=mediaWallChoices(f,walls,insideShell,roomAt);if(!choices.length)return notify('找不到可容納電視牆的完整牆段。');commitFurniture(f,anchorMediaWall(f,choices[0],walls));return;}let candidates=[],a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);for(const w of(f.type==='beam'?exteriorWallRects():wallRects())){const wallAngle=w.rot*Math.PI/180,tx=Math.cos(wallAngle),tz=-Math.sin(wallAngle);for(const sign of[-1,1]){const nx=Math.sin(wallAngle)*sign,nz=Math.cos(wallAngle)*sign,normalExtent=Math.abs(nx*c-nz*s)*f.w/2+Math.abs(nx*s+nz*c)*f.d/2,tangentExtent=Math.abs(tx*c-tz*s)*f.w/2+Math.abs(tx*s+tz*c)*f.d/2;let along=(f.x-w.x)*tx+(f.z-w.z)*tz;along=Math.max(-w.w/2+tangentExtent,Math.min(w.w/2-tangentExtent,along));let n={...f,x:w.x+tx*along+nx*(normalExtent+w.d/2),z:w.z+tz*along+nz*(normalExtent+w.d/2)};if((['light','beam'].includes(f.type)||sameRoom(f,n))&&!issues(n,items).length)candidates.push({n,dist:Math.hypot(n.x-f.x,n.z-f.z)});}}candidates.sort((a,b)=>a.dist-b.dist);if(candidates[0]){commitFurniture(f,candidates[0].n);notify('已平移到最近可用牆面；保留原本旋轉角度。')}else notify('找不到足夠寬的可用牆面。');};
 $('duplicate').onclick=()=>{let f=items.find(f=>f.id===selected);if(!f)return;remember();let n={...clone(f),id:crypto.randomUUID(),name:f.name+' 副本',x:f.x+.4,z:f.z+.4,open:0};n.draft=issues(n,items).length>0;items.push(n);setView('top');scene.buildFurniture(items);setForegroundDraft(n.id);select(n.id);render();persist()};
-$('delete').onclick=()=>{if(!items.some(f=>f.id===selected))return;remember();const deleted=selected;items=items.filter(f=>f.id!==deleted);scene.buildFurniture(items);setForegroundDraft(deleted===foregroundDraft?null:foregroundDraft);select(null);render();persist()};
+$('delete').onclick=()=>{if(!items.some(f=>f.id===selected))return;remember();const deleted=selected;items=items.filter(f=>f.id!==deleted);for(const tv of items)if(tv.type==='television'&&tv.supportId===deleted){tv.tvMount='wall';delete tv.supportId;}scene.buildFurniture(items);setForegroundDraft(deleted===foregroundDraft?null:foregroundDraft);select(null);render();persist()};
 $('operate').onclick=$('operate2').onclick=()=>operate();$('focus').onclick=()=>{let f=items.find(f=>f.id===selected)||doors.find(d=>d.id===selected);if(f)scene.focus(f);};$('closeInspector').onclick=()=>select(null);$('search').oninput=renderList;for(const r of rooms)$('roomFilter').add(new Option(r.name,r.name));$('roomFilter').onchange=$('kindFilter').onchange=renderList;
 document.querySelectorAll('.zoomImage').forEach(b=>b.onclick=()=>{const img=b.querySelector('img');$('imageLarge').src=img.src;$('imageLarge').alt=img.alt;$('imageCaption').textContent=b.dataset.caption;$('imageOriginal').href=b.dataset.full;$('imageDialog').showModal();});
 function setView(v){if(placementCandidate&&v!=='top')cancelPlacement();scene.setMode(v);renderProps();$('fovValue').textContent=Math.round(scene.camera.fov)+'°';document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v));$('miniMap').toggleAttribute('hidden',v!=='walk');$('crosshair').hidden=v!=='walk';$('walkHud').hidden=v!=='walk';$('touchPad').hidden=v!=='walk';$('cutaway').disabled=v==='walk';$('hint').textContent=v==='top'?'家具持續跟隨游標 · 干涉物件顯示紅色標示 · 戶型外框不可超出':v==='walk'?'↑↓ 前後 · ←→ 轉彎 · 按住拖曳環視 · 滾輪調整視角':'拖曳旋轉 · 滾輪縮放';}
@@ -72,7 +81,7 @@ $('export').onclick=()=>download(new Blob([JSON.stringify({...snapshot(),schemes
 $('shot').onclick=()=>{scene.renderer.render(scene.scene,scene.activeCamera);scene.renderer.domElement.toBlob(b=>{if(b)download(b,'A7-'+palettes[palette].name+'.png')});};
 function cancelPlacement(message='已取消新增家具。'){placementCandidate=null;scene.cancelPlacement(false);$('placementHint').hidden=true;if(message)notify(message);}
 scene.onCancelPlacement=()=>cancelPlacement();scene.onPlace=(x,z)=>{if(!placementCandidate)return;const target={x:$('snap').checked?Math.round(x*20)/20:x,z:$('snap').checked?Math.round(z*20)/20:z},result=placeAtTarget(placementCandidate,target,items);if(!result.item)return notify('這個位置附近沒有足夠空間，請改點戶型內的位置。');remember();const n=result.item;n.draft=issues(n,items).length>0;items.push(n);placementCandidate=null;scene.cancelPlacement(false);$('placementHint').hidden=true;scene.buildFurniture(items);setForegroundDraft(n.id);select(n.id);render();persist();notify(n.draft?'家具已加入；目前有干涉，已用紅色標示。':result.blocked?'已貼齊戶型外框加入，可沿外框繼續拖拉。':'家具已放到指定位置，可繼續拖拉微調。');};$('cancelPlacement').onclick=()=>cancelPlacement();
-const catalogTypes=['sofa','bed','wardrobe','drawer','table','desk','chair','console','plant','rug','light','beam'];for(const type of catalogTypes){let ref=initialFurniture.find(f=>f.type===type)||(type==='light'?lightTemplate:beamTemplate),b=document.createElement('button');b.textContent=(icons[type]||'')+' '+typeNames[type];let s=document.createElement('small');s.textContent=`${Math.round(ref.w*100)} × ${Math.round(ref.d*100)} cm`;b.append(s);b.onclick=()=>{placementCandidate={...clone(ref),id:crypto.randomUUID(),name:typeNames[type]+'（新增）',x:0,z:0,rot:0,open:0};$('addDialog').close();setView('top');select(null);$('placementName').textContent=placementCandidate.name;$('placementHint').hidden=false;scene.startPlacement();notify('請在俯視圖點一下物件要放的位置。');};$('catalog').append(b)}{const linear={...lightTemplate,...linearLightDefaults,lightKind:'linear',name:'線燈（新增）'},b=document.createElement('button');b.textContent='━ 線燈';const s=document.createElement('small');s.textContent=`${Math.round(linear.w*100)} × ${Math.round(linear.d*100)} cm`;b.append(s);b.onclick=()=>{placementCandidate={...clone(linear),id:crypto.randomUUID(),x:0,z:0,rot:0,open:0};$('addDialog').close();setView('top');select(null);$('placementName').textContent=placementCandidate.name;$('placementHint').hidden=false;scene.startPlacement();notify('請在俯視圖點一下物件要放的位置。');};$('catalog').append(b);}$('add').onclick=()=>{if(placementCandidate)cancelPlacement('');$('addDialog').showModal();};
+const catalogTypes=['sofa','bed','wardrobe','drawer','table','desk','chair','console','mediaWall','television','plant','rug','light','beam'];for(const type of catalogTypes){let ref=initialFurniture.find(f=>f.type===type)||(type==='light'?lightTemplate:type==='mediaWall'?mediaWallTemplate:type==='television'?tvTemplate:beamTemplate),b=document.createElement('button');b.textContent=(icons[type]||'')+' '+typeNames[type];let s=document.createElement('small');s.textContent=`${Math.round(ref.w*100)} × ${Math.round(ref.d*100)} cm`;b.append(s);b.onclick=()=>{placementCandidate={...clone(ref),id:crypto.randomUUID(),name:typeNames[type]+'（新增）',x:0,z:0,rot:0,open:0};if(['wardrobe','console'].includes(type)){placementCandidate.cabinetDesign=makeCabinetDesign(placementCandidate,type==='console'?'low':placementCandidate.w<.65?'closed':'niche');placementCandidate.openCells={};}if(type==='mediaWall')placementCandidate.mediaWall=makeMediaWall(placementCandidate);$('addDialog').close();setView('top');select(null);$('placementName').textContent=placementCandidate.name;$('placementHint').hidden=false;scene.startPlacement();notify('請在俯視圖點一下物件要放的位置。');};$('catalog').append(b)}{const linear={...lightTemplate,...linearLightDefaults,lightKind:'linear',name:'線燈（新增）'},b=document.createElement('button');b.textContent='━ 線燈';const s=document.createElement('small');s.textContent=`${Math.round(linear.w*100)} × ${Math.round(linear.d*100)} cm`;b.append(s);b.onclick=()=>{placementCandidate={...clone(linear),id:crypto.randomUUID(),x:0,z:0,rot:0,open:0};$('addDialog').close();setView('top');select(null);$('placementName').textContent=placementCandidate.name;$('placementHint').hidden=false;scene.startPlacement();notify('請在俯視圖點一下物件要放的位置。');};$('catalog').append(b);}$('add').onclick=()=>{if(placementCandidate)cancelPlacement('');$('addDialog').showModal();};
 const ns='http://www.w3.org/2000/svg',mini=document.createElementNS(ns,'svg');mini.id='miniMap';mini.setAttribute('viewBox','-1 -1 10.5 10.5');mini.setAttribute('aria-label','A7 導覽位置小地圖');mini.setAttribute('hidden','');const shell=document.createElementNS(ns,'polygon');shell.setAttribute('points',outline.map(p=>p.join(',')).join(' '));shell.setAttribute('fill','#e3e6dc');shell.setAttribute('stroke','#60786c');shell.setAttribute('stroke-width','.08');mini.append(shell);for(const w of wallRects()){const r=document.createElementNS(ns,'polygon');r.setAttribute('points',corners(w).map(p=>p.join(',')).join(' '));r.setAttribute('fill','#768578');mini.append(r);}const dot=document.createElementNS(ns,'circle');dot.setAttribute('r','.16');dot.setAttribute('fill','#c06940');dot.setAttribute('stroke','white');dot.setAttribute('stroke-width','.06');mini.append(dot);$('workspace').append(mini);
 for(const r of rooms){let d=document.createElement('span');d.className='roomlabel';d.textContent=r.name;$('roomLabels').append(d);}scene.onFrame=()=>{dot.setAttribute('cx',scene.camera.position.x);dot.setAttribute('cy',scene.camera.position.z);const labels=$('roomLabels').children;for(let i=0;i<rooms.length;i++){let r=rooms[i],p=scene.camera.position.clone().set(r.x,.1,r.z).project(scene.activeCamera);labels[i].style.left=((p.x+1)/2*$('canvasHost').clientWidth)+'px';labels[i].style.top=((-p.y+1)/2*$('canvasHost').clientHeight)+'px';labels[i].hidden=!$('labels').checked||scene.mode==='walk'||p.z>1||p.z< -1;}};
 // Same actions as the visible editor, with validation before mutations.
@@ -117,4 +126,125 @@ const renderWithFabric=renderProps;renderProps=()=>{renderWithFabric();const f=i
  const swatch=(color,label)=>{const b=document.createElement('button');b.type='button';b.className='fabricSwatch'+(color?'':' fabricDefault')+(current===color?' active':'');b.style.background=color||palettes[palette].fabric;b.title=label;b.setAttribute('aria-label','布面顏色：'+label);if(!color)b.textContent='預設';b.onclick=()=>setFabric(color);return b;};
  host.append(swatch('','預設'));for(const [c,n]of fabricColors)host.append(swatch(c,n));
  const custom=document.createElement('label'),input=document.createElement('input');custom.className='fabricSwatch fabricCustom'+(current&&!preset?' active':'');custom.title='自訂顏色';if(current&&!preset)custom.style.background=current;input.type='color';input.value=current||palettes[palette].fabric;input.setAttribute('aria-label','自訂布面顏色');input.onchange=()=>setFabric(input.value);custom.append(input);host.append(custom);};
+const cabinetEditor=createCabinetEditor({
+ getItem:id=>items.find(f=>f.id===id),
+ commit:commitFurniture,
+ onConvert(f){
+  if(f.type!=='console')return;
+  const tv=attachTvToSupport({...tvTemplate,id:crypto.randomUUID(),name:f.name+'的電視',w:Math.min(f.w*.74,1.4),supportId:f.id,tvMount:'cabinet'},items);
+  items.push(validateFurniture([tv])[0]);
+  scene.buildFurniture(items);render();persist();
+ },
+ toggleCell(f,cellId){
+  remember();
+  f.openCells={...(f.openCells||{})};
+  if(f.openCells[cellId])delete f.openCells[cellId];else f.openCells[cellId]=1;
+  f.open=cabinetCells(f).filter(cell=>cell.front!=='open').every(cell=>f.openCells[cell.id])?1:0;
+  persist();renderProps();const warnings=operationIssues(f.id);if(warnings.length)notify(warnings[0]+'；請查看配置檢查。');
+ }
+});
+const cabinetButton=document.createElement('button');
+cabinetButton.type='button';
+cabinetButton.className='wide';
+cabinetButton.textContent='編輯櫃體分格';
+$('proportions').parentElement.after(cabinetButton);
+cabinetButton.onclick=()=>{const f=items.find(item=>item.id===selected);if(f)cabinetEditor.open(f);};
+const renderWithCabinet=renderProps;
+renderProps=()=>{
+ renderWithCabinet();
+ const f=items.find(item=>item.id===selected),show=!!f&&['wardrobe','console'].includes(f.type);
+ cabinetButton.hidden=!show;
+ if(f?.cabinetDesign)$('doorStyleField').hidden=true;
+};
+let mediaEditor;
+const nestedCabinetEditor=createCabinetEditor({
+ getItem:id=>{
+  const cut=id.lastIndexOf(':'),parent=items.find(f=>f.id===id.slice(0,cut));
+  const module=parent?.mediaWall?.[id.slice(cut+1)];
+  return module?{...module,id,type:'console',name:'電視牆櫃體'}:null;
+ },
+ commit(module,next){
+  const cut=module.id.lastIndexOf(':'),parent=items.find(f=>f.id===module.id.slice(0,cut)),part=module.id.slice(cut+1);
+  if(!parent)return;
+  const media=clone(parent.mediaWall);
+  media[part].cabinetDesign=next.cabinetDesign;
+  media[part].openCells=next.openCells||{};
+  const okay=commitFurniture(parent,{...parent,mediaWall:media});
+  mediaEditor?.refresh();
+  return okay;
+ },
+ toggleCell(module,cellId){
+  const cut=module.id.lastIndexOf(':'),parent=items.find(f=>f.id===module.id.slice(0,cut)),part=module.id.slice(cut+1);
+  if(!parent)return;
+  remember();
+  const target=parent.mediaWall[part];
+  target.openCells={...target.openCells};
+  if(target.openCells[cellId])delete target.openCells[cellId];else target.openCells[cellId]=1;
+  persist();mediaEditor?.refresh();
+ }
+});
+mediaEditor=createMediaWallEditor({
+ getItem:id=>items.find(f=>f.id===id),
+ commit:commitFurniture,
+ onEditModule:(f,part)=>nestedCabinetEditor.open({id:f.id+':'+part}),
+ wallChoices:f=>mediaWallChoices(f,walls,insideShell,roomAt),
+ setWall(f,value){
+  if(!value){const next={...f};delete next.wallAnchor;commitFurniture(f,next);return;}
+  const choice=mediaWallChoices(f,walls,insideShell,roomAt).find(entry=>`${entry.index}:${entry.side}`===value);
+  if(choice)commitFurniture(f,anchorMediaWall(f,choice,walls));
+ },
+ showMarkers:value=>{
+  if(value===undefined)return !!scene.showMediaMarkers;
+  scene.showMediaMarkers=value;
+  scene.buildFurniture(items);
+  return value;
+ }
+});
+const mediaButton=document.createElement('button');
+mediaButton.type='button';
+mediaButton.className='wide';
+mediaButton.textContent='編輯電視牆與施工標註';
+cabinetButton.after(mediaButton);
+mediaButton.onclick=()=>{const f=items.find(item=>item.id===selected);if(f?.type==='mediaWall')mediaEditor.open(f);};
+const renderWithMedia=renderProps;
+renderProps=()=>{
+ renderWithMedia();
+ const f=items.find(item=>item.id===selected),anchored=f?.type==='mediaWall'&&!!f.wallAnchor;
+ mediaButton.hidden=f?.type!=='mediaWall';
+ $('rot').disabled=!!anchored;
+ $('rotate').disabled=!!anchored;
+ $('rot').title=anchored?'角度由選定牆面決定':'';
+};
+const tvControls=document.createElement('div');
+tvControls.className='tvControls';
+tvControls.innerHTML='<div class="sectiontitle space">電視安裝</div><label>方式<select id="tvMount"><option value="wall">壁掛</option><option value="cabinet">放在櫃上</option></select></label><label id="tvSupportField">支撐櫃體<select id="tvSupport"></select></label><label id="tvElevationField">底部離地（cm）<input id="tvElevation" type="number" min="0" max="280" step="1"></label>';
+mediaButton.after(tvControls);
+const renderWithTv=renderProps;
+renderProps=()=>{
+ renderWithTv();
+ const f=items.find(item=>item.id===selected);
+ tvControls.hidden=f?.type!=='television';
+ if(f?.type!=='television')return;
+ $('tvMount').value=f.tvMount||'wall';
+ const support=$('tvSupport'),chosen=f.supportId||'';
+ support.replaceChildren(new Option('選擇電視櫃',''),...items.filter(item=>item.type==='console').map(item=>new Option(item.name,item.id)));
+ support.value=chosen;
+ $('tvSupportField').hidden=f.tvMount!=='cabinet';
+ $('tvElevationField').hidden=f.tvMount==='cabinet';
+ if(document.activeElement!==$('tvElevation'))$('tvElevation').value=Math.round(f.elevation*100);
+};
+$('tvMount').onchange=()=>{
+ const f=items.find(item=>item.id===selected);if(!f)return;
+ const kind=$('tvMount').value,support=items.find(item=>item.type==='console');
+ if(kind==='cabinet'&&!support){notify('請先加入一座電視櫃。');renderProps();return;}
+ const next={...f,tvMount:kind};
+ if(kind==='cabinet')next.supportId=f.supportId||support.id;else delete next.supportId;
+ commitFurniture(f,next);
+};
+$('tvSupport').onchange=()=>{
+ const f=items.find(item=>item.id===selected);if(f&&$('tvSupport').value)commitFurniture(f,{...f,tvMount:'cabinet',supportId:$('tvSupport').value});
+};
+$('tvElevation').onchange=()=>{
+ const f=items.find(item=>item.id===selected);if(f)commitFurniture(f,{...f,elevation:Number($('tvElevation').value)/100});
+};
 render();updateUndo();persist();

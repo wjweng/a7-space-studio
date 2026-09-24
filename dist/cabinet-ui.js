@@ -1,0 +1,163 @@
+import {cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,makeCabinetDesign,validateCabinetDesign} from './cabinet-design.js';
+
+const labels={open:'開放',left:'左開門',right:'右開門',double:'對開門',sliding:'滑門',drawers:'抽屜'};
+const cm=n=>Math.round(n*1000)/10;
+const id=()=>crypto.randomUUID();
+const elt=(tag,className,text)=>{const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;};
+const field=(label,value,change,min=0,max=500)=>{
+  const wrap=elt('label','cabinetField',label),input=elt('input');
+  Object.assign(input,{type:'number',step:'0.1',min:String(min),max:String(max),value:String(cm(value))});
+  input.onchange=()=>change(Number(input.value)/100);
+  wrap.append(input);
+  return wrap;
+};
+export function createCabinetEditor({getItem,commit,toggleCell,onConvert}){
+  const dialog=elt('dialog','cabinetDialog');
+  dialog.innerHTML='<div class="cabinetHead"><div><span class="eyebrow">CABINET EDITOR</span><h2>編輯櫃體</h2></div><button type="button" class="dialogClose" aria-label="關閉">×</button></div><p class="muted">點選正面圖中的格子，再修改分區、層高與門面。尺寸單位為 cm。</p><div class="cabinetToolbar"></div><div class="cabinetElevation"></div><div class="cabinetFields"></div><p class="cabinetError" role="alert"></p>';
+  document.body.append(dialog);
+  dialog.querySelector('.dialogClose').onclick=()=>dialog.close();
+  let currentId=null,columnId=null,cellId=null;
+  const item=()=>getItem(currentId);
+  const save=design=>{
+    const f=item();
+    if(!f)return;
+    try{const okay=commit(f,{...f,cabinetDesign:design});if(okay===false){dialog.querySelector('.cabinetError').textContent=commit.lastError||'尺寸無法套用';render();return;}dialog.querySelector('.cabinetError').textContent='';render();}
+    catch(error){dialog.querySelector('.cabinetError').textContent=error.message;}
+  };
+  const edit=mutate=>{const f=item();if(!f)return;const next=structuredClone(f.cabinetDesign);mutate(next);save(next);};
+  const button=(text,click)=>{const b=elt('button','',text);b.type='button';b.onclick=click;return b;};
+  function render(){
+    const f=item();if(!f?.cabinetDesign){dialog.close();return;}
+    const design=f.cabinetDesign,columns=cabinetColumns(f),cells=cabinetCells(f);
+    if(!design.columns.some(c=>c.id===columnId))columnId=design.columns[0].id;
+    const selectedColumn=design.columns.find(c=>c.id===columnId);
+    if(!selectedColumn.cells.some(c=>c.id===cellId))cellId=selectedColumn.cells[0].id;
+    const selectedCell=selectedColumn.cells.find(c=>c.id===cellId);
+    const toolbar=dialog.querySelector('.cabinetToolbar');toolbar.replaceChildren();
+    const template=elt('select');template.setAttribute('aria-label','櫃體範本');
+    template.add(new Option('自訂分格','custom'));
+    for(const [key,spec]of Object.entries(cabinetTemplates)){
+      const option=new Option(spec.label,key);
+      try{validateCabinetDesign(f,makeCabinetDesign(f,key));}catch{option.disabled=true;}
+      template.add(option);
+    }
+    template.value=design.template;
+    template.onchange=()=>save(makeCabinetDesign(f,template.value));
+    toolbar.append(template);
+    toolbar.append(button('＋直向分區',()=>edit(next=>{
+      if(next.columns.length>=8)return;
+      const index=next.columns.findIndex(c=>c.id===columnId),base=next.columns[index];
+      if(base.width<.4)return;
+      const width=Math.round(base.width*5000)/10000;
+      base.width-=width;
+      next.columns.splice(index+1,0,{id:id(),width,bottom:base.bottom,cells:[{id:id(),height:f.h-base.bottom,front:'open'}]});
+      next.template='custom';
+    })));
+    toolbar.append(button('－目前分區',()=>edit(next=>{
+      if(next.columns.length===1)return;
+      const index=next.columns.findIndex(c=>c.id===columnId),removed=next.columns.splice(index,1)[0],recipient=next.columns[Math.max(0,index-1)];
+      recipient.width+=removed.width;columnId=recipient.id;next.template='custom';
+    })));
+    const elevation=dialog.querySelector('.cabinetElevation');elevation.replaceChildren();
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('viewBox',`0 0 ${f.w*1000} ${f.h*1000}`);
+    svg.setAttribute('role','img');svg.setAttribute('aria-label','櫃體正面分格圖');
+    for(const cell of cells){
+      const r=document.createElementNS(svg.namespaceURI,'rect'),x=(cell.x-cell.w/2+f.w/2)*1000,y=(f.h-cell.bottom-cell.h)*1000;
+      for(const [key,value]of Object.entries({x,y,width:cell.w*1000,height:cell.h*1000}))r.setAttribute(key,value);
+      r.setAttribute('class','cabinetCell'+(cell.id===cellId?' selected':'')+(cell.front==='open'?' open':''));
+      r.addEventListener('click',()=>{columnId=cell.columnId;cellId=cell.id;render();});
+      svg.append(r);
+      const text=document.createElementNS(svg.namespaceURI,'text');
+      text.setAttribute('x',(cell.x+f.w/2)*1000);text.setAttribute('y',(f.h-cell.y)*1000);
+      text.setAttribute('class','cabinetCellLabel');text.textContent=labels[cell.front];svg.append(text);
+    }
+    const handle=(attrs,cursor,onFinish)=>{
+      const grip=document.createElementNS(svg.namespaceURI,'rect');
+      for(const [key,value]of Object.entries(attrs))grip.setAttribute(key,value);
+      grip.setAttribute('class','cabinetDivider');grip.style.cursor=cursor;
+      grip.onpointerdown=event=>{
+        event.preventDefault();event.stopPropagation();
+        const startX=event.clientX,startY=event.clientY,originalX=Number(grip.getAttribute('x')),originalY=Number(grip.getAttribute('y'));
+        grip.setPointerCapture(event.pointerId);
+        grip.onpointermove=move=>{
+          if(cursor==='ew-resize')grip.setAttribute('x',originalX+(move.clientX-startX)/svg.getBoundingClientRect().width*f.w*1000);
+          else grip.setAttribute('y',originalY+(move.clientY-startY)/svg.getBoundingClientRect().height*f.h*1000);
+        };
+        grip.onpointerup=up=>{
+          grip.onpointermove=null;grip.onpointerup=null;
+          const delta=cursor==='ew-resize'?(up.clientX-startX)/svg.getBoundingClientRect().width*f.w:-(up.clientY-startY)/svg.getBoundingClientRect().height*f.h;
+          onFinish(Math.round(delta*100)/100);
+        };
+      };
+      svg.append(grip);
+    };
+    let boundary=0;
+    columns.slice(0,-1).forEach((column,index)=>{
+      boundary+=column.width;
+      handle({x:boundary*1000-10,y:0,width:20,height:f.h*1000},'ew-resize',delta=>edit(next=>{
+        const left=next.columns[index],right=next.columns[index+1],limited=Math.max(.2-left.width,Math.min(right.width-.2,delta));
+        left.width=Math.round((left.width+limited)*10000)/10000;
+        right.width=Math.round((right.width-limited)*10000)/10000;
+        next.template='custom';
+      }));
+    });
+    for(const [columnIndex,column]of design.columns.entries()){
+      let height=column.bottom;
+      column.cells.slice(0,-1).forEach((cell,rowIndex)=>{
+        height+=cell.height;
+        const x=columns[columnIndex].x-column.width/2+f.w/2,y=f.h-height;
+        handle({x:x*1000,y:y*1000-10,width:column.width*1000,height:20},'ns-resize',delta=>edit(next=>{
+          const lower=next.columns[columnIndex].cells[rowIndex],upper=next.columns[columnIndex].cells[rowIndex+1];
+          const limited=Math.max(.15-lower.height,Math.min(upper.height-.15,delta));
+          lower.height=Math.round((lower.height+limited)*10000)/10000;
+          upper.height=Math.round((upper.height-limited)*10000)/10000;
+          next.template='custom';
+        }));
+      });
+    }
+    elevation.append(svg);
+    const fields=dialog.querySelector('.cabinetFields');fields.replaceChildren();
+    const colTitle=elt('h3','',`分區 ${design.columns.indexOf(selectedColumn)+1}`);
+    fields.append(colTitle,field('分區寬度',selectedColumn.width,value=>edit(next=>{
+      const index=next.columns.findIndex(c=>c.id===columnId),other=index===next.columns.length-1?index-1:index+1;
+      if(other<0)return;
+      const delta=value-next.columns[index].width;
+      next.columns[index].width=value;next.columns[other].width-=delta;next.template='custom';
+    }),20),field('底部離地',selectedColumn.bottom,value=>edit(next=>{
+      const c=next.columns.find(c=>c.id===columnId),delta=value-c.bottom;c.bottom=value;c.cells.at(-1).height-=delta;next.template='custom';
+    }),0,cm(f.h-.15)));
+    const row=elt('div','cabinetToolbar');
+    row.append(button('＋層格',()=>edit(next=>{
+      const c=next.columns.find(c=>c.id===columnId),cell=c.cells.find(r=>r.id===cellId);
+      if(c.cells.length>=10||cell.height<.3)return;
+      const half=Math.round(cell.height*5000)/10000;cell.height-=half;
+      c.cells.splice(c.cells.indexOf(cell)+1,0,{id:id(),height:half,front:'open'});next.template='custom';
+    })),button('－目前層格',()=>edit(next=>{
+      const c=next.columns.find(c=>c.id===columnId);if(c.cells.length===1)return;
+      const index=c.cells.findIndex(r=>r.id===cellId),removed=c.cells.splice(index,1)[0],neighbor=c.cells[Math.max(0,index-1)];
+      neighbor.height+=removed.height;cellId=neighbor.id;next.template='custom';
+    })));
+    fields.append(row,elt('h3','',`層格 ${selectedColumn.cells.indexOf(selectedCell)+1}`));
+    fields.append(field('層格高度',selectedCell.height,value=>edit(next=>{
+      const c=next.columns.find(c=>c.id===columnId),index=c.cells.findIndex(r=>r.id===cellId),other=index===c.cells.length-1?index-1:index+1;
+      if(other<0)return;
+      const delta=value-c.cells[index].height;c.cells[index].height=value;c.cells[other].height-=delta;next.template='custom';
+    }),15));
+    const frontLabel=elt('label','cabinetField','門面形式'),front=elt('select');
+    for(const kind of cabinetFronts)front.add(new Option(labels[kind],kind));
+    front.value=selectedCell.front;front.onchange=()=>edit(next=>{next.columns.find(c=>c.id===columnId).cells.find(r=>r.id===cellId).front=front.value;next.template='custom';});
+    frontLabel.append(front);fields.append(frontLabel);
+    if(selectedCell.front!=='open')fields.append(button(f.openCells?.[cellId]?'關閉這格':'打開這格',()=>{toggleCell(f,cellId);render();}));
+  }
+  return{open(f){
+    currentId=f.id;
+    const original=item();
+    if(!original?.cabinetDesign){
+      const converted=commit(original,{...original,cabinetDesign:makeCabinetDesign(original,original.type==='console'?'low':original.w<.65?'closed':'niche')});
+      if(converted!==false)onConvert?.(original);
+    }
+    const updated=item();columnId=updated.cabinetDesign.columns[0].id;cellId=updated.cabinetDesign.columns[0].cells[0].id;
+    render();dialog.showModal();
+  }};
+}
