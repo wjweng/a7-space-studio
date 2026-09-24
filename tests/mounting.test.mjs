@@ -31,7 +31,7 @@ test('mounted lights drop under the beam in walk view and rise above it in top v
 test('a linear light protrudes by its height',()=>{
  for(const h of[.01,.05]){
   const s=fixture(),g=new THREE.Group;s.makeFurniture(g,{...linear,h,lumens:1200,dimming:100,colorTemperature:'white'});
-  const bar=g.children.find(o=>o.isMesh&&o.material===s.m.lightWhite);bar.geometry.computeBoundingBox();
+  const bar=g.children.find(o=>o.isMesh&&o.material.userData.fixtureLens);bar.geometry.computeBoundingBox();
   const box=bar.geometry.boundingBox;assert(Math.abs(box.max.y-box.min.y-h)<1e-9,'bar is '+h+' m deep');
   assert(Math.abs(bar.position.y+box.max.y-HEIGHT)<1e-9,'top stays on the ceiling');
  }
