@@ -124,14 +124,28 @@ function surface(f,pl,seed){
     if(Math.hypot(s-cx,(t-cz)*(1+.6*hash(a,b,k+47)))<r)chip=Math.max(chip,.6+.4*hash(a,b,k+53));}
    return(big?.6*fbm(s,t,.04,.04,3,k)+.4*fbm(s,t,.004,.004,2,k+5):.25*fbm(s,t,.08,.08,2,k)+.75*fbm(s,t,.003,.003,2,k+5))+sign*chip;}
  }
- // Oak: fine grain and broad streaks along the plank, cathedral arches on some planks,
- // knots on rustic ones.
- const xx=s+.006*(fbm(s,t,.06,.5,3,k+11)-.5)*2;
- const fine=fbm(xx,t,.008,.25,3,k),band=fbm(xx,t,.05,.5,2,k+23),ridge=1-Math.abs(2*fbm(xx,t,.015,.5,2,k+31)-1);
- let v=.55*fine+.45*band-.15*ridge**8;
- if(hash(pl.id,5,seed)>.45){const c=w*(.3+.4*hash(pl.id,6,seed)),g=t-l*(.1+.6*hash(pl.id,7,seed))+60*(xx-c)**2,arc=1-Math.abs(2*((g/.022%1+1)%1)-1),fade=Math.max(0,1-Math.abs(xx-c)/(w*.45))*(g>0&&g<.35?1-g/.35:0);v-=.35*fade*arc**4;}
- if(f.pattern==='knotty')for(let n=0;n<2;n++){if(hash(pl.id,9+n,seed)<.55)continue;const ks=w*(.2+.6*hash(pl.id,11+n,seed)),kt=l*hash(pl.id,13+n,seed),r=.008+.01*hash(pl.id,15+n,seed),d=((s-ks)/r)**2+((t-kt)/(r*1.8))**2;v-=.9*Math.exp(-d)+.25*Math.exp(-d/6)*(1-Math.abs(2*((Math.sqrt(d)*.8)%1)-1))**4;}
- return v;
+ // Oak grain has several scales. Long fibres bend around the same local features as the
+ // broad figure; short pores and isolated knots interrupt it rather than forming a grid.
+ let xx=s+.018*(fbm(s,t,.075,.36,2,k+11)-.5);
+ let knot=0;
+ const knots=f.pattern==='knotty'?2:1;
+ for(let n=0;n<knots;n++){
+  if(hash(pl.id,n+9,seed)<(f.pattern==='knotty'?.61:.84))continue;
+  const ks=w*(.23+.54*hash(pl.id,n+11,seed)),kt=l*(.12+.76*hash(pl.id,n+13,seed));
+  const dx=s-ks,dy=t-kt,r=.008+.009*hash(pl.id,n+15,seed);
+  const d=(dx/r)**2+(dy/(r*2.5))**2;
+  const reach=Math.exp(-((dx/.055)**2+(dy/.14)**2));
+  xx+=.027*Math.sign(dx)*reach;
+  const ring=1-Math.abs(2*(Math.sqrt(d)*.33%1)-1);
+  knot+=.75*Math.exp(-d)+.22*Math.exp(-d/9)*ring**5;
+ }
+ const broad=fbm(xx,t,.065,.32,2,k+23);
+ const figure=fbm(xx,t,.025,.22,2,k+31);
+ const fibre=fbm(xx,t,.006,.22,3,k+43);
+ const ridge=1-Math.abs(2*noise(xx/.014,t/.32,FAR,FAR,k+71)-1);
+ const pores=hash(Math.floor(xx/.002),Math.floor(t/.018),k+59)>.987?.09:0;
+ const knotStrength=f.series==='herringbone'?.5:1;
+ return .35*broad+.23*figure+.42*fibre-.13*ridge**10-knotStrength*knot-pores;
 }
 
 // RGBA pixels of one repeating tile at pxPerM pixels per metre; rows run along the planks.
