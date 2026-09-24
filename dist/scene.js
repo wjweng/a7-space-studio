@@ -412,6 +412,7 @@ export class SpaceScene{
   if(tv.mount==='base')box(.08,Math.max(.04,tv.y-(media.base?.y||0)-(media.base?.h||0)+.04),.1,tv.x,tv.y-.02,tvZ-.045,'dark');
   const markers=new T.Group;markers.name='media-markers';markers.visible=!!this.showMediaMarkers;g.add(markers);
   for(const outlet of media.outlets){const color=outlet.kind==='power'?'metal':outlet.kind==='data'?'accent':'stone';this.box(markers,.07,.07,.01,outlet.x,outlet.y,back+panel.thickness+.015,color,.008);}
+  for(const point of media.servicePoints||[])this.box(markers,point.w,point.h,.012,point.x,point.y+point.h/2,back+panel.thickness+.025,point.kind==='access'?'stone':'metal',.005);
   for(const conduit of media.conduits)for(let i=1;i<conduit.points.length;i++){
    const a=conduit.points[i-1],b=conduit.points[i],length=Math.hypot(b.x-a.x,b.y-a.y);
    if(length<.005)continue;

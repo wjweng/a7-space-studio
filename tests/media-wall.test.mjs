@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makeMediaWall,validateMediaWall,resizeMediaWall,mediaWallSvg,mediaWallSchedule} from '../dist/media-wall.js';
+import {makeMediaWall,validateMediaWall,resizeMediaWall,mediaWallSvg,mediaWallSchedule,mediaWallWarnings} from '../dist/media-wall.js';
 import {anchorMediaWall,mediaWallChoices} from '../dist/wall-anchor.js';
 import {walls,insideShell,validateFurniture,initialFurniture} from '../dist/model.js';
 import {roomAt} from '../dist/geometry.js';
@@ -39,4 +39,18 @@ test('standalone television validates elevation while old consoles keep legacy d
   assert.throws(()=>validateFurniture([{...tv,elevation:2.8}]),/電視高度/);
   const legacy=validateFurniture([initialFurniture.find(f=>f.id==='tv')])[0];
   assert.equal(legacy.cabinetDesign,undefined);
+});
+
+test('service openings and site facts survive export with visible draft warnings',()=>{
+  const f=item();f.mediaWall=makeMediaWall(f);
+  f.mediaWall.servicePoints.push({id:'exit',kind:'exit',x:.5,y:.7,w:.08,h:.08,note:'HDMI',source:'drawing'});
+  f.mediaWall.servicePoints.push({id:'access',kind:'access',x:-.75,y:.3,w:.25,h:.2,note:'管線檢修',source:'estimated'});
+  f.mediaWall.siteFacts.push({id:'column',kind:'column',description:'既有柱',x:-.9,y:0,w:.25,h:2.5,source:'measured'});
+  f.mediaWall.survey.wallThickness=.12;
+  const saved=validateFurniture([f])[0],svg=mediaWallSvg(saved),schedule=mediaWallSchedule(saved);
+  assert.equal(saved.mediaWall.servicePoints.length,2);
+  assert.match(svg,/出線孔/);assert.match(svg,/檢修口/);
+  assert.match(schedule,/既有柱/);assert.match(schedule,/HDMI/);
+  assert.ok(mediaWallWarnings(saved).some(w=>w.includes('既有柱')));
+  assert.throws(()=>validateMediaWall(f,{...f.mediaWall,servicePoints:[{...f.mediaWall.servicePoints[0],x:1.19}]}),/超出電視牆外框/);
 });
