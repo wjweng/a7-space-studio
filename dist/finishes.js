@@ -68,11 +68,12 @@ export const finishableTypes=['bed','desk','chair','table','wardrobe','drawer','
 // grain fleck runs; band: width of the broad colour streaks and bandMix their share;
 // warp: sideways sway of the grain, over strips warpWidth wide and warpLen long, so
 // neighbouring strips curve differently; lines/pores: strength of thin dark grain lines
-// and of short pore dashes; leaves: tone step between the 12-18 cm veneer leaves.
+// and of short pore dashes; leaves: tone step between the 12-18 cm veneer leaves;
+// streaks/knots/figure: occasional darker fibres, eyes and curved growth rings.
 const patterns={
-  straight:{line:.004,stretch:40,band:.05,bandMix:.45,warp:.004,warpWidth:.05,warpLen:.5,lines:.35,pores:.25,leaves:.12},
-  soft:{line:.008,stretch:60,band:.08,bandMix:.75,warp:.006,warpWidth:.08,warpLen:.6,lines:.15,pores:0,leaves:.05},
-  flame:{line:.005,stretch:25,band:.06,bandMix:.5,warp:.022,warpWidth:.07,warpLen:.28,lines:.45,pores:.15,leaves:.2},
+  straight:{line:.0035,stretch:55,band:.055,bandMix:.4,warp:.012,warpWidth:.06,warpLen:.35,lines:.25,pores:.16,leaves:.055,streaks:.18,knots:.15,figure:.12},
+  soft:{line:.006,stretch:65,band:.085,bandMix:.7,warp:.015,warpWidth:.09,warpLen:.45,lines:.1,pores:0,leaves:.035,streaks:.04,knots:0,figure:.04},
+  flame:{line:.0035,stretch:35,band:.06,bandMix:.45,warp:.012,warpWidth:.08,warpLen:.3,lines:.35,pores:.25,leaves:.09,streaks:.3,knots:.38,figure:.2},
   linen:{},concrete:{},solid:{}
 };
 export const hash=(x,y,seed)=>{let h=Math.imul(x,374761393)^Math.imul(y,668265263)^Math.imul(seed,2246822519);h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296;};
@@ -97,14 +98,25 @@ function field(finish,x,y,seed){
   if(finish.pattern==='linen')return .5*fbm(x,y,.004,.04,2,seed)+.5*fbm(x,y,.04,.004,2,seed+7);
   if(finish.pattern==='concrete'){const pit=hash(Math.floor(x/.003),Math.floor(y/.003),seed+3)>.975?-.3:0;return .3*fbm(x,y,.08,.08,3,seed)+.7*fbm(x,y,.008,.008,3,seed+5)+pit;}
   const xx=x+p.warp*(fbm(x,y,p.warpWidth,p.warpLen,3,seed+11)-.5)*2;
-  const fine=fbm(xx,y,p.line,p.line*p.stretch,3,seed),band=fbm(xx,y,p.band,p.band*p.stretch*.5,2,seed+23);
+  const fine=fbm(xx,y,p.line,p.line*p.stretch,3,seed),band=fbm(xx,y,p.band,p.band*p.stretch*.5,2,seed+23),figure=fbm(xx,y,.02,.27,2,seed+37);
   const ridge=1-Math.abs(2*fbm(xx,y,p.line*3,p.line*3*p.stretch,2,seed+31)-1),lines=ridge**8;
-  const pore=p.pores&&hash(Math.floor(xx/.0015),Math.floor(y/.02),seed+41)>.97?p.pores:0;
+  const pore=p.pores?p.pores*Math.max(0,fbm(xx,y,.003,.028,2,seed+41)-.55)*3:0;
   // Veneer leaves: eight strips across the board, each a random width and tone.
   const edges=[0];for(let k=1;k<8;k++)edges.push((k+(hash(k,0,seed+53)-.5)*.6)/8*BOARD.w);
   let leaf=0;while(leaf<7&&x>=edges[leaf+1])leaf++;
-  const tone=p.leaves*(hash(leaf,1,seed+59)-.5);
-  return (1-p.bandMix)*fine+p.bandMix*band-p.lines*lines-pore+tone;
+  const tone=p.leaves*(hash(leaf,1,seed+59)-.5),leafWidth=(edges[leaf+1]||BOARD.w)-edges[leaf];
+  const path=edges[leaf]+leafWidth*(.25+.5*hash(leaf,2,seed+59))+.012*Math.sin(y*(3+hash(leaf,3,seed+59)*3)+hash(leaf,4,seed+59)*6);
+  const streak=p.streaks&&hash(leaf,5,seed+59)>.3?p.streaks*Math.exp(-(((xx-path)/.009)**2))*(.4+.6*noise(y/BOARD.h*8,leaf,8,8,seed+leaf*13)):0;
+  let knot=0;
+  if(p.knots&&hash(leaf,6,seed+59)>.63){const ky=BOARD.h*(.18+.65*hash(leaf,7,seed+59)),d=((xx-path)/.018)**2+((y-ky)/.045)**2;knot=p.knots*Math.exp(-d);}
+  let cathedral=0;
+  if(p.figure&&hash(leaf,8,seed+59)>.65){
+    const cy=BOARD.h*(.25+.5*hash(leaf,9,seed+59)),dx=xx-path,run=y-cy+26*dx*dx;
+    const phase=((run/.035%1)+1)%1,contour=1-Math.abs(2*phase);
+    const fade=Math.exp(-(((y-cy)/.34)**2))*Math.max(0,1-Math.abs(dx)/(leafWidth*.55));
+    cathedral=p.figure*fade*contour**6;
+  }
+  return .85*((1-p.bandMix)*fine+p.bandMix*band)+.15*figure-p.lines*lines-pore+tone-streak-knot-cathedral;
 }
 // RGBA pixels covering one whole board. Tones are assigned by rank, so the generated board
 // has the same dark / mid / light distribution as the one it was measured from.
