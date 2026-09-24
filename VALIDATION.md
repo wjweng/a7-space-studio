@@ -2,7 +2,7 @@
 
 ## Latest verified state — 2026-09-24
 
-The application changes through `22b29eb` passed all 119 automated tests. Cloudflare Pages served files identical to the local `dist/` (checked by hash for the changed modules and the page).
+The application changes through `ca82a30` passed all 123 automated tests. Cloudflare Pages served files identical to the local `dist/` (checked by hash for the changed modules).
 
 | Application commit | Work completed | How it was checked |
 | --- | --- | --- |
@@ -10,8 +10,10 @@ The application changes through `22b29eb` passed all 119 automated tests. Cloudf
 | `8402f19` | Clear ceiling height 3.00 m; balcony opening and curtains follow it, doors and windows keep absolute heights; ratio lock applies to handle drags; example-beam line removed from the assumptions | Tests; browser (page text, height input maximum, typed ratio lock) |
 | `ea59e21` | Door leaves hinge on the swing-side face corner and fill their frames; openings that start at a perpendicular wall use that wall's face | Tests sweeping every door 0–89° against walls; browser (front door closed, half open, open) |
 | `22b29eb` | A1, A2 and A6 lobby door handles on the left, read from the plan's swing arcs | Tests; browser view from the front door (A6, A2, A3) |
+| `b81905c` | Lift-lobby positions measured from A7's end wall at 4.73 cm per plan pixel: A6 and the A2 stair now open right beside A7's door (centres 1.2 / 1.35 m from the end wall, were 2.3 / 2.5 m); corridor 16.5 m long | Plan pixel measurement checked against the corridor's 2.66 m width; a test that fails on the old positions; browser view from the front door |
+| `ca82a30` | Room floors choose from 55 SPC floorings (如沐, 如沐人字拼, 無限, 大匠) kept apart from the furniture board finishes; tiles generated plank by plank; saved board-finish floors fall back to the default | Tests on catalogue, tone distribution against the measured percentiles, joint spacing, herringbone period and texture repeat; catalogue-vs-generated sheets for all 55 (Dropbox `材質比對/地板比對-*.jpg`); browser (floor dialog groups, furniture dialog unchanged, herringbone and marble floors in the flat) |
 
-Not verified in a browser: a dragged ratio-locked resize (synthetic drags could not target the handles), the paused-autosave path when storage is full, room doors other than the front door, and the A1 and A8 handles.
+Not verified in a browser: a dragged ratio-locked resize (synthetic drags could not target the handles), the paused-autosave path when storage is full, room doors other than the front door, and the A1 and A8 handles. How long the 55 flooring swatches take to appear on a machine with a GPU is unmeasured: headless Chrome renders the scene at about 1 fps, which starves the swatch queue, while each swatch alone takes about 30 ms.
 
 ## Earlier verified state — 2026-09-23
 
