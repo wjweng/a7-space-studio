@@ -3,6 +3,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {roofCanopyGeometry,sideRingGeometry} from './facade-geometry.js';
 import {BOARD,finishByCode,finishPixels} from './finishes.js';
+import {flooringByCode,flooringPixels} from './floorings.js';
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeFabric,lightMountDrop} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
@@ -157,7 +158,7 @@ export class SpaceScene{
  // A room with a chosen board finish gets one continuous floor over its whole footprint
  // (the decorative boards and tiles leave gaps); other rooms keep boards or tiles.
  const finished=room=>!!this.floors?.[room];
- for(const room of Object.keys(this.floors||{})){const mesh=new T.Mesh(roomFloorGeometry(room),this.finishMaterial(this.floors[room]));mesh.receiveShadow=true;this.building.add(mesh);}
+ for(const room of Object.keys(this.floors||{})){const mesh=new T.Mesh(roomFloorGeometry(room),this.flooringMaterial(this.floors[room]));mesh.receiveShadow=true;this.building.add(mesh);}
  for(const board of floorBoardRects())if(!finished(roomAt(board.x,board.z)))this.box(this.building,board.w,.009,board.d,board.x,.002,board.z,'floor');
  for(const [x,z,w,d,room]of[[2.24,6,1.55,2.4,'衛浴 A'],[7.7,3.55,2.13,1.55,'衛浴 B'],[7.45,5.83,1.62,2.7,'工作陽台']]){if(finished(room))continue;this.box(this.building,w,.018,d,x,.018,z,'tile');for(let xx=x-w/2;xx<x+w/2;xx+=.4)this.box(this.building,.004,.002,d,xx,.029,z,'white');for(let zz=z-d/2;zz<z+d/2;zz+=.4)this.box(this.building,w,.002,.004,x,.029,zz,'white');}
  for(const w of walls){let dx=w.b[0]-w.a[0],dz=w.b[1]-w.a[1],len=Math.hypot(dx,dz);const group=new T.Group;group.position.set(w.a[0],0,w.a[1]);group.rotation.y=-Math.atan2(dz,dx);this.building.add(group);const segment=(a,b,y,h)=>{if(b-a<.005||h<=0)return;let mesh=this.box(group,b-a,h,WALL_THICKNESS,(a+b)/2,y+h/2,0,'wall');this.wallMeshes.push({mesh,h,y});if(y===0)this.box(group,b-a,.075,WALL_THICKNESS,.5*(a+b),.038,0,'white');};if(w.opening){let[s,ow,sill,oh]=w.opening;segment(0,s,0,HEIGHT);segment(s+ow,len,0,HEIGHT);segment(s,s+ow,0,sill);segment(s,s+ow,sill+oh,HEIGHT-sill-oh);if(sill>0&&w.openingType==='railing'){for(let y of[.45,.8,1.1])this.box(group,ow,.035,.04,s+ow/2,y,0,'metal');for(let x=s;x<=s+ow+.01;x+=ow/6)this.box(group,.025,1,.04,x,.6,0,'metal');}else if(sill>0){let frame=new T.Group;group.add(frame);this.box(frame,ow,oh,.035,s+ow/2,sill+oh/2,0,'glass');for(let yy of[sill,sill+oh])this.box(frame,ow,.045,.07,s+ow/2,yy,0,'dark');for(let xx of[s,s+ow/2,s+ow])this.box(frame,.035,oh,.07,xx,sill+oh/2,0,'dark');}}
@@ -299,6 +300,18 @@ export class SpaceScene{
   // The lobby has no lamps of its own in the scene; a steady self-lit tone stands in for its
   // ceiling lights, a little stronger on the ceiling, which the hemisphere barely reaches.
   for(const m of this.lobby){if(m.userData.lamp)continue;m.emissive.copy(m.color);m.emissiveIntensity=(m.userData.ceiling?.55:.25)*(night?1.15:1);}
+ }
+ // An SPC flooring: one repeating tile of planks, scaled to the floor's board-sized UVs.
+ flooringMaterial(code){
+  const flooring=flooringByCode(code);if(!flooring)return null;
+  if(!this.flooringMaterials)this.flooringMaterials=new Map;
+  if(!this.flooringMaterials.has(code)){
+   const {pixels,width,height,size}=flooringPixels(flooring),texture=new T.DataTexture(pixels,width,height,T.RGBAFormat);
+   Object.assign(texture,{wrapS:T.RepeatWrapping,wrapT:T.RepeatWrapping,magFilter:T.LinearFilter,minFilter:T.LinearMipmapLinearFilter,generateMipmaps:true,colorSpace:T.SRGBColorSpace,anisotropy:this.renderer?.capabilities.getMaxAnisotropy()||1,needsUpdate:true});
+   texture.repeat.set(BOARD.w/size[0],BOARD.h/size[1]);
+   this.flooringMaterials.set(code,new T.MeshStandardMaterial({map:texture,roughness:.5}));
+  }
+  return this.flooringMaterials.get(code);
  }
  finishMaterial(code){
   const finish=finishByCode(code);if(!finish)return null;

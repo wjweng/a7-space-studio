@@ -1,5 +1,6 @@
 import {corners,overlaps,signedDistance,sameRoom,furnitureInterference,EPS} from './geometry.js';
 import {finishByCode,finishableTypes} from './finishes.js';
+import {flooringByCode} from './floorings.js';
 export {corners,overlaps} from './geometry.js';
 export const VERSION=1;
 export const LAYOUT_REVISION=16;
@@ -105,9 +106,11 @@ export const clone=v=>JSON.parse(JSON.stringify(v));
 export const fabricTypes=['sofa','chair','bed'];
 export const fabricColors=[['#e6dfd2','米白'],['#cdbfa6','燕麥'],['#bdbab3','淺灰'],['#6b6c6b','深灰'],['#34373a','炭黑'],['#a8693e','焦糖'],['#8c4a3d','磚紅'],['#c49a3a','芥末黃'],['#4a6552','墨綠'],['#7e95a3','霧藍'],['#2f3f5a','藏青']];
 export const normalizeFabric=color=>typeof color==='string'&&/^#[0-9a-f]{6}$/i.test(color)?color.toLowerCase():null;
-// Floor finish per room: absent means the palette's timber floor, or tiles in wet rooms.
+// Floor per room: an SPC flooring code (floorings.js); absent means the palette's timber
+// floor, or tiles in wet rooms. Codes that are not floorings, such as the board finishes
+// rooms could take before 2026-09-24, are dropped and the room returns to its default.
 export const wetRooms=['衛浴 A','衛浴 B','工作陽台'];
-export function normalizeFloors(input){const out={};if(input&&typeof input==='object'&&!Array.isArray(input))for(const [room,code]of Object.entries(input))if(rooms.some(r=>r.name===room)&&finishByCode(code))out[room]=code;return out;}
+export function normalizeFloors(input){const out={};if(input&&typeof input==='object'&&!Array.isArray(input))for(const [room,code]of Object.entries(input))if(rooms.some(r=>r.name===room)&&flooringByCode(code))out[room]=code;return out;}
 export const minimums={sofa:[1.1,.5,.45],bed:[.65,1.2,.25],chair:[.3,.3,.55],wardrobe:[.2,.2,.3],drawer:[.2,.2,.2],console:[.5,.2,.2],table:[.3,.25,.2],desk:[.4,.35,.4],kitchen:[1.2,.4,.7],fridge:[.4,.4,.9],washer:[.4,.4,.6],sink:[.3,.3,.5],toilet:[.3,.4,.5],plant:[.2,.2,.3],shower:[.6,.6,1.8],rug:[.2,.2,.005],light:[.1,.1,.02],beam:[.05,.05,.05]};
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,Number.isFinite(value)?value:min));
 export const lightKinds=['ceiling','pendant','linear'];

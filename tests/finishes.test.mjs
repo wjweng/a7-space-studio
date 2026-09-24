@@ -64,19 +64,19 @@ test('a finish replaces only the wooden parts and maps the board at true scale a
  for(let i=0;i<tp.count;i++)if(tn.getY(i)>.9)assert(Math.abs(tu.getY(i)-tp.getX(i)/BOARD.h)<1e-6,'grain runs along a long table top');
 });
 
-test('floor choices keep only real rooms and real finishes',()=>{
- assert.deepEqual(normalizeFloors({'客餐廳':'P64','衛浴 A':'B49','陽台':'P64','主臥室':'NOPE'}),{'客餐廳':'P64','衛浴 A':'B49'});
+test('floor choices keep only real rooms and SPC floorings; furniture board finishes fall back to the default',()=>{
+ assert.deepEqual(normalizeFloors({'客餐廳':'MB0601','衛浴 A':'DJ0801','陽台':'MB0601','主臥室':'NOPE','臥室 A':'P64'}),{'客餐廳':'MB0601','衛浴 A':'DJ0801'});
  assert.deepEqual(normalizeFloors(undefined),{});assert.deepEqual(normalizeFloors(['P64']),{});
 });
 
 test('a finished room gets one continuous floor over its footprint, others keep boards or tiles',()=>{
  const s=Object.create(SpaceScene.prototype);
  s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow','lightWhite','lightNatural','lightWarm','floor','tile','wall','entryDoor'].map(k=>[k,new THREE.MeshStandardMaterial()]));
- Object.assign(s,{palette:'oak',building:new THREE.Group,actions:new Map,lightObjects:[],openStates:{},cutaway:false,mode:'orbit',floors:{'客餐廳':'P64','衛浴 B':'B49'}});
+ Object.assign(s,{palette:'oak',building:new THREE.Group,actions:new Map,lightObjects:[],openStates:{},cutaway:false,mode:'orbit',floors:{'客餐廳':'MB0603Y','衛浴 B':'DJ0801'}});
  s.setCutaway=()=>{};s.updateLight=()=>{};
  s.buildHouse();
  const meshes=[];s.building.traverse(o=>{if(o.isMesh)meshes.push(o);});
- const living=meshes.filter(o=>o.material===s.finishMaterial('P64')),bath=meshes.filter(o=>o.material===s.finishMaterial('B49'));
+ const living=meshes.filter(o=>o.material===s.flooringMaterial('MB0603Y')),bath=meshes.filter(o=>o.material===s.flooringMaterial('DJ0801'));
  assert.equal(living.length,1);assert.equal(bath.length,1);
  const covers=(geo,x,z)=>{const p=geo.attributes.position;for(let i=0;i<p.count;i+=6){const xs=[p.getX(i),p.getX(i+2)],zs=[p.getZ(i),p.getZ(i+2)];if(x>=Math.min(...xs)&&x<=Math.max(...xs)&&z>=Math.min(...zs)&&z<=Math.max(...zs))return true;}return false;};
  for(const [x,z]of[[.3,3.9],[1.5,4.2],[2.5,3.1],[.8,1.8]])assert(covers(living[0].geometry,x,z),'living floor covers '+x+','+z);

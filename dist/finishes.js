@@ -75,10 +75,10 @@ const patterns={
   flame:{line:.005,stretch:25,band:.06,bandMix:.5,warp:.022,warpWidth:.07,warpLen:.28,lines:.45,pores:.15,leaves:.2},
   linen:{},concrete:{},solid:{}
 };
-const hash=(x,y,seed)=>{let h=Math.imul(x,374761393)^Math.imul(y,668265263)^Math.imul(seed,2246822519);h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296;};
+export const hash=(x,y,seed)=>{let h=Math.imul(x,374761393)^Math.imul(y,668265263)^Math.imul(seed,2246822519);h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296;};
 const smooth=t=>t*t*(3-2*t);
 // Value noise on a lattice that wraps every px by py cells, so the texture tiles.
-function noise(u,v,px,py,seed){
+export function noise(u,v,px,py,seed){
   const x0=Math.floor(u),y0=Math.floor(v),fx=smooth(u-x0),fy=smooth(v-y0),wrap=(n,p)=>((n%p)+p)%p;
   const a=hash(wrap(x0,px),wrap(y0,py),seed),b=hash(wrap(x0+1,px),wrap(y0,py),seed),c=hash(wrap(x0,px),wrap(y0+1,py),seed),d=hash(wrap(x0+1,px),wrap(y0+1,py),seed);
   return a+(b-a)*fx+(c-a)*fy+(a-b-c+d)*fx*fy;
