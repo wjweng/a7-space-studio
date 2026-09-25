@@ -345,21 +345,26 @@ export class SpaceScene{
  }
  makeModularCabinet(g,f,box){
   const t=.018,d=f.d,parts=[];
+  // A part without its own finish passes 'wood', which box() resolves to the
+  // cabinet's overall finish or the palette's wood.
+  const finish=code=>code&&this.finishMaterial(code)||'wood',own=f.partFinishes||{};
+  const body=finish(own.body),interior=finish(own.interior);
   for(const column of cabinetColumns(f)){
    const{width,bottom,x}=column,bodyHeight=f.h-bottom;
-   box(width,bodyHeight,t,x,bottom+bodyHeight/2,-d/2+t/2);
-   for(const side of[-1,1])box(t,bodyHeight,d,x+side*(width/2-t/2),bottom+bodyHeight/2,0);
+   box(width,bodyHeight,t,x,bottom+bodyHeight/2,-d/2+t/2,interior);
+   for(const side of[-1,1])box(t,bodyHeight,d,x+side*(width/2-t/2),bottom+bodyHeight/2,0,body);
   }
   for(const cell of cabinetCells(f)){
-   const{x,y,w,h,bottom,front,id}=cell,frontW=w-FRONT_GAP,frontH=h-FRONT_GAP,z=d/2+FRONT_Z;
-   box(w,t,d,x,bottom+t/2,0);
-   if(Math.abs(bottom+h-f.h)<.001)box(w,t,d,x,bottom+h-t/2,0);
+   const{x,y,w,h,bottom,front,id}=cell,frontW=w-FRONT_GAP,frontH=h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cell.finish||own.fronts);
+   // The lowest board of a column belongs to the body, the others are shelves.
+   box(w,t,d,x,bottom+t/2,0,cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom?body:interior);
+   if(Math.abs(bottom+h-f.h)<.001)box(w,t,d,x,bottom+h-t/2,0,body);
    if(front==='open')continue;
    const addDoor=(hinge,sign,width)=>{
     const pivot=new T.Group;
     pivot.position.set(hinge,y,z);
     g.add(pivot);
-    this.box(pivot,width,frontH,FRONT_T,sign*width/2,0,0,'wood',.003);
+    this.box(pivot,width,frontH,FRONT_T,sign*width/2,0,0,face,.003);
     this.box(pivot,.013,.09,.022,sign*(width-.045),0,.02,'metal',.003);
     parts.push({id,kind:'door',pivot,sign});
    };
@@ -376,7 +381,7 @@ export class SpaceScene{
     const pivot=new T.Group;
     pivot.position.set(x,y,z);
     g.add(pivot);
-    this.box(pivot,frontW,frontH,FRONT_T,0,0,0,'wood',.003);
+    this.box(pivot,frontW,frontH,FRONT_T,0,0,0,face,.003);
     this.box(pivot,Math.min(.16,frontW*.35),.015,.025,0,0,.02,'metal',.003);
     this.drawerBox(pivot,innerW-.026,Math.min(openH-.03,Math.max(.1,openH*.6)),d-t-.02,openBottom+.01-y,-FRONT_T/2);
     parts.push({id,kind:'drawer',pivot,base:pivot.position.z,travel:d*.55});
@@ -390,7 +395,7 @@ export class SpaceScene{
      const pivot=new T.Group;
      pivot.position.set(x+sign*(innerW/2-leafW/2),(openBottom+openTop)/2,sign>0?frontZ:backZ);
      g.add(pivot);
-     this.box(pivot,leafW,leafH,FRONT_T,0,0,0,'wood',.003);
+     this.box(pivot,leafW,leafH,FRONT_T,0,0,0,face,.003);
      this.box(pivot,.012,.14,.004,sign*(leafW/2-.03),0,FRONT_T/2+.002,'dark',.002);
      parts.push({id,kind:'slide',pivot,base:pivot.position.x,travel:sign>0?0:innerW-leafW});
     }

@@ -1,4 +1,4 @@
-import {cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,makeCabinetDesign,validateCabinetDesign} from './cabinet-design.js';
+import {cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishParts,makeCabinetDesign,validateCabinetDesign} from './cabinet-design.js';
 
 const labels={open:'開放',left:'左開門',right:'右開門',double:'對開門',sliding:'滑門',drawers:'抽屜'};
 const cm=n=>Math.round(n*1000)/10;
@@ -11,7 +11,8 @@ const field=(label,value,change,min=0,max=500)=>{
   wrap.append(input);
   return wrap;
 };
-export function createCabinetEditor({getItem,commit,toggleCell,onConvert}){
+// placeTv and chooseFinish are optional: the media-wall module editor has neither.
+export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv,chooseFinish,finishLabel=code=>code||'預設'}){
   const dialog=elt('dialog','cabinetDialog');
   dialog.innerHTML='<div class="cabinetHead" title="拖曳可移動視窗"><div><span class="eyebrow">CABINET EDITOR</span><h2>編輯櫃體</h2></div><div class="cabinetHeadButtons"><button type="button" class="dialogFold" aria-expanded="true">收合</button><button type="button" class="dialogClose" aria-label="關閉">×</button></div></div><div class="cabinetBody"><p class="muted">點選正面圖中的格子，再修改分區、層高與門面。尺寸單位為 cm。拖曳標題可移動視窗。</p><div class="cabinetToolbar"></div><div class="cabinetElevation"></div><div class="cabinetFields"></div><p class="cabinetError" role="alert"></p></div>';
   document.body.append(dialog);
@@ -175,8 +176,14 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert}){
     front.value=selectedCell.front;front.onchange=()=>edit(next=>{next.columns.find(c=>c.id===columnId).cells.find(r=>r.id===cellId).front=front.value;next.template='custom';});
     frontLabel.append(front);fields.append(frontLabel);
     if(selectedCell.front!=='open')fields.append(button(f.openCells?.[cellId]?'關閉這格':'打開這格',()=>{toggleCell(f,cellId);render();}));
+    if(selectedCell.front==='open'&&placeTv)fields.append(button('在這格掛電視',()=>placeTv(f,cellId)));
+    if(selectedCell.front!=='open'&&chooseFinish)fields.append(button(`這格門面材質：${selectedCell.finish?finishLabel(selectedCell.finish):'跟隨門片'}`,()=>chooseFinish(f,{cell:cellId})));
+    if(chooseFinish){
+      fields.append(elt('h3','','材質'));
+      for(const [key,label]of cabinetFinishParts)fields.append(button(`${label}：${f.partFinishes?.[key]?finishLabel(f.partFinishes[key]):'跟隨整體'}`,()=>chooseFinish(f,{part:key})));
+    }
   }
-  return{open(f,{onClose:closed}={}){
+  return{refresh(){if(dialog.open)render();},open(f,{onClose:closed}={}){
     if(dialog.open)dialog.close();
     onClose=closed||null;
     currentId=f.id;

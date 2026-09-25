@@ -1,3 +1,5 @@
+import {finishByCode} from './finishes.js';
+
 // Cabinet dimensions are metres. Each column can start at a different height,
 // which permits a floating column; the templates all start on the floor.
 export const cabinetFronts=['open','left','right','double','sliding','drawers'];
@@ -9,7 +11,10 @@ export const cabinetTemplates={
 };
 // Fronts are full overlay: each covers its cell's carcass edges, leaving a
 // FRONT_GAP reveal to its neighbours, with its back face on the carcass face.
-export const FRONT_GAP=.003,FRONT_T=.018,FRONT_Z=FRONT_T/2;
+export const FRONT_GAP=.003,FRONT_T=.018,FRONT_Z=FRONT_T/2,CARCASS_T=.018;
+// Parts of a modular cabinet that can take their own board finish; a cell's
+// own `finish` overrides `fronts` for that cell's door or drawer front.
+export const cabinetFinishParts=[['body','櫃身'],['fronts','門片／抽屜面'],['interior','層板與背板']];
 const round=n=>Math.round(n*10000)/10000;
 const makeId=()=>globalThis.crypto?.randomUUID?.()||Math.random().toString(36).slice(2);
 export function makeCabinetDesign(f,template=f.type==='console'?'low':'niche'){
@@ -26,6 +31,7 @@ export function makeCabinetDesign(f,template=f.type==='console'?'low':'niche'){
   });
   return{template,columns};
 }
+const isFinish=code=>!!finishByCode(code);
 export function validateCabinetDesign(f,design){
   if(!design||!Array.isArray(design.columns)||!design.columns.length||design.columns.length>8)throw Error('櫃體分區數量須為 1 至 8');
   let total=0,ids=new Set;
@@ -40,7 +46,7 @@ export function validateCabinetDesign(f,design){
       if(!cell||typeof cell.id!=='string'||ids.has(cell.id)||!cabinetFronts.includes(cell.front)||!Number.isFinite(cell.height)||cell.height<.15)throw Error('層格尺寸或形式不正確；高度至少 15 cm');
       if(cell.front==='double'&&width<.4||cell.front==='sliding'&&width<.5||cell.front==='drawers'&&width<.25)throw Error('此分區寬度不足以使用所選門面');
       ids.add(cell.id);used+=cell.height;
-      return{id:cell.id,height:round(cell.height),front:cell.front};
+      return{id:cell.id,height:round(cell.height),front:cell.front,...(typeof cell.finish==='string'&&isFinish(cell.finish)?{finish:cell.finish}:{})};
     });
     if(Math.abs(used+bottom-f.h)>.002)throw Error('層格高度加離地高度必須等於櫃體總高');
     total+=width;
@@ -107,3 +113,37 @@ export function modularCabinetRects(f,amounts={}){
   }
   return result;
 }
+
+// The clear opening of one cell: between the side panels, above the cell's
+// bottom board and below the top board when the cell reaches the top.
+export function cellOpening(f,cellId){
+  const cell=cabinetCells(f).find(c=>c.id===cellId);
+  if(!cell)return null;
+  const bottom=cell.bottom+CARCASS_T,top=cell.bottom+cell.h-(Math.abs(cell.bottom+cell.h-f.h)<.001?CARCASS_T:0);
+  return{cell,x:cell.x,w:cell.w-2*CARCASS_T,bottom,h:top-bottom,depth:f.d-CARCASS_T};
+}
+// A TV hung inside an open cell: centred in the opening, its back on a 1 cm
+// bracket against the back panel, following the cabinet's position and angle.
+export const NICHE_BRACKET=.01;
+export function nicheTvPlacement(tv,support,cellId){
+  const opening=cellOpening(support,cellId);
+  if(!opening)return null;
+  const angle=support.rot*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle);
+  const z=-support.d/2+CARCASS_T+NICHE_BRACKET+tv.d/2;
+  return{x:support.x+opening.x*c+z*s,z:support.z-opening.x*s+z*c,rot:support.rot,elevation:round(opening.bottom+Math.max(0,(opening.h-tv.h)/2))};
+}
+// Warnings only: a TV that does not fit keeps its size, as the owner sets it
+// from the real model.
+export function nicheTvWarnings(tv,support){
+  if(tv?.type!=='television'||tv.tvMount!=='niche')return[];
+  if(!support?.cabinetDesign)return['找不到放電視的櫃體'];
+  const opening=cellOpening(support,tv.supportCell);
+  if(!opening)return['找不到放電視的櫃格，請重新選擇'];
+  const cm=n=>Math.round(n*1000)/10,messages=[];
+  if(opening.cell.front!=='open')messages.push('放電視的櫃格有門面，請改為開放格');
+  if(tv.w>opening.w+.0005)messages.push(`電視寬 ${cm(tv.w)} cm，超過櫃格內寬 ${cm(opening.w)} cm`);
+  if(tv.h>opening.h+.0005)messages.push(`電視高 ${cm(tv.h)} cm，超過櫃格內高 ${cm(opening.h)} cm`);
+  if(tv.d+NICHE_BRACKET>opening.depth+.0005)messages.push(`電視厚度加壁掛架 ${cm(tv.d+NICHE_BRACKET)} cm，超過櫃格深度 ${cm(opening.depth)} cm`);
+  return messages;
+}
+export const hostsNicheTv=(host,tv)=>tv?.type==='television'&&tv.tvMount==='niche'&&tv.supportId===host?.id;

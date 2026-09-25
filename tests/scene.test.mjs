@@ -209,3 +209,17 @@ test('sliding leaves run inside the carcass and drawers carry a body that fits w
  assert(body.min.z>=-f.d/2+t-eps,'closed drawer body clears the back panel');
  assert(body.min.y>=t-eps,'drawer body sits above the bottom board');
 });
+
+test('cabinet part finishes reach the body, shelves and fronts, and a cell finish overrides the fronts',()=>{
+ const s=fixture(),g=new THREE.Group,[body,fronts,own]=['P86','A07','B18'];
+ const f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'parts',x:0,z:0,w:.8,d:.5,h:2,rot:0,partFinishes:{body,fronts}};
+ f.cabinetDesign={template:'custom',columns:[{id:'c',width:.8,bottom:0,cells:[{id:'a',height:1,front:'left'},{id:'b',height:1,front:'left',finish:own}]}]};
+ s.makeFurniture(g,f);
+ const [lower,upper]=s.actions.get('parts').parts,leaf=part=>part.pivot.children[0].material;
+ assert.equal(leaf(lower),s.finishMaterial(fronts));
+ assert.equal(leaf(upper),s.finishMaterial(own));
+ const side=g.children.find(m=>m.isMesh&&Math.abs(m.geometry.parameters?.width-.018)<1e-9&&Math.abs(m.geometry.parameters?.depth-.5)<1e-9);
+ assert.equal(side.material,s.finishMaterial(body));
+ const back=g.children.find(m=>m.isMesh&&Math.abs(m.geometry.parameters?.depth-.018)<1e-9&&m.position.z<0);
+ assert.notEqual(back.material,s.finishMaterial(body),'the back panel is interior, which follows the overall finish');
+});

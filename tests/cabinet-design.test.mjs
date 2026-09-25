@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z} from '../dist/cabinet-design.js';
+import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,nicheTvPlacement,nicheTvWarnings} from '../dist/cabinet-design.js';
+import {finishes} from '../dist/finishes.js';
 import {furnitureInterference} from '../dist/geometry.js';
-import {validateFurniture} from '../dist/model.js';
+import {validateFurniture,issues} from '../dist/model.js';
 
 const item=()=>({id:'modular',type:'wardrobe',name:'收納櫃',x:4,z:1,w:1.2,d:.5,h:2.4,rot:0,open:0});
 
@@ -66,4 +67,53 @@ test('cabinet fronts overlay the carcass and leave only the reveal gap',()=>{
   assert.ok(Math.abs(leaf.w-(f.w-FRONT_GAP))<1e-9);
   assert.ok(Math.abs(leaf.x-f.x)<1e-6);
   assert.ok(Math.abs(leaf.z-(f.z+f.d/2+FRONT_Z))<1e-6);
+});
+
+test('a niche TV hangs centred in its open cell and follows the cabinet angle',()=>{
+  const f={...item(),x:2,z:3,w:1.2,d:.45,h:2,rot:90};
+  f.cabinetDesign={template:'custom',columns:[{id:'c',width:1.2,bottom:0,cells:[{id:'low',height:.6,front:'drawers'},{id:'tv',height:1,front:'open'},{id:'top',height:.4,front:'double'}]}]};
+  const tv={id:'tv',type:'television',name:'電視',w:1,h:.56,d:.06,rot:0,tvMount:'niche',supportId:f.id,supportCell:'tv'};
+  const placed=nicheTvPlacement(tv,f,'tv'),opening=cellOpening(f,'tv');
+  assert.ok(Math.abs(opening.w-(1.2-2*CARCASS_T))<1e-9);
+  assert.ok(Math.abs(placed.elevation-(.6+CARCASS_T+(opening.h-.56)/2))<1e-4);
+  assert.equal(placed.rot,90);
+  // rot 90: local +z (towards the front) points along world +x
+  assert.ok(Math.abs(placed.x-(2+(-f.d/2+CARCASS_T+NICHE_BRACKET+tv.d/2)))<1e-9);
+  assert.ok(Math.abs(placed.z-3)<1e-9);
+  assert.deepEqual(nicheTvWarnings({...tv,...placed},f),[]);
+});
+
+test('a niche TV that does not fit is warned about, never resized',()=>{
+  const f=item();
+  f.cabinetDesign={template:'custom',columns:[{id:'c',width:1.2,bottom:0,cells:[{id:'tv',height:.5,front:'open'},{id:'door',height:1.9,front:'left'}]}]};
+  const tv={type:'television',w:1.4,h:.8,d:.06,tvMount:'niche',supportId:f.id,supportCell:'tv'};
+  const warnings=nicheTvWarnings(tv,f);
+  assert.equal(warnings.length,2);
+  assert.ok(warnings[0].includes('寬')&&warnings[1].includes('高'));
+  assert.equal(tv.w,1.4);
+  assert.ok(nicheTvWarnings({...tv,w:.5,h:.3,supportCell:'door'},f)[0].includes('門面'));
+  assert.ok(nicheTvWarnings({...tv,supportCell:'gone'},f)[0].includes('找不到'));
+});
+
+test('cabinet cells keep a valid own finish and drop an unknown one',()=>{
+  const f=item();
+  f.cabinetDesign=makeCabinetDesign(f,'closed');
+  f.cabinetDesign.columns[0].cells[0].finish='nope';
+  assert.equal(validateCabinetDesign(f,f.cabinetDesign).columns[0].cells[0].finish,undefined);
+  f.cabinetDesign.columns[0].cells[0].finish=finishes[0].code;
+  assert.equal(validateCabinetDesign(f,f.cabinetDesign).columns[0].cells[0].finish,finishes[0].code);
+});
+
+test('furniture validation keeps niche mounting and cabinet part finishes',()=>{
+  const cabinet=item();
+  cabinet.cabinetDesign=makeCabinetDesign(cabinet,'niche');
+  cabinet.partFinishes={body:finishes[0].code,fronts:'bad',interior:finishes[1].code,extra:finishes[2].code};
+  const cell=cabinet.cabinetDesign.columns[1].cells[0].id;
+  const tv={id:'tv',type:'television',name:'電視',x:cabinet.x,z:cabinet.z,w:.3,h:.2,d:.06,rot:0,open:0,elevation:1,tvMount:'niche',supportId:cabinet.id,supportCell:cell};
+  const [c,t]=validateFurniture([cabinet,tv]);
+  assert.deepEqual(c.partFinishes,{body:finishes[0].code,interior:finishes[1].code});
+  assert.equal(t.tvMount,'niche');assert.equal(t.supportCell,cell);
+  assert.equal(validateFurniture([{...tv,id:'x',supportCell:undefined}])[0].tvMount,'wall');
+  assert.ok(!issues(t,[c,t]).some(m=>m.includes(c.name)),'the host cabinet is not an interference');
+  assert.ok(!issues(c,[c,t]).some(m=>m.includes(t.name)));
 });
