@@ -297,7 +297,7 @@ $('tvSupport').onchange=()=>{
 };
 $('tvCell').onchange=()=>{const f=items.find(item=>item.id===selected);if(f&&$('tvCell').value)commitFurniture(f,{...f,supportCell:$('tvCell').value});};
 // Cabinets that can hold a TV in an open cell, and those cells as [id,label].
-function openCells(host){if(!host?.cabinetDesign)return[];return host.cabinetDesign.columns.flatMap((column,ci)=>column.cells.flatMap((cell,ri)=>(cell.parts||[cell]).map((leaf,pi)=>({leaf,label:`分區 ${ci+1} 層格 ${ri+1}`+(cell.parts?` 第 ${pi+1} 格`:'')})))).filter(({leaf})=>leaf.front==='open').map(({leaf,label})=>{const o=cellOpening(host,leaf.id);return[leaf.id,`${label}（內寬 ${Math.round(o.w*100)} × 內高 ${Math.round(o.h*100)} cm）`];});}
+function openCells(host){if(!host?.cabinetDesign)return[];const order=host.cabinetDesign.columns.map(c=>c.id);return cabinetCells(host).filter(cell=>cell.front==='open').map(cell=>{const o=cellOpening(host,cell.id);return[cell.id,`${order.length>1?`分區 ${order.indexOf(cell.columnId)+1} · `:''}離地 ${Math.round(cell.bottom*100)} cm 的開放格（內寬 ${Math.round(o.w*100)} × 內高 ${Math.round(o.h*100)} cm）`];});}
 function nicheHosts(){return items.filter(item=>['wardrobe','console'].includes(item.type)&&openCells(item).length);}
 $('tvElevation').onchange=()=>{
  const f=items.find(item=>item.id===selected);if(f)commitFurniture(f,{...f,elevation:Number($('tvElevation').value)/100});

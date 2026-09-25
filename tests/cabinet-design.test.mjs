@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,cellFinish,cellFinishSlots,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,nicheTvPlacement,nicheTvWarnings,designFromDoorStyle,splitCabinetCell,removeCabinetPart,designLeaves} from '../dist/cabinet-design.js';
+import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,cellFinish,cellFinishSlots,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,nicheTvPlacement,nicheTvWarnings,designFromDoorStyle,splitCabinetCell,removeCabinetNode,designLeaves,moveCabinetLine,cabinetStructure,locateCell} from '../dist/cabinet-design.js';
 import {finishes} from '../dist/finishes.js';
 import {furnitureInterference} from '../dist/geometry.js';
 import {validateFurniture,issues} from '../dist/model.js';
@@ -262,7 +262,7 @@ test('a single layer splits side by side into parts that act as cells of their o
   assert.deepEqual(three.columns[0].cells[0].parts.map(p=>p.id),['low','p2','p3'],'a further split keeps the left id too');
   assert.deepEqual(three.columns[0].cells[0].parts.map(p=>p.width),[.6,.3,.3]);
   assert.equal(splitCabinetCell(three,'p3'),null,'a 30 cm part is too narrow to split');
-  const merged=removeCabinetPart(removeCabinetPart(three,'p3'),'p2');
+  const merged=removeCabinetNode(removeCabinetNode(three,'p3','parts'),'p2','parts');
   assert.equal(merged.columns[0].cells[0].parts,undefined,'one part left becomes a plain layer again');
   assert.equal(merged.columns[0].cells[0].id,'low','and takes that part id, so its open state carries over');
   assert.equal(merged.columns[0].cells[0].front,'drawers');
@@ -282,4 +282,42 @@ test('split layers keep their widths through resizes and validate their parts',(
   assert.throws(()=>validateCabinetDesign(f,bad),/總和/);
   const narrow=structuredClone(f.cabinetDesign);narrow.columns[0].cells[0].parts[0].front='sliding';
   assert.throws(()=>validateCabinetDesign(f,narrow),/寬度不足/);
+});
+
+test('a part can be split into rows of its own, and those into parts, to any depth',()=>{
+  const f={...item(),w:1.2,h:2.4};
+  f.cabinetDesign={template:'custom',columns:[{id:'c',width:1.2,bottom:0,cells:[{id:'low',height:.6,parts:[{id:'l',width:.4,front:'drawers'},{id:'m',width:.4,front:'open'},{id:'r',width:.4,front:'drawers'}]},{id:'tv',height:1.8,front:'open'}]}]};
+  let n=0;const make=()=>'n'+(++n);
+  // Stacking the middle part splits only that part, not the whole row.
+  const stacked=splitCabinetCell(f.cabinetDesign,'m',make,'stack');
+  const middle=stacked.columns[0].cells[0].parts[1];
+  assert.equal(stacked.columns[0].cells.length,2,'no new row across the cabinet');
+  assert.equal(middle.id,'n1');
+  assert.deepEqual(middle.cells.map(c=>[c.id,c.height,c.front]),[['m',.3,'open'],['n2',.3,'open']],'the lower half keeps the id');
+  const g={...f,cabinetDesign:validateCabinetDesign(f,stacked)};
+  const {cells,rowLines,partLines}=cabinetStructure(g);
+  assert.deepEqual(cells.map(c=>c.id),['l','m','n2','r','tv']);
+  const upper=cells.find(c=>c.id==='n2');
+  assert.ok(Math.abs(upper.bottom-.3)<1e-9&&Math.abs(upper.w-.4)<1e-9);
+  assert.ok(Math.abs(upper.insetL-CARCASS_T/2)<1e-9&&Math.abs(upper.insetR-CARCASS_T/2)<1e-9,'it sits between the two dividers');
+  assert.ok(rowLines.some(l=>l.id==='m'&&Math.abs(l.w-.4)<1e-9),'a shelf line only across the middle part');
+  assert.equal(partLines.filter(l=>Math.abs(l.h-.6)<1e-9).length,2,'dividers still run the whole row');
+  // and deeper: split the upper half side by side
+  const deeper=validateCabinetDesign(f,splitCabinetCell(stacked,'n2',make,'side'));
+  assert.deepEqual(designLeaves(deeper).map(l=>l.id),['l','m','n2','n4','r','tv']);
+  // moving a nested line trades with the neighbour only
+  const moved=moveCabinetLine(g,'m',.05);
+  assert.deepEqual(moved.columns[0].cells[0].parts[1].cells.map(c=>c.height),[.35,.25]);
+  // removing the upper half collapses the part back to a plain cell with its id
+  const back=removeCabinetNode(stacked,'n2','rows');
+  assert.deepEqual(back.columns[0].cells[0].parts[1],{id:'m',width:.4,front:'open'});
+  assert.equal(locateCell(back,'m').length,3,'column, row, part');
+});
+
+test('rows nested in a part follow a change of the row height on the dragged side',()=>{
+  const f={...item(),w:1.2,h:2.4};
+  f.cabinetDesign={template:'custom',columns:[{id:'c',width:1.2,bottom:0,cells:[{id:'tv',height:1.8,front:'open'},{id:'top',height:.6,parts:[{id:'a',width:.6,cells:[{id:'a1',height:.3,front:'left'},{id:'a2',height:.3,front:'left'}]},{id:'b',width:.6,front:'double'}]}]}]};
+  const taller=resizeCabinetEdge(f,'top',.2);
+  assert.deepEqual(taller.cabinetDesign.columns[0].cells[1].parts[0].cells.map(c=>c.height),[.3,.5],'the top nested row takes the growth');
+  validateCabinetDesign(taller,taller.cabinetDesign);
 });

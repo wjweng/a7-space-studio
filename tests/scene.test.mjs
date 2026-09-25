@@ -264,7 +264,7 @@ test('a split layer gets a divider board and fronts that stay within each part',
  s.makeFurniture(g,f);g.updateMatrixWorld(true);
  const divider=g.children.find(m=>m.isMesh&&Math.abs(m.geometry.parameters?.width-t)<1e-6&&Math.abs(m.position.x-(-.1))<1e-6);
  assert.ok(divider,'a vertical board sits on the boundary 50 cm from the left side');
- assert.ok(Math.abs(divider.geometry.parameters.height-(.6-t))<1e-6,'it stands on the shelf and reaches the next layer');
+ assert.ok(Math.abs(divider.geometry.parameters.height-.6)<1e-6,'it runs the full height of its row');
  const [drawer,door]=s.actions.get('split').parts,front=part=>new THREE.Box3().setFromObject(part.pivot.children[0]);
  assert.ok(front(drawer).max.x<=-.1+1e-6&&front(door).min.x>=-.1-1e-6,'each front covers only its own part');
  const box=new THREE.Box3();for(const piece of drawer.pivot.children.slice(2))box.expandByObject(piece);

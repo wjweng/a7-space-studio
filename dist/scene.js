@@ -7,7 +7,7 @@ import {flooringByCode,flooringPixels} from './floorings.js';
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeFabric,lightMountDrop,hangingElevation} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
-import {cabinetCells,cabinetColumns,cellFinish,cellOpening,FRONT_GAP,FRONT_T,FRONT_Z} from './cabinet-design.js';
+import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,FRONT_GAP,FRONT_T,FRONT_Z} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
 // A flush fitting sends all of its light downward and glows like a panel, so straight below
 // it is several times brighter than under a bare bulb of the same output.
@@ -352,19 +352,18 @@ export class SpaceScene{
    const{width,bottom,x}=column,bodyHeight=f.h-bottom-(column.top||0);
    for(const side of[-1,1])box(t,bodyHeight,d,x+side*(width/2-t/2),bottom+bodyHeight/2,0);
   }
-  for(const cell of cabinetCells(f)){
+  const structure=cabinetStructure(f);
+  // Dividers between side-by-side parts run the full height of their row;
+  // every shelf, top board and back stops at the side panels or a divider,
+  // so only the sides show outside and nothing overlaps.
+  for(const line of structure.partLines)box(t,line.h,d-t,line.x,line.bottom+line.h/2,t/2);
+  for(const cell of structure.cells){
    const{x,y,w,h,bottom,front,id,last,insetL,insetR}=cell,frontW=w-FRONT_GAP,frontH=h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cellFinish(f,cell,'door'));
-   // Boards and the back sit between the side panels, so only the sides show
-   // on the outer faces; shelves stop at the back panel instead of passing it.
-   // In a split layer the back stops at the dividers while the shelf and top
-   // board run under and over them; `cx` is the centre of the clear opening.
-   const innerW=w-insetL-insetR,cx=x+(insetL-insetR)/2,boardL=insetL<t?0:t,boardR=insetR<t?0:t,boardW=w-boardL-boardR,boardX=x+(boardL-boardR)/2;
+   const innerW=w-insetL-insetR,cx=x+(insetL-insetR)/2;
    box(innerW,h,t,cx,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));
    const lowest=cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom;
-   box(boardW,t,d-t,boardX,bottom+t/2,t/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
-   if(last)box(boardW,t,d-t,boardX,bottom+h-t/2,t/2);
-   // A divider between two parts of a layer, drawn by the part on its left.
-   if(insetR<t)box(t,h-t-(last?t:0),d-t,x+w/2,bottom+t+(h-t-(last?t:0))/2,t/2);
+   box(innerW,t,d-t,cx,bottom+t/2,t/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
+   if(last)box(innerW,t,d-t,cx,bottom+h-t/2,t/2);
    if(front==='open')continue;
    const addDoor=(hinge,sign,width)=>{
     const pivot=new T.Group;

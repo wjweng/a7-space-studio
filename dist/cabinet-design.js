@@ -38,6 +38,40 @@ export function makeCabinetDesign(f,template=f.type==='console'?'low':'niche'){
 const isFinish=code=>!!finishByCode(code);
 const ownFinishes=cell=>{const finishes={};for(const [slot]of cabinetFinishSlots)if(isFinish(cell.finishes?.[slot]))finishes[slot]=cell.finishes[slot];return finishes;};
 const checkFront=(front,width)=>{if(front==='double'&&width<.4||front==='sliding'&&width<.5||front==='drawers'&&width<.25)throw Error('此格寬度不足以使用所選門面');};
+// A column holds a stack of rows; a row may be split side by side into
+// parts, and a part may again hold a stack of rows, to any depth. The rows
+// and parts without children are the cells that carry fronts and finishes.
+function checkRows(list,height,width,ids){
+  if(!Array.isArray(list)||!list.length||list.length>10)throw Error('每區層格數量須為 1 至 10');
+  let used=0;
+  const rows=list.map(row=>{
+    if(!row||typeof row.id!=='string'||ids.has(row.id)||!Number.isFinite(row.height)||row.height<.15)throw Error('層格尺寸不正確；高度至少 15 cm');
+    ids.add(row.id);used+=row.height;
+    if(Array.isArray(row.parts)&&row.parts.length)return{id:row.id,height:round(row.height),parts:checkParts(row.parts,width,row.height,ids)};
+    return{id:row.id,height:round(row.height),...leafFields(row,width)};
+  });
+  if(Math.abs(used-height)>.002)throw Error('層格高度總和必須等於所在空間的高度');
+  return rows;
+}
+function checkParts(list,width,height,ids){
+  if(list.length>8)throw Error('單層直向分區最多 8 格');
+  let used=0;
+  const parts=list.map(part=>{
+    if(!part||typeof part.id!=='string'||ids.has(part.id)||!Number.isFinite(part.width)||part.width<.15)throw Error('直向分區寬度至少 15 cm');
+    ids.add(part.id);used+=part.width;
+    if(Array.isArray(part.cells)&&part.cells.length)return{id:part.id,width:round(part.width),cells:checkRows(part.cells,height,part.width,ids)};
+    return{id:part.id,width:round(part.width),...leafFields(part,part.width)};
+  });
+  if(Math.abs(used-width)>.002)throw Error('直向分區寬度總和必須等於所在空間的寬度');
+  return parts;
+}
+function leafFields(cell,width){
+  if(!cabinetFronts.includes(cell.front))throw Error('層格門面形式不正確');
+  checkFront(cell.front,width);
+  const finishes=ownFinishes(cell);
+  if(!finishes.door&&isFinish(cell.finish))finishes.door=cell.finish; // before 2026-09-25 a cell had one front finish
+  return{front:cell.front,...(Object.keys(finishes).length?{finishes}:{})};
+}
 export function validateCabinetDesign(f,design){
   if(!design||!Array.isArray(design.columns)||!design.columns.length||design.columns.length>8)throw Error('櫃體分區數量須為 1 至 8');
   let total=0,ids=new Set;
@@ -46,30 +80,7 @@ export function validateCabinetDesign(f,design){
     ids.add(column.id);
     const{width,bottom}=column,top=column.top??0;
     if(!Number.isFinite(width)||width<.2||!Number.isFinite(bottom)||bottom<0||!Number.isFinite(top)||top<0||bottom+top>f.h-.15)throw Error('櫃體分區寬度至少 20 cm，底部須保留 15 cm 以上櫃體');
-    if(!Array.isArray(column.cells)||!column.cells.length||column.cells.length>10)throw Error('每區層格數量須為 1 至 10');
-    let used=0;
-    const cells=column.cells.map(cell=>{
-      if(!cell||typeof cell.id!=='string'||ids.has(cell.id)||!cabinetFronts.includes(cell.front)||!Number.isFinite(cell.height)||cell.height<.15)throw Error('層格尺寸或形式不正確；高度至少 15 cm');
-      ids.add(cell.id);used+=cell.height;
-      const finishes=ownFinishes(cell);
-      if(!finishes.door&&isFinish(cell.finish))finishes.door=cell.finish; // before 2026-09-25 a cell had one front finish
-      if(Array.isArray(cell.parts)&&cell.parts.length>1){
-        // A layer split side by side: each part is a cell of its own.
-        if(cell.parts.length>8)throw Error('單層直向分區最多 8 格');
-        let partWidth=0;
-        const parts=cell.parts.map(part=>{
-          if(!part||typeof part.id!=='string'||ids.has(part.id)||!cabinetFronts.includes(part.front)||!Number.isFinite(part.width)||part.width<.15)throw Error('單層直向分區寬度至少 15 cm');
-          checkFront(part.front,part.width);ids.add(part.id);partWidth+=part.width;
-          const own=ownFinishes(part);
-          return{id:part.id,width:round(part.width),front:part.front,...(Object.keys(own).length?{finishes:own}:{})};
-        });
-        if(Math.abs(partWidth-width)>.002)throw Error('單層直向分區寬度總和必須等於分區寬度');
-        return{id:cell.id,height:round(cell.height),front:cell.front,parts};
-      }
-      checkFront(cell.front,width);
-      return{id:cell.id,height:round(cell.height),front:cell.front,...(Object.keys(finishes).length?{finishes}:{})};
-    });
-    if(Math.abs(used+bottom+top-f.h)>.002)throw Error('層格高度加上下留空必須等於櫃體總高');
+    const cells=checkRows(column.cells,f.h-bottom-top,width,ids);
     total+=width;
     return{id:column.id,width:round(width),bottom:round(bottom),...(top>0?{top:round(top)}:{}),cells};
   });
@@ -82,35 +93,52 @@ export function resizeCabinetDesign(design,oldSize,newSize){
   next.columns.forEach((column,index)=>{
     column.width=index===next.columns.length-1?round(newSize.w-x):round(column.width*newSize.w/oldSize.w);
     x+=column.width;
-    fitParts(column);
     column.bottom=round(Math.min(column.bottom,Math.max(0,newSize.h-.15)));
     if(column.top)column.top=round(Math.min(column.top,Math.max(0,newSize.h-column.bottom-.15)));
     const old=design.columns[index],oldHeight=oldSize.h-old.bottom-(old.top||0),available=newSize.h-column.bottom-(column.top||0);
     let y=0;
     column.cells.forEach((cell,row)=>{cell.height=row===column.cells.length-1?round(available-y):round(cell.height*available/oldHeight);y+=cell.height;});
   });
-  return next;
+  return fitDesign({h:newSize.h},next);
 }
-export function cabinetCells(f){
-  if(!f.cabinetDesign)return[];
+// Walk the tree into cell rects plus the lines between siblings. Each cell
+// rect has its centre (x, y), size (w, h), `bottom`, `last` (its top is the
+// column's top, so it carries the top board), `rowId` (the row it is or sits
+// in) and `insetL`/`insetR`: the board at each side, a full side panel at
+// the column's edges and half a divider inside. `partLines` are the dividers
+// between side-by-side parts; `rowLines` the boundaries between rows.
+export function cabinetStructure(f){
+  const cells=[],rowLines=[],partLines=[],T=CARCASS_T;
+  if(!f.cabinetDesign)return{cells,rowLines,partLines};
   let x=-f.w/2;
-  return f.cabinetDesign.columns.flatMap(column=>{
-    let y=column.bottom;
-    // One rect per smallest cell: a layer, or each part of a split layer.
-    // `last` marks the column's top layer, which carries the top board;
-    // `rowId` names the layer; insets are the side board thickness at each
-    // side, a full board at the column's sides and half a divider inside.
-    const cells=column.cells.flatMap((cell,row)=>{
-      const shared={columnId:column.id,rowId:cell.id,y:y+cell.height/2,h:cell.height,bottom:y,last:row===column.cells.length-1};
-      y+=cell.height;
-      if(!cell.parts)return[{...cell,...shared,x:x+column.width/2,w:column.width,insetL:CARCASS_T,insetR:CARCASS_T}];
-      let px=x;
-      return cell.parts.map((part,i)=>{const rect={...part,...shared,height:cell.height,x:px+part.width/2,w:part.width,insetL:i?CARCASS_T/2:CARCASS_T,insetR:i<cell.parts.length-1?CARCASS_T/2:CARCASS_T};px+=part.width;return rect;});
-    });
+  for(const column of f.cabinetDesign.columns){
+    const top=f.h-(column.top||0),atTop=(bottom,height)=>Math.abs(bottom+height-top)<1e-6;
+    const rect=(node,left,width,bottom,height,insetL,insetR,rowId)=>({...node,columnId:column.id,rowId,x:left+width/2,w:width,y:bottom+height/2,h:height,height,bottom,last:atTop(bottom,height),insetL,insetR});
+    const rows=(list,left,width,bottom,insetL,insetR)=>{
+      let y=bottom;
+      list.forEach((row,i)=>{
+        if(i)rowLines.push({id:list[i-1].id,next:row.id,x:left+width/2,w:width,y,insetL,insetR});
+        if(row.parts)parts(row.parts,left,width,y,row.height,insetL,insetR,row.id);
+        else cells.push(rect(row,left,width,y,row.height,insetL,insetR,row.id));
+        y+=row.height;
+      });
+    };
+    const parts=(list,left,width,bottom,height,insetL,insetR,rowId)=>{
+      let px=left;
+      list.forEach((part,i)=>{
+        const l=i?T/2:insetL,r=i<list.length-1?T/2:insetR;
+        if(i<list.length-1)partLines.push({id:part.id,next:list[i+1].id,x:px+part.width,bottom,h:height});
+        if(part.cells)rows(part.cells,px,part.width,bottom,l,r);
+        else cells.push(rect(part,px,part.width,bottom,height,l,r,rowId));
+        px+=part.width;
+      });
+    };
+    rows(column.cells,x,column.width,column.bottom,T,T);
     x+=column.width;
-    return cells;
-  });
+  }
+  return{cells,rowLines,partLines};
 }
+export const cabinetCells=f=>cabinetStructure(f).cells;
 export function cabinetColumns(f){
   if(!f.cabinetDesign)return[];
   let x=-f.w/2;
@@ -187,57 +215,114 @@ export const hostsNicheTv=(host,tv)=>tv?.type==='television'&&tv.tvMount==='nich
 // lowest cell (that board is body), a drawer box only behind drawers.
 export function cellFinishSlots(f,cell){
   const column=f.cabinetDesign.columns.find(c=>c.id===cell.columnId);
-  return cabinetFinishSlots.filter(([slot])=>slot==='door'?cell.front!=='open':slot==='shelf'?column.cells[0].id!==cell.rowId:slot==='drawerBox'?cell.front==='drawers':true);
+  return cabinetFinishSlots.filter(([slot])=>slot==='door'?cell.front!=='open':slot==='shelf'?cell.bottom>column.bottom+1e-6:slot==='drawerBox'?cell.front==='drawers':true);
 }
-// The design objects that hold a front, finishes and an open state: every
-// unsplit layer and every part of a split one.
-export const designLeaves=design=>design.columns.flatMap(column=>column.cells.flatMap(cell=>cell.parts||[cell]));
+const isLeaf=node=>!node.parts&&!node.cells;
+const children=node=>node.parts||node.cells||[];
+// Every cell object (row or part without children), in drawing order.
+export const designLeaves=design=>{const out=[],walk=node=>isLeaf(node)?out.push(node):children(node).forEach(walk);design.columns.forEach(c=>c.cells.forEach(walk));return out;};
 export const findLeaf=(design,id)=>designLeaves(design).find(leaf=>leaf.id===id);
-// After a column's width changed, let its layers' parts follow: the part on
-// `side` takes the difference, or all scale if that would leave one too thin.
-export function fitParts(column,side='right'){
-  for(const cell of column.cells){
-    if(!cell.parts)continue;
-    const diff=column.width-cell.parts.reduce((sum,p)=>sum+p.width,0),edge=side==='left'?cell.parts[0]:cell.parts.at(-1);
-    if(Math.abs(diff)<1e-9)continue;
-    if(edge.width+diff>=.15)edge.width=round(edge.width+diff);
-    else{const scale=column.width/(column.width-diff);let used=0;cell.parts.forEach((p,i)=>{p.width=i===cell.parts.length-1?round(column.width-used):round(p.width*scale);used+=p.width;});}
-  }
-}
-// Split one smallest cell side by side into two equal parts. The left part
-// keeps the cell's id, front and finishes, so its open state and anything
-// keyed to it carry over; a first split gives the layer a new id instead.
-// Returns null when too narrow (parts are 20 cm+).
-export function splitCabinetCell(design,leafId,makePartId=makeId){
-  const next=structuredClone(design);
-  for(const column of next.columns)for(const cell of column.cells){
-    const parts=cell.parts||[{id:cell.id,width:column.width,front:cell.front,...(cell.finishes?{finishes:cell.finishes}:{})}],index=parts.findIndex(p=>p.id===leafId);
-    if(index<0)continue;
-    const part=parts[index];
-    if(part.width<.4||parts.length>=8)return null;
-    const half=round(part.width/2),left={...part,width:half};
-    if(!cell.parts){cell.id=makePartId();delete cell.finishes;}
-    const right={id:makePartId(),width:round(part.width-half),front:'open'};
-    parts.splice(index,1,left,right);cell.parts=parts;next.template='custom';
-    return next;
-  }
+// The chain from a column down to the node with this id. Each step is the
+// sibling list the node sits in, its index, whether the list stacks rows or
+// sets parts side by side, and the list's width and height.
+export function locateCell(design,id){
+  const inRows=(list,width,path)=>{
+    for(const [index,row]of list.entries()){
+      const step=[...path,{kind:'rows',list,index,node:row,width,height:row.height}];
+      if(row.id===id)return step;
+      if(row.parts){const found=inParts(row.parts,row.height,step);if(found)return found;}
+    }
+    return null;
+  };
+  const inParts=(list,height,path)=>{
+    for(const [index,part]of list.entries()){
+      const step=[...path,{kind:'parts',list,index,node:part,width:part.width,height}];
+      if(part.id===id)return step;
+      if(part.cells){const found=inRows(part.cells,part.width,step);if(found)return found;}
+    }
+    return null;
+  };
+  for(const column of design.columns){const found=inRows(column.cells,column.width,[{kind:'column',node:column}]);if(found)return found;}
   return null;
 }
-// Remove one part of a split layer; its left neighbour (or right, for the
-// first) takes the width. A layer left with one part becomes unsplit again
-// and takes that part's id, so the part's open state carries over.
-export function removeCabinetPart(design,partId){
-  const next=structuredClone(design);
-  for(const column of next.columns)for(const cell of column.cells){
-    const index=cell.parts?.findIndex(p=>p.id===partId)??-1;
-    if(index<0)continue;
-    const [removed]=cell.parts.splice(index,1),neighbour=cell.parts[Math.max(0,index-1)];
-    neighbour.width=round(neighbour.width+removed.width);
-    if(cell.parts.length===1){const [only]=cell.parts;cell.id=only.id;cell.front=only.front;if(only.finishes)cell.finishes=only.finishes;delete cell.parts;}
-    next.template='custom';
-    return next;
+const nearest=(path,kind)=>{for(let i=path.length-1;i>0;i--)if(path[i].kind===kind)return i;return -1;};
+export const leafIdsUnder=node=>{const out=[],walk=n=>isLeaf(n)?out.push(n.id):children(n).forEach(walk);walk(node);return out;};
+// Make every stack of rows fill its height and every set of parts its width,
+// all the way down, after a size changed above them. The row or part on
+// `hSide` ('top'|'bottom') or `wSide` ('left'|'right') takes the difference;
+// if that would leave it under 15 cm, all scale instead.
+export function fitDesign(f,design=f.cabinetDesign,{hSide='top',wSide='right'}={}){
+  const settle=(list,key,total,side)=>{
+    const diff=total-list.reduce((sum,n)=>sum+n[key],0);if(Math.abs(diff)<1e-9)return;
+    const edge=side==='bottom'||side==='left'?list[0]:list.at(-1);
+    if(edge[key]+diff>=.15){edge[key]=round(edge[key]+diff);return;}
+    const scale=total/(total-diff);let used=0;list.forEach((n,i)=>{n[key]=i===list.length-1?round(total-used):round(n[key]*scale);used+=n[key];});
+  };
+  const rows=(list,height,width)=>{settle(list,'height',height,hSide);for(const row of list)if(row.parts)parts(row.parts,width,row.height);};
+  const parts=(list,width,height)=>{settle(list,'width',width,wSide);for(const part of list)if(part.cells)rows(part.cells,height,part.width);};
+  for(const column of design.columns)rows(column.cells,f.h-column.bottom-(column.top||0),column.width);
+  return design;
+}
+// Split one cell in two: 'stack' puts a new open cell above it, 'side' puts
+// one to its right. The original half keeps the cell's id, front and
+// finishes, so its open state carries over; a cell that becomes a
+// container hands its id to that half and takes a new one. Halves are at
+// least 15 cm (a stack) or 20 cm (side by side); returns null otherwise.
+export function splitCabinetCell(design,leafId,makePartId=makeId,direction='side'){
+  const next=structuredClone(design),path=locateCell(next,leafId);
+  if(!path)return null;
+  const here=path.at(-1),node=here.node,side=direction==='side';
+  const size=side?here.width:here.height,half=round(size/2);
+  if(size<(side?.4:.3))return null;
+  const keep={id:node.id,front:node.front,...(node.finishes?{finishes:node.finishes}:{})};
+  const fresh=extra=>({id:makePartId(),front:'open',...extra});
+  if(side===(here.kind==='parts')){
+    // Same direction as its list: add a sibling after it.
+    if(here.list.length>=(side?8:10))return null;
+    node[side?'width':'height']=half;
+    here.list.splice(here.index+1,0,fresh({[side?'width':'height']:round(size-half)}));
+  }else{
+    // Across its list: the cell becomes a container of two.
+    const key=side?'width':'height';
+    node.id=makePartId();delete node.front;delete node.finishes;
+    node[side?'parts':'cells']=[{...keep,[key]:half},fresh({[key]:round(size-half)})];
   }
-  return null;
+  next.template='custom';
+  return next;
+}
+// Remove the row ('rows') or part ('parts') that holds a cell; a
+// neighbour in the same list takes its size. A container left with a
+// single plain cell becomes that cell again, keeping the cell's id.
+export function removeCabinetNode(design,leafId,kind){
+  const next=structuredClone(design),path=locateCell(next,leafId);
+  if(!path)return null;
+  const at=nearest(path,kind);
+  if(at<0)return null;
+  const here=path[at],key=kind==='rows'?'height':'width';
+  if(here.list.length===1)return null;
+  here.list.splice(here.index,1);
+  const neighbour=here.list[Math.max(0,here.index-1)];
+  neighbour[key]=round(neighbour[key]+here.node[key]);
+  const parent=path[at-1].node;
+  if(here.list.length===1&&at>1&&isLeaf(here.list[0])){
+    const [only]=here.list;
+    delete parent.parts;delete parent.cells;
+    Object.assign(parent,{id:only.id,front:only.front});if(only.finishes)parent.finishes=only.finishes;
+  }
+  next.template='custom';
+  return next;
+}
+// Move the boundary after the row or part with this id by `delta` metres,
+// trading size with the next sibling (each keeps 15 cm).
+export function moveCabinetLine(f,id,delta){
+  const next=structuredClone(f.cabinetDesign),path=locateCell(next,id);
+  if(!path)return null;
+  const here=path.at(-1),key=here.kind==='rows'?'height':'width',a=here.list[here.index],b=here.list[here.index+1];
+  if(!b)return null;
+  const limited=Math.max(.15-a[key],Math.min(b[key]-.15,delta));
+  a[key]=round(a[key]+limited);b[key]=round(b[key]-limited);
+  next.template='custom';
+  return fitDesign(f,next,{hSide:'bottom',wSide:'left'});
 }
 // Resolved finish code for a cell slot, or '' for the level-one fallback.
 export function cellFinish(f,cell,slot){
@@ -253,7 +338,7 @@ export function resizeCabinetEdge(f,side,delta,maxHeight=Infinity){
   const next=structuredClone(f),columns=next.cabinetDesign.columns;
   if(side==='left'||side==='right'){
     const column=side==='right'?columns.at(-1):columns[0],grow=Math.max(.2-column.width,delta),shift=(side==='right'?1:-1)*grow/2,angle=f.rot*Math.PI/180;
-    column.width=round(column.width+grow);next.w=round(f.w+grow);fitParts(column,side);
+    column.width=round(column.width+grow);next.w=round(f.w+grow);
     next.x=f.x+shift*Math.cos(angle);next.z=f.z-shift*Math.sin(angle);
   }else{
     const top=side==='top',gapKey=top?'top':'bottom',edgeCell=column=>top?column.cells.at(-1):column.cells[0];
@@ -268,6 +353,8 @@ export function resizeCabinetEdge(f,side,delta,maxHeight=Infinity){
     next.h=round(f.h+grow);
   }
   next.cabinetDesign.template='custom';
+  // Nested rows and parts follow on the dragged side only.
+  fitDesign(next,next.cabinetDesign,{hSide:side==='bottom'?'bottom':'top',wSide:side==='left'?'left':'right'});
   return next;
 }
 
@@ -296,7 +383,8 @@ export function removeCabinetColumn(f,columnId){
   if(index===0||index===columns.length){
     const shift=(index===0?1:-1)*removed.width/2,angle=f.rot*Math.PI/180;
     next.w=round(f.w-removed.width);next.x=f.x+shift*Math.cos(angle);next.z=f.z-shift*Math.sin(angle);
-  }else{columns[index-1].width=round(columns[index-1].width+removed.width);fitParts(columns[index-1]);}
+  }else columns[index-1].width=round(columns[index-1].width+removed.width);
+  fitDesign(next,next.cabinetDesign);
   next.cabinetDesign.template='custom';
   return trimCabinetGap(next);
 }
