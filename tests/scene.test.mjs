@@ -223,10 +223,24 @@ test('cabinet finishes resolve cell, then cabinet-wide, then the cabinet finish'
  const backsFound=meshes.filter(m=>Math.abs(size(m).depth-.018)<1e-9&&m.position.z<0);
  assert.equal(backsFound.length,2,'one back panel per cell');
  assert.ok(backsFound.every(m=>m.material===s.finishMaterial(backs)));
- const boards=meshes.filter(m=>Math.abs(size(m).height-.018)<1e-9&&Math.abs(size(m).depth-.5)<1e-9);
+ const boards=meshes.filter(m=>Math.abs(size(m).height-.018)<1e-9&&Math.abs(size(m).depth-(.5-.018))<1e-9);
  const shelf=boards.find(m=>Math.abs(m.position.y-(.6+.009))<1e-6),bottom=boards.find(m=>Math.abs(m.position.y-.009)<1e-6);
  assert.equal(shelf.material,s.finishMaterial(own),'the board under a cell is its shelf');
  assert.equal(bottom.material,s.finishMaterial(whole),'the lowest board is body');
  const side=meshes.find(m=>Math.abs(size(m).width-.018)<1e-9&&Math.abs(size(m).depth-.5)<1e-9);
  assert.equal(side.material,s.finishMaterial(whole));
+});
+
+test('cabinet boards stay between the side panels and a rebuild keeps open parts open',()=>{
+ const s=fixture(),g=new THREE.Group,t=.018;
+ const f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'inner',x:0,z:0,w:.8,d:.5,h:2,rot:0,openCells:{a:1}};
+ f.cabinetDesign={template:'custom',columns:[{id:'c',width:.8,bottom:0,cells:[{id:'a',height:.6,front:'left'},{id:'b',height:1.4,front:'open'}]}]};
+ s.makeFurniture(g,f);g.updateMatrixWorld(true);
+ for(const mesh of g.children.filter(m=>m.isMesh&&Math.abs(m.geometry.parameters?.width-t)>1e-9)){
+  const box=new THREE.Box3().setFromObject(mesh);
+  assert(box.min.x>=-.4+t-1e-9&&box.max.x<=.4-t+1e-9,'a board or back reaches the outer face of a side panel');
+ }
+ const [door]=s.actions.get('inner').parts;
+ assert.equal(door.amount,1);
+ assert(Math.abs(Math.abs(door.pivot.rotation.y)-Math.PI/2)<1e-9,'the open door is built already open');
 });

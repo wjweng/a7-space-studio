@@ -354,10 +354,12 @@ export class SpaceScene{
   }
   for(const cell of cabinetCells(f)){
    const{x,y,w,h,bottom,front,id}=cell,frontW=w-FRONT_GAP,frontH=h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cellFinish(f,cell,'door'));
-   box(w,h,t,x,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));
+   // Boards and the back sit between the side panels, so only the sides show
+   // on the outer faces; shelves stop at the back panel instead of passing it.
+   box(w-2*t,h,t,x,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));
    const lowest=cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom;
-   box(w,t,d,x,bottom+t/2,0,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
-   if(Math.abs(bottom+h-f.h)<.001)box(w,t,d,x,bottom+h-t/2,0);
+   box(w-2*t,t,d-t,x,bottom+t/2,t/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
+   if(Math.abs(bottom+h-f.h)<.001)box(w-2*t,t,d-t,x,bottom+h-t/2,t/2);
    if(front==='open')continue;
    const addDoor=(hinge,sign,width)=>{
     const pivot=new T.Group;
@@ -400,6 +402,9 @@ export class SpaceScene{
     }
    }
   }
+  // Start each part at its current open state, so a rebuild (a new finish,
+  // a resize) does not replay the opening animation.
+  for(const part of parts){part.amount=f.openCells?.[part.id]?1:0;if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+part.amount*part.travel;}
   if(parts.length)this.actions.set(f.id,{type:'modularCabinet',item:f,parts,amount:0});
  }
  makeFurnitureParts(g,f){let{w,d,h,type}=f;const box=(ww,hh,dd,x,y,z,m='wood',r=0)=>this.box(g,ww,hh,dd,x,y,z,m,r);const legs=(height,offset=.07)=>{for(let x of[-w/2+offset,w/2-offset])for(let z of[-d/2+offset,d/2-offset])box(.045,height,.045,x,height/2,z,'wood',.008);};
