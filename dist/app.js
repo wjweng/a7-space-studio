@@ -186,7 +186,9 @@ const nestedCabinetEditor=createCabinetEditor({
 mediaEditor=createMediaWallEditor({
  getItem:id=>items.find(f=>f.id===id),
  commit:commitFurniture,
- onEditModule:(f,part)=>nestedCabinetEditor.open({id:f.id+':'+part}),
+ // The media-wall dialog is modal, so it steps aside while a module is edited
+ // (keeping the wall in view) and returns when the cabinet editor closes.
+ onEditModule:(f,part)=>{document.querySelector('.mediaDialog')?.close();nestedCabinetEditor.open({id:f.id+':'+part},{onClose:()=>{if(items.some(item=>item.id===f.id))mediaEditor.open(f);}});},
  wallChoices:f=>mediaWallChoices(f,walls,insideShell,roomAt),
  setWall(f,value){
   if(!value){const next={...f};delete next.wallAnchor;commitFurniture(f,next);return;}

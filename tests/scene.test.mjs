@@ -185,3 +185,27 @@ test('a modular cabinet door covers its whole cell and sits on the carcass face'
  assert(near(box.min.y,gap/2)&&near(box.max.y,1.2-gap/2),`door rises ${box.min.y}..${box.max.y}`);
  assert(near(box.min.z,f.d/2),'door back rests on the carcass front');
 });
+
+test('sliding leaves run inside the carcass and drawers carry a body that fits when closed',()=>{
+ const s=fixture(),g=new THREE.Group,t=.018;
+ const f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'inset',x:0,z:0,w:.8,d:.5,h:2,rot:0};
+ f.cabinetDesign={template:'custom',columns:[{id:'c',width:.8,bottom:0,cells:[{id:'drawer',height:.4,front:'drawers'},{id:'slide',height:1.6,front:'sliding'}]}]};
+ s.makeFurniture(g,f);g.updateMatrixWorld(true);
+ const parts=s.actions.get('inset').parts,eps=1e-6;
+ const slides=parts.filter(p=>p.kind==='slide');
+ assert.equal(slides.length,2);
+ for(const part of slides){
+  const box=new THREE.Box3().setFromObject(part.pivot);
+  assert(box.min.x>=-.4+t-eps&&box.max.x<=.4-t+eps,'leaf stays between the side panels');
+  assert(box.max.z<=f.d/2+eps,'leaf stays behind the carcass front');
+  assert(box.min.y>=.4+t-eps&&box.max.y<=2-t+eps,'leaf stays between bottom and top boards');
+ }
+ const moved=slides.filter(p=>p.travel!==0);
+ assert.equal(moved.length,1,'only the rear leaf moves, so opening reveals half the cell');
+ assert(Math.abs(moved[0].base+moved[0].travel-slides.find(p=>p.travel===0).base)<eps,'rear leaf ends behind the front leaf');
+ const drawer=parts.find(p=>p.kind==='drawer'),body=new THREE.Box3();
+ for(const piece of drawer.pivot.children.slice(2))body.expandByObject(piece);
+ assert(drawer.pivot.children.length>2,'drawer has a body behind its front');
+ assert(body.min.z>=-f.d/2+t-eps,'closed drawer body clears the back panel');
+ assert(body.min.y>=t-eps,'drawer body sits above the bottom board');
+});

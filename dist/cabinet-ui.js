@@ -13,9 +13,30 @@ const field=(label,value,change,min=0,max=500)=>{
 };
 export function createCabinetEditor({getItem,commit,toggleCell,onConvert}){
   const dialog=elt('dialog','cabinetDialog');
-  dialog.innerHTML='<div class="cabinetHead"><div><span class="eyebrow">CABINET EDITOR</span><h2>編輯櫃體</h2></div><button type="button" class="dialogClose" aria-label="關閉">×</button></div><p class="muted">點選正面圖中的格子，再修改分區、層高與門面。尺寸單位為 cm。</p><div class="cabinetToolbar"></div><div class="cabinetElevation"></div><div class="cabinetFields"></div><p class="cabinetError" role="alert"></p>';
+  dialog.innerHTML='<div class="cabinetHead" title="拖曳可移動視窗"><div><span class="eyebrow">CABINET EDITOR</span><h2>編輯櫃體</h2></div><div class="cabinetHeadButtons"><button type="button" class="dialogFold" aria-expanded="true">收合</button><button type="button" class="dialogClose" aria-label="關閉">×</button></div></div><div class="cabinetBody"><p class="muted">點選正面圖中的格子，再修改分區、層高與門面。尺寸單位為 cm。拖曳標題可移動視窗。</p><div class="cabinetToolbar"></div><div class="cabinetElevation"></div><div class="cabinetFields"></div><p class="cabinetError" role="alert"></p></div>';
   document.body.append(dialog);
+  let onClose=null;
   dialog.querySelector('.dialogClose').onclick=()=>dialog.close();
+  dialog.addEventListener('close',()=>{if(dialog.open)return;const done=onClose;onClose=null;done?.();});
+  dialog.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();dialog.close();}});
+  // Shown without a backdrop so the cabinet stays visible and updates live;
+  // the header drags the window and the fold button shrinks it to its header.
+  const fold=dialog.querySelector('.dialogFold');
+  fold.onclick=()=>{const folded=dialog.classList.toggle('folded');fold.textContent=folded?'展開':'收合';fold.setAttribute('aria-expanded',String(!folded));place(dialog.offsetLeft,dialog.offsetTop);};
+  const place=(left,top)=>{
+    const width=dialog.offsetWidth,head=dialog.querySelector('.cabinetHead').offsetHeight+24;
+    dialog.style.left=Math.max(8-width+80,Math.min(innerWidth-80,left))+'px';
+    dialog.style.top=Math.max(8,Math.min(innerHeight-head,top))+'px';
+  };
+  dialog.querySelector('.cabinetHead').addEventListener('pointerdown',event=>{
+    if(event.target.closest('button'))return;
+    event.preventDefault();
+    const head=event.currentTarget,dx=event.clientX-dialog.offsetLeft,dy=event.clientY-dialog.offsetTop;
+    head.setPointerCapture(event.pointerId);
+    head.onpointermove=move=>place(move.clientX-dx,move.clientY-dy);
+    head.onpointerup=head.onpointercancel=()=>{head.onpointermove=head.onpointerup=head.onpointercancel=null;};
+  });
+  addEventListener('resize',()=>{if(dialog.open)place(dialog.offsetLeft,dialog.offsetTop);});
   let currentId=null,columnId=null,cellId=null;
   const item=()=>getItem(currentId);
   const save=design=>{
@@ -155,7 +176,9 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert}){
     frontLabel.append(front);fields.append(frontLabel);
     if(selectedCell.front!=='open')fields.append(button(f.openCells?.[cellId]?'關閉這格':'打開這格',()=>{toggleCell(f,cellId);render();}));
   }
-  return{open(f){
+  return{open(f,{onClose:closed}={}){
+    if(dialog.open)dialog.close();
+    onClose=closed||null;
     currentId=f.id;
     const original=item();
     if(!original?.cabinetDesign){
@@ -163,6 +186,10 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert}){
       if(converted!==false)onConvert?.(original);
     }
     const updated=item();columnId=updated.cabinetDesign.columns[0].id;cellId=updated.cabinetDesign.columns[0].cells[0].id;
-    render();dialog.showModal();
+    render();
+    dialog.classList.remove('folded');fold.textContent='收合';fold.setAttribute('aria-expanded','true');
+    dialog.show();
+    if(!dialog.style.left)place(innerWidth>900?16:(innerWidth-dialog.offsetWidth)/2,innerWidth>900?90:70);
+    else place(dialog.offsetLeft,dialog.offsetTop);
   }};
 }

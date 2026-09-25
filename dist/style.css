@@ -39,9 +39,9 @@
 #recovery[hidden]{display:none}
 #recovery span{flex:1 1 260px}
 #recovery div{display:flex;gap:6px}
-.cabinetDialog{width:min(92vw,760px);max-height:90vh;overflow:auto;background:var(--panel,#f8f8f5);color:var(--text,#252b29);border:1px solid var(--line,#bbb);border-radius:12px;padding:22px}
+.cabinetDialog{position:fixed;inset:auto;margin:0;z-index:30;box-shadow:0 18px 60px #112a3940;width:min(92vw,560px);max-height:calc(100dvh - 16px);overflow:auto;background:var(--panel,#f8f8f5);color:var(--text,#252b29);border:1px solid var(--line,#bbb);border-radius:12px;padding:22px}
 .cabinetHead,.cabinetToolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
-.cabinetHead h2{margin:3px 0}.cabinetToolbar{justify-content:flex-start;margin:12px 0}
+.cabinetHead{cursor:move;touch-action:none;user-select:none}.cabinetHead .eyebrow{margin-top:0}.cabinetHeadButtons{display:flex;gap:6px;align-items:center}.cabinetHeadButtons .dialogFold{font-size:12px;padding:6px 10px}.cabinetDialog.folded .cabinetBody{display:none}.cabinetHead h2{margin:3px 0}.cabinetToolbar{justify-content:flex-start;margin:12px 0}
 .cabinetElevation{display:flex;justify-content:center;padding:12px;background:#edece6;border:1px solid var(--line,#bbb);border-radius:8px}
 .cabinetElevation svg{display:block;width:auto;height:auto;max-width:100%;max-height:min(32vh,420px)}
 .cabinetCell{fill:#b9ac97;stroke:#4b524d;stroke-width:1.5px;vector-effect:non-scaling-stroke;cursor:pointer}
