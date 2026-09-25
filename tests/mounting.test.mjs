@@ -142,3 +142,19 @@ test('in top view a lifted light keeps its lamp at the real height',()=>{
  assert.ok(Math.abs(worldY()-real)<1e-9,'the lamp is not');
  assert.ok(Math.abs(targetY()-realTarget)<1e-9,'and still points the same way');
 });
+
+test('light fixtures get a dark outline in top view only, and pendant lamps stay low too',()=>{
+ const s=fixture();
+ for(const lightKind of['ceiling','pendant','linear']){
+  const lamp={...linear,id:'o-'+lightKind,w:lightKind==='linear'?1.2:.4,d:lightKind==='linear'?.04:.4,lightKind,on:true,pendantLength:.6};
+  s.items=[wideBeam,lamp];s.mode='walk';
+  const g=new THREE.Group;s.makeFurniture(g,lamp);
+  const outline=g.children.filter(m=>m.userData.topOnly);
+  assert.equal(outline.length,1,lightKind+' has one outline');
+  assert.equal(outline[0].visible,false,'hidden outside top view');
+  s.mode='top';g.position.y=s.mountOffset(lamp);s.keepLampAtRealHeight(lamp,g);g.traverse(o=>{if(o.userData.topOnly)o.visible=s.mode==='top';});
+  assert.equal(outline[0].visible,true);
+  const lampSource=s.lightObjects.filter(o=>o.f===lamp).map(o=>o.point);
+  for(const p of lampSource)assert.ok(g.position.y+p.position.y<HEIGHT-wideBeam.h+1e-6,lightKind+' lamp stays under the beam');
+ }
+});
