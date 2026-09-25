@@ -1,4 +1,4 @@
-import {cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn} from './cabinet-design.js';
+import {cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,designFromDoorStyle} from './cabinet-design.js';
 
 const labels={open:'開放',left:'左開門',right:'右開門',double:'對開門',sliding:'滑門',drawers:'抽屜'};
 const cm=n=>Math.round(n*1000)/10;
@@ -261,7 +261,9 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     currentId=f.id;
     const original=item();
     if(!original?.cabinetDesign){
-      const converted=commit(original,{...original,cabinetDesign:makeCabinetDesign(original,original.type==='console'?'low':original.w<.65?'closed':'niche')});
+      // Keep the existing fronts; an open cabinet stays open.
+      const design=designFromDoorStyle(original),openCells=original.open?Object.fromEntries(design.columns.flatMap(c=>c.cells).filter(c=>c.front!=='open').map(c=>[c.id,1])):{};
+      const converted=commit(original,{...original,cabinetDesign:design,openCells});
       if(converted!==false)onConvert?.(original);
     }
     const updated=item();columnId=updated.cabinetDesign.columns[0].id;cellId=updated.cabinetDesign.columns[0].cells[0].id;

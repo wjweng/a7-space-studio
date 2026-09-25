@@ -233,3 +233,24 @@ function trimCabinetGap(f){
   f.h=round(f.h-gap);
   return f;
 }
+
+// The modular design that looks like a pre-modular cabinet's `doorStyle`,
+// so opening the editor for the first time keeps the cabinet's fronts
+// instead of swapping in a template. Mirrors `cabinetLayout` in spatial.js.
+export function designFromDoorStyle(f){
+  const style=f.doorStyle||'double',fit=(front,width)=>front==='sliding'&&width<.5?fit('double',width):front==='double'&&width<.4||front==='drawers'&&width<.25?'left':front;
+  let spec;
+  if(style==='drawers'){const count=f.type==='console'?Math.ceil(f.w/.6):Math.ceil(f.w/.8);spec=Array(Math.max(1,count)).fill(['drawers',f.type==='console'?1:3]);}
+  else if(style==='mixed')spec=[['left',1],['drawers',1],['right',1]];
+  else if(style==='multi')spec=Array.from({length:Math.max(2,Math.ceil(f.w/.6))},(_,i)=>[i%2?'right':'left',1]);
+  else spec=[[['left','right','sliding'].includes(style)?style:'double',1]];
+  spec=spec.slice(0,Math.max(1,Math.floor(f.w/.2+1e-9)));
+  let usedW=0;
+  const columns=spec.map(([front,rows],index)=>{
+    const width=index===spec.length-1?round(f.w-usedW):round(f.w/spec.length);usedW+=width;
+    const count=f.h/rows>=.15?rows:1;let usedH=0;
+    const cells=Array.from({length:count},(_,row)=>{const height=row===count-1?round(f.h-usedH):round(f.h/count);usedH+=height;return{id:makeId(),height,front:fit(front,width)};});
+    return{id:makeId(),width,bottom:0,cells};
+  });
+  return{template:'custom',columns};
+}

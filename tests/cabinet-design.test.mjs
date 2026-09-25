@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,cellFinish,cellFinishSlots,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,nicheTvPlacement,nicheTvWarnings} from '../dist/cabinet-design.js';
+import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,cellFinish,cellFinishSlots,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,nicheTvPlacement,nicheTvWarnings,designFromDoorStyle} from '../dist/cabinet-design.js';
 import {finishes} from '../dist/finishes.js';
 import {furnitureInterference} from '../dist/geometry.js';
 import {validateFurniture,issues} from '../dist/model.js';
@@ -225,4 +225,17 @@ test('a top edge drag over a column with a top gap widens the gap',()=>{
   const lower=resizeCabinetEdge(f,'top',-.5);
   assert.equal(lower.cabinetDesign.columns[0].top,undefined,'a used-up gap disappears');
   validateCabinetDesign(lower,lower.cabinetDesign);
+});
+
+test('a pre-modular cabinet converts to the fronts it already had',()=>{
+  const fronts=g=>g.columns.map(c=>c.cells.map(r=>r.front).join('+'));
+  const base={...item(),w:1.2,h:2.4};
+  assert.deepEqual(fronts(designFromDoorStyle({...base,doorStyle:'double'})),['double']);
+  assert.deepEqual(fronts(designFromDoorStyle({...base,doorStyle:'multi'})),['left','right']);
+  assert.deepEqual(fronts(designFromDoorStyle({...base,doorStyle:'mixed'})),['left','drawers','right']);
+  assert.deepEqual(fronts(designFromDoorStyle({...base,doorStyle:'drawers'})),['drawers+drawers+drawers','drawers+drawers+drawers']);
+  assert.deepEqual(fronts(designFromDoorStyle({...base,doorStyle:'sliding'})),['sliding']);
+  assert.deepEqual(fronts(designFromDoorStyle({...base,w:.35,doorStyle:'double'})),['left'],'too narrow for a pair');
+  assert.deepEqual(fronts(designFromDoorStyle({...base,type:'console',w:1.8,h:.48,doorStyle:'drawers'})),['drawers','drawers','drawers']);
+  for(const style of['double','left','right','multi','mixed','drawers','sliding']){const f={...base,doorStyle:style};validateCabinetDesign(f,designFromDoorStyle(f));}
 });

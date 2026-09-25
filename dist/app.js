@@ -250,7 +250,7 @@ renderProps=()=>{
 };
 const tvControls=document.createElement('div');
 tvControls.className='tvControls';
-tvControls.innerHTML='<div class="sectiontitle space">電視安裝</div><label>方式<select id="tvMount"><option value="wall">壁掛</option><option value="cabinet">放在櫃上</option><option value="niche">掛在櫃格內</option></select></label><label id="tvSupportField">支撐櫃體<select id="tvSupport"></select></label><label id="tvCellField">櫃格<select id="tvCell"></select></label><label id="tvElevationField">底部離地（cm）<input id="tvElevation" type="number" min="0" max="280" step="1"></label>';
+tvControls.innerHTML='<div class="sectiontitle space">電視安裝</div><label>方式<select id="tvMount"><option value="wall">壁掛</option><option value="cabinet">放在櫃上</option><option value="niche">掛在櫃格內</option></select></label><label id="tvSupportField">支撐櫃體<select id="tvSupport"></select></label><label id="tvCellField">櫃格<select id="tvCell"></select></label><label>尺寸<select id="tvSize"></select></label><label id="tvElevationField">底部離地（cm）<input id="tvElevation" type="number" min="0" max="280" step="1"></label>';
 mediaButton.after(tvControls);
 const renderWithTv=renderProps;
 renderProps=()=>{
@@ -259,6 +259,9 @@ renderProps=()=>{
  tvControls.hidden=f?.type!=='television';
  if(f?.type!=='television')return;
  $('tvMount').value=f.tvMount||'wall';
+ const size=tvSizes.find(inch=>{const [w,h]=tvDimensions(inch);return Math.abs(w-f.w)<.006&&Math.abs(h-f.h)<.006;});
+ $('tvSize').replaceChildren(...(size?[]:[new Option(`自訂（${Math.round(f.w*100)} × ${Math.round(f.h*100)} cm）`,'')]),...tvSizes.map(inch=>{const [w,h]=tvDimensions(inch);return new Option(`${inch} 吋（${Math.round(w*100)} × ${Math.round(h*100)} cm）`,inch);}));
+ $('tvSize').value=size?String(size):'';
  const support=$('tvSupport'),chosen=f.supportId||'';
  const niche=f.tvMount==='niche';
  support.replaceChildren(new Option(niche?'選擇櫃體':'選擇電視櫃',''),...(niche?nicheHosts():items.filter(item=>item.type==='console')).map(item=>new Option(item.name,item.id)));
@@ -269,6 +272,10 @@ renderProps=()=>{
  $('tvElevationField').hidden=f.tvMount!=='wall';
  if(document.activeElement!==$('tvElevation'))$('tvElevation').value=Math.round(f.elevation*100);
 };
+// Common 16:9 sizes: screen width and height from the diagonal plus a 1.2 cm
+// bezel all round, which lands within a centimetre or two of typical models.
+const tvSizes=[43,50,55,65,75,85],tvDimensions=inch=>{const d=inch*.0254,bezel=.012;return[Math.round((d*16/Math.hypot(16,9)+bezel)*100)/100,Math.round((d*9/Math.hypot(16,9)+bezel)*100)/100];};
+$('tvSize').onchange=()=>{const f=items.find(item=>item.id===selected),inch=Number($('tvSize').value);if(!f||!inch)return;const [w,h]=tvDimensions(inch);commitFurniture(f,{...f,w,h});};
 $('tvMount').onchange=()=>{
  const f=items.find(item=>item.id===selected);if(!f)return;
  const kind=$('tvMount').value,support=items.find(item=>item.type==='console');
