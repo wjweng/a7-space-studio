@@ -423,7 +423,7 @@ export class SpaceScene{
   // A TV whose cabinet cell is gone is not drawn until it gets a new place;
   // its warning says so. Drawing it where the cell was would cut through
   // whatever replaced the cell.
-  if(f.tvMount==='niche'){const host=this.items?.find(item=>item.id===f.supportId);if(!host?.cabinetDesign||!cellOpening(host,f.supportCell))return;}
+  if(f.tvMount==='niche'||f.tvMount==='cabinet'&&f.supportCell){const host=this.items?.find(item=>item.id===f.supportId);if(!host?.cabinetDesign||!cellOpening(host,f.supportCell))return;}
   box(w,h,Math.max(.035,d*.7),0,f.elevation+h/2,0,'dark',.012);
   box(w*.96,h*.94,.008,0,f.elevation+h/2,d*.36,'accent',.007);
   if(f.tvMount==='cabinet'){box(.07,.07,.06,0,f.elevation-.03,0,'dark');box(Math.min(.4,w*.4),.018,.16,0,f.elevation-.065,.02,'dark',.008);}

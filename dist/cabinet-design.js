@@ -195,21 +195,46 @@ export function nicheTvPlacement(tv,support,cellId){
   const z=-support.d/2+CARCASS_T+NICHE_BRACKET+tv.d/2;
   return{x:support.x+opening.x*c+z*s,z:support.z-opening.x*s+z*c,rot:support.rot,elevation:round(opening.bottom+Math.max(0,(opening.h-tv.h)/2))};
 }
+// A TV standing on its foot on an open cell's shelf: centred in the
+// opening, at the middle of its depth.
+export const TV_STAND=.07,TV_STAND_DEPTH=.16;
+export function shelfTvPlacement(tv,support,cellId){
+  const opening=cellOpening(support,cellId);
+  if(!opening)return null;
+  const angle=support.rot*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),z=CARCASS_T/2;
+  return{x:support.x+opening.x*c+z*s,z:support.z-opening.x*s+z*c,rot:support.rot,elevation:round(opening.bottom+TV_STAND)};
+}
+// Where a TV in a cell goes by default: among open cells it fits (with its
+// foot when standing), the one whose TV centre is nearest 1.1 m, a common
+// seated viewing height; if it fits nowhere, the largest open cell.
+export function bestTvCell(host,tv,mount='niche'){
+  const stand=mount==='cabinet'?TV_STAND:0,options=cabinetCells(host).filter(c=>c.front==='open').map(cell=>({cell,o:cellOpening(host,cell.id)}));
+  if(!options.length)return null;
+  const fits=({o})=>tv.w<=o.w+.0005&&tv.h+stand<=o.h+.0005&&(mount==='cabinet'?TV_STAND_DEPTH:tv.d+NICHE_BRACKET)<=o.depth+.0005;
+  const centre=({o})=>mount==='cabinet'?o.bottom+stand+tv.h/2:o.bottom+o.h/2;
+  const pool=options.filter(fits);
+  const best=pool.length?pool.sort((a,b)=>Math.abs(centre(a)-1.1)-Math.abs(centre(b)-1.1))[0]:options.sort((a,b)=>b.o.w*b.o.h-a.o.w*a.o.h)[0];
+  return best.cell.id;
+}
 // Warnings only: a TV that does not fit keeps its size, as the owner sets it
-// from the real model.
+// from the real model. Covers TVs hung in a cell and TVs standing in one.
 export function nicheTvWarnings(tv,support){
-  if(tv?.type!=='television'||tv.tvMount!=='niche')return[];
+  if(tv?.type!=='television'||!tvInCell(tv))return[];
   if(!support?.cabinetDesign)return['找不到放電視的櫃體'];
   const opening=cellOpening(support,tv.supportCell);
   if(!opening)return['找不到放電視的櫃格，請重新選擇'];
   const cm=n=>Math.round(n*1000)/10,messages=[];
+  const standing=tv.tvMount==='cabinet';
   if(opening.cell.front!=='open')messages.push('放電視的櫃格有門面，請改為開放格');
   if(tv.w>opening.w+.0005)messages.push(`電視寬 ${cm(tv.w)} cm，超過櫃格內寬 ${cm(opening.w)} cm`);
-  if(tv.h>opening.h+.0005)messages.push(`電視高 ${cm(tv.h)} cm，超過櫃格內高 ${cm(opening.h)} cm`);
-  if(tv.d+NICHE_BRACKET>opening.depth+.0005)messages.push(`電視厚度加壁掛架 ${cm(tv.d+NICHE_BRACKET)} cm，超過櫃格深度 ${cm(opening.depth)} cm`);
+  if(standing&&tv.h+TV_STAND>opening.h+.0005)messages.push(`電視加腳座高 ${cm(tv.h+TV_STAND)} cm，超過櫃格內高 ${cm(opening.h)} cm`);
+  if(!standing&&tv.h>opening.h+.0005)messages.push(`電視高 ${cm(tv.h)} cm，超過櫃格內高 ${cm(opening.h)} cm`);
+  if(!standing&&tv.d+NICHE_BRACKET>opening.depth+.0005)messages.push(`電視厚度加壁掛架 ${cm(tv.d+NICHE_BRACKET)} cm，超過櫃格深度 ${cm(opening.depth)} cm`);
   return messages;
 }
-export const hostsNicheTv=(host,tv)=>tv?.type==='television'&&tv.tvMount==='niche'&&tv.supportId===host?.id;
+// A TV hung in, or standing in, a cell of this cabinet.
+const tvInCell=tv=>tv.tvMount==='niche'||tv.tvMount==='cabinet'&&typeof tv.supportCell==='string';
+export const hostsNicheTv=(host,tv)=>tv?.type==='television'&&tvInCell(tv)&&tv.supportId===host?.id;
 
 // Which cell slots apply: no door on an open cell, no shelf on a column's
 // lowest cell (that board is body), a drawer box only behind drawers.

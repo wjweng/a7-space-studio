@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,cellFinish,cellFinishSlots,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,nicheTvPlacement,nicheTvWarnings,designFromDoorStyle,splitCabinetCell,removeCabinetNode,designLeaves,moveCabinetLine,cabinetStructure,locateCell} from '../dist/cabinet-design.js';
+import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,cellFinish,cellFinishSlots,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,nicheTvPlacement,nicheTvWarnings,designFromDoorStyle,splitCabinetCell,removeCabinetNode,designLeaves,moveCabinetLine,cabinetStructure,locateCell,bestTvCell,shelfTvPlacement,TV_STAND,hostsNicheTv} from '../dist/cabinet-design.js';
 import {finishes} from '../dist/finishes.js';
 import {furnitureInterference} from '../dist/geometry.js';
 import {validateFurniture,issues} from '../dist/model.js';
@@ -320,4 +320,29 @@ test('rows nested in a part follow a change of the row height on the dragged sid
   const taller=resizeCabinetEdge(f,'top',.2);
   assert.deepEqual(taller.cabinetDesign.columns[0].cells[1].parts[0].cells.map(c=>c.height),[.3,.5],'the top nested row takes the growth');
   validateCabinetDesign(taller,taller.cabinetDesign);
+});
+
+test('a TV defaults to the open cell it fits whose centre is nearest seated eye level',()=>{
+  const f={...item(),w:1.6,h:2.8,d:.45};
+  f.cabinetDesign={template:'custom',columns:[{id:'c',width:1.6,bottom:0,cells:[{id:'floor',height:.4,front:'open'},{id:'drawers',height:.2,front:'drawers'},{id:'tv',height:1.2,front:'open'},{id:'shelf',height:.4,front:'open'},{id:'top',height:.6,front:'double'}]}]};
+  const tv={type:'television',w:1.23,h:.7,d:.06};
+  assert.equal(bestTvCell(f,tv,'niche'),'tv','not the floor-level cell');
+  assert.equal(bestTvCell(f,tv,'cabinet'),'tv');
+  const huge={...tv,w:1.9};
+  assert.equal(bestTvCell(f,huge,'niche'),'tv','nothing fits: the largest open cell');
+});
+
+test('a TV can stand on an open cell shelf, following the cabinet, with warnings only',()=>{
+  const f={...item(),x:2,z:1,w:1.2,h:2.4,d:.5,rot:0};
+  f.cabinetDesign={template:'custom',columns:[{id:'c',width:1.2,bottom:0,cells:[{id:'low',height:.5,front:'drawers'},{id:'tv',height:1.9,front:'open'}]}]};
+  const tv={id:'t',type:'television',name:'電視',w:1.1,h:.63,d:.06,tvMount:'cabinet',supportId:f.id,supportCell:'tv'};
+  const placed=shelfTvPlacement(tv,f,'tv');
+  assert.ok(Math.abs(placed.elevation-(.5+CARCASS_T+TV_STAND))<1e-9,'on its foot on the shelf');
+  assert.ok(Math.abs(placed.x-2)<1e-9);
+  assert.deepEqual(nicheTvWarnings({...tv,...placed},f),[]);
+  assert.ok(hostsNicheTv(f,tv),'the host cabinet does not count as a clash');
+  const tall={...tv,h:1.9};
+  assert.ok(nicheTvWarnings(tall,f)[0].includes('腳座'));
+  assert.equal(validateFurniture([{...tv,x:2,z:1,rot:0,open:0,elevation:1}])[0].supportCell,'tv');
+  assert.ok(!hostsNicheTv(f,{...tv,supportCell:undefined}),'a TV on the cabinet top is not in a cell');
 });

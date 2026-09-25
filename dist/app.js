@@ -4,7 +4,7 @@ import {minimumsFor,linearLightDefaults,wetRooms,normalizeFloors,fabricTypes,fab
 import {finishes,finishFamilies,finishByCode,finishableTypes,finishPixels} from './finishes.js';
 import {floorings,flooringSeries,flooringByCode,flooringPixels} from './floorings.js';
 import {exteriorWallRects} from './model.js';
-import {makeCabinetDesign,resizeCabinetDesign,cabinetCells,modularCabinetRects,cabinetFinishSlots,findLeaf,cellOpening,nicheTvPlacement,nicheTvWarnings,hostsNicheTv} from './cabinet-design.js';
+import {makeCabinetDesign,resizeCabinetDesign,cabinetCells,modularCabinetRects,cabinetFinishSlots,findLeaf,cellOpening,nicheTvPlacement,nicheTvWarnings,hostsNicheTv,shelfTvPlacement,bestTvCell,TV_STAND} from './cabinet-design.js';
 import {createCabinetEditor} from './cabinet-ui.js';
 import {makeMediaWall,resizeMediaWall} from './media-wall.js';
 import {createMediaWallEditor} from './media-wall-ui.js';
@@ -57,7 +57,7 @@ function renderProps(){const f=items.find(f=>f.id===selected),a=scene.actions.ge
 function renderPalettes(){$('palettes').replaceChildren();for(const [key,p]of Object.entries(palettes)){let b=document.createElement('button');b.className='palette'+(palette===key?' active':'');b.setAttribute('aria-pressed',palette===key);let sw=document.createElement('span');sw.className='swatches';for(const color of[p.wood,p.wall,p.fabric,p.accent]){let i=document.createElement('i');i.style.background=color;sw.append(i)}b.append(sw,document.createTextNode(p.name));b.onclick=()=>{remember();palette=key;scene.setPalette(key);render();persist()};$('palettes').append(b)}$('sceneName').textContent=palettes[palette].name;}
 function renderSchemes(){let active=$('scheme').value;$('scheme').replaceChildren(new Option('目前工作配置',''));for(const s of schemes)$('scheme').add(new Option(s.name,s.id));$('scheme').value=active;}
 function render(){renderPalettes();renderFloors();renderList();renderProps();renderSchemes();updateUndo();}
-function attachTvToSupport(tv,collection){if(tv.tvMount==='niche'){const host=collection.find(item=>item.id===tv.supportId&&item.cabinetDesign);if(!host)throw Error('請先選擇要放電視的櫃體');const placed=nicheTvPlacement(tv,host,tv.supportCell);return placed?{...tv,...placed,elevation:Math.min(placed.elevation,HEIGHT-tv.h)}:tv;}if(tv.tvMount!=='cabinet')return tv;const support=collection.find(item=>item.id===tv.supportId&&['console','wardrobe'].includes(item.type));if(!support)throw Error('請先選擇支撐電視的櫃體');return{...tv,x:support.x,z:support.z,rot:support.rot,elevation:support.h+.07};}
+function attachTvToSupport(tv,collection){if(tv.tvMount==='niche'){const host=collection.find(item=>item.id===tv.supportId&&item.cabinetDesign);if(!host)throw Error('請先選擇要放電視的櫃體');const placed=nicheTvPlacement(tv,host,tv.supportCell);return placed?{...tv,...placed,elevation:Math.min(placed.elevation,HEIGHT-tv.h)}:tv;}if(tv.tvMount!=='cabinet')return tv;const support=collection.find(item=>item.id===tv.supportId&&['console','wardrobe'].includes(item.type));if(!support)throw Error('請先選擇支撐電視的櫃體');if(tv.supportCell){const placed=support.cabinetDesign&&shelfTvPlacement(tv,support,tv.supportCell);return placed?{...tv,...placed,elevation:Math.min(placed.elevation,HEIGHT-tv.h)}:tv;}return{...tv,x:support.x,z:support.z,rot:support.rot,elevation:support.h+.07};}
 function syncSupportedTvs(support){for(const tv of items)if(tv.type==='television'&&tv.supportId===support.id&&['cabinet','niche'].includes(tv.tvMount))Object.assign(tv,attachTvToSupport(tv,items));}
 // Niche-TV fit problems are shown on the TV and on its cabinet, but do not
 // hide either of them the way an interference does.
@@ -265,11 +265,13 @@ renderProps=()=>{
  $('tvSize').value=size?String(size):'';
  const support=$('tvSupport'),chosen=f.supportId||'';
  const niche=f.tvMount==='niche';
- support.replaceChildren(new Option(niche?'選擇櫃體':'選擇電視櫃',''),...(niche?nicheHosts():items.filter(item=>item.type==='console')).map(item=>new Option(item.name,item.id)));
+ support.replaceChildren(new Option(niche?'選擇櫃體':'選擇電視櫃',''),...(niche?nicheHosts():standHosts()).map(item=>new Option(item.name,item.id)));
  support.value=chosen;
  $('tvSupportField').hidden=!['cabinet','niche'].includes(f.tvMount);
- $('tvCellField').hidden=!niche;
- if(niche){const host=items.find(item=>item.id===f.supportId);$('tvCell').replaceChildren(...(host?openCells(host):[]).map(([id,label])=>new Option(label,id)));$('tvCell').value=f.supportCell||'';}
+ const host=items.find(item=>item.id===f.supportId),cellsHere=host?openCells(host):[];
+ $('tvCellField').hidden=!(niche||f.tvMount==='cabinet'&&cellsHere.length);
+ // Standing on a cabinet: its top, or the shelf of one of its open cells.
+ $('tvCell').replaceChildren(...(niche?[]:[new Option('櫃頂','')]),...cellsHere.map(([id,label])=>new Option(label,id)));$('tvCell').value=f.supportCell||'';
  $('tvElevationField').hidden=f.tvMount!=='wall';
  if(document.activeElement!==$('tvElevation'))$('tvElevation').value=Math.round(f.elevation*100);
 };
@@ -277,28 +279,36 @@ renderProps=()=>{
 // bezel all round, which lands within a centimetre or two of typical models.
 const tvSizes=[43,50,55,65,75,85],tvDimensions=inch=>{const d=inch*.0254,bezel=.012;return[Math.round((d*16/Math.hypot(16,9)+bezel)*100)/100,Math.round((d*9/Math.hypot(16,9)+bezel)*100)/100];};
 $('tvSize').onchange=()=>{const f=items.find(item=>item.id===selected),inch=Number($('tvSize').value);if(!f||!inch)return;const [w,h]=tvDimensions(inch);commitFurniture(f,{...f,w,h});};
+// A TV on a cabinet stands on its top when that leaves room under the
+// ceiling on a low cabinet, otherwise on the best open cell's shelf.
+function standOn(tv,support){const next={...tv,tvMount:'cabinet',supportId:support.id};delete next.supportCell;const topFits=support.h<=1.2&&support.h+TV_STAND+tv.h<=HEIGHT;const cell=!topFits&&support.cabinetDesign&&bestTvCell(support,tv,'cabinet');if(cell)next.supportCell=cell;return next;}
 $('tvMount').onchange=()=>{
  const f=items.find(item=>item.id===selected);if(!f)return;
- const kind=$('tvMount').value,support=items.find(item=>item.type==='console');
- if(kind==='cabinet'&&!support){notify('請先加入一座電視櫃。');renderProps();return;}
- const next={...f,tvMount:kind};delete next.supportCell;
- if(kind==='cabinet')next.supportId=items.some(item=>item.id===f.supportId&&item.type==='console')?f.supportId:support.id;else delete next.supportId;
+ const kind=$('tvMount').value;
+ if(kind==='cabinet'){
+  const support=standHosts().find(item=>item.id===f.supportId)||standHosts()[0];
+  if(!support){notify('請先加入一座電視櫃或收納櫃。');renderProps();return;}
+  commitFurniture(f,standOn(f,support));return;
+ }
+ const next={...f,tvMount:kind};delete next.supportCell;delete next.supportId;
  if(kind==='niche'){
   const host=nicheHosts().find(item=>item.id===f.supportId)||nicheHosts()[0];
   if(!host){notify('請先在收納櫃或電視櫃的「編輯櫃體分格」裡留一個開放格。');renderProps();return;}
-  next.supportId=host.id;next.supportCell=openCells(host)[0][0];
+  next.supportId=host.id;next.supportCell=bestTvCell(host,f,'niche');
  }
  commitFurniture(f,next);
 };
 $('tvSupport').onchange=()=>{
  const f=items.find(item=>item.id===selected),id=$('tvSupport').value;if(!f||!id)return;
- if(f.tvMount==='niche'){const host=items.find(item=>item.id===id);commitFurniture(f,{...f,supportId:id,supportCell:openCells(host)[0]?.[0]||''});return;}
- commitFurniture(f,{...f,tvMount:'cabinet',supportId:id});
+ const host=items.find(item=>item.id===id);
+ if(f.tvMount==='niche'){commitFurniture(f,{...f,supportId:id,supportCell:bestTvCell(host,f,'niche')||''});return;}
+ commitFurniture(f,standOn(f,host));
 };
-$('tvCell').onchange=()=>{const f=items.find(item=>item.id===selected);if(f&&$('tvCell').value)commitFurniture(f,{...f,supportCell:$('tvCell').value});};
+$('tvCell').onchange=()=>{const f=items.find(item=>item.id===selected);if(!f)return;const next={...f};if($('tvCell').value)next.supportCell=$('tvCell').value;else if(f.tvMount==='cabinet')delete next.supportCell;else return;commitFurniture(f,next);};
 // Cabinets that can hold a TV in an open cell, and those cells as [id,label].
-function openCells(host){if(!host?.cabinetDesign)return[];const order=host.cabinetDesign.columns.map(c=>c.id);return cabinetCells(host).filter(cell=>cell.front==='open').map(cell=>{const o=cellOpening(host,cell.id);return[cell.id,`${order.length>1?`分區 ${order.indexOf(cell.columnId)+1} · `:''}離地 ${Math.round(cell.bottom*100)} cm 的開放格（內寬 ${Math.round(o.w*100)} × 內高 ${Math.round(o.h*100)} cm）`];});}
+function openCells(host){if(!host?.cabinetDesign)return[];const order=host.cabinetDesign.columns.map(c=>c.id);return cabinetCells(host).filter(cell=>cell.front==='open').map(cell=>{const o=cellOpening(host,cell.id);return[cell.id,`${order.length>1?`分區 ${order.indexOf(cell.columnId)+1} · `:''}離地 ${Math.round(cell.bottom*100)}–${Math.round((cell.bottom+cell.h)*100)} cm 的開放格（內寬 ${Math.round(o.w*100)} × 內高 ${Math.round(o.h*100)} cm）`];});}
 function nicheHosts(){return items.filter(item=>['wardrobe','console'].includes(item.type)&&openCells(item).length);}
+function standHosts(){return items.filter(item=>item.type==='console'||item.type==='wardrobe'&&openCells(item).length);}
 $('tvElevation').onchange=()=>{
  const f=items.find(item=>item.id===selected);if(f)commitFurniture(f,{...f,elevation:Number($('tvElevation').value)/100});
 };
