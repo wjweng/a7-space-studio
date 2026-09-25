@@ -1,12 +1,15 @@
 // Cabinet dimensions are metres. Each column can start at a different height,
-// which permits a floating centre while the shelves beside it reach the floor.
+// which permits a floating column; the templates all start on the floor.
 export const cabinetFronts=['open','left','right','double','sliding','drawers'];
 export const cabinetTemplates={
   closed:{label:'全封閉收納櫃',columns:[{share:1,bottom:0,front:'double'}]},
-  niche:{label:'中央開放收納櫃',columns:[{share:.3,bottom:.18,front:'left'},{share:.4,bottom:.18,front:'open'},{share:.3,bottom:0,front:'open'}]},
+  niche:{label:'中央開放收納櫃',columns:[{share:.3,bottom:0,front:'left'},{share:.4,bottom:0,front:'open'},{share:.3,bottom:0,front:'open'}]},
   shelves:{label:'開放層架',columns:[{share:1,bottom:0,front:'open',rows:4}]},
-  low:{label:'低電視櫃',columns:[{share:.5,bottom:.12,front:'drawers'},{share:.5,bottom:.12,front:'open'}]}
+  low:{label:'低電視櫃',columns:[{share:.5,bottom:0,front:'drawers'},{share:.5,bottom:0,front:'open'}]}
 };
+// Fronts are full overlay: each covers its cell's carcass edges, leaving a
+// FRONT_GAP reveal to its neighbours, with its back face on the carcass face.
+export const FRONT_GAP=.003,FRONT_T=.018,FRONT_Z=FRONT_T/2;
 const round=n=>Math.round(n*10000)/10000;
 const makeId=()=>globalThis.crypto?.randomUUID?.()||Math.random().toString(36).slice(2);
 export function makeCabinetDesign(f,template=f.type==='console'?'low':'niche'){
@@ -88,14 +91,15 @@ export function modularCabinetRects(f,amounts={}){
   for(const cell of cabinetCells(f)){
     const amount=Math.max(0,Math.min(1,Number(amounts[cell.id])||0));
     if(amount<=0)continue;
-    const width=cell.w-.036,z=f.d/2+.012;
+    const width=cell.w-FRONT_GAP,z=f.d/2+FRONT_Z;
     const door=(hinge,sign,panelWidth)=>{
       const turn=-sign*amount*Math.PI/2,p=world(hinge+sign*Math.cos(turn)*panelWidth/2,z-sign*Math.sin(turn)*panelWidth/2);
       result.push({...p,w:panelWidth,d:.04,rot:f.rot+turn*180/Math.PI,yMin:cell.bottom,yMax:cell.bottom+cell.h,cellId:cell.id});
     };
-    if(cell.front==='left')door(cell.x-cell.w/2+.018,1,width);
-    if(cell.front==='right')door(cell.x+cell.w/2-.018,-1,width);
-    if(cell.front==='double'){door(cell.x-cell.w/2+.018,1,width/2);door(cell.x+cell.w/2-.018,-1,width/2);}
+    const left=cell.x-width/2,right=cell.x+width/2;
+    if(cell.front==='left')door(left,1,width);
+    if(cell.front==='right')door(right,-1,width);
+    if(cell.front==='double'){door(left,1,(width-FRONT_GAP)/2);door(right,-1,(width-FRONT_GAP)/2);}
     if(cell.front==='drawers'){
       const travel=amount*f.d*.55,p=world(cell.x,z+travel/2);
       result.push({...p,w:width,d:travel,rot:f.rot,yMin:cell.bottom,yMax:cell.bottom+cell.h,cellId:cell.id});

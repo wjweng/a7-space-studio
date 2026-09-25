@@ -7,7 +7,7 @@ import {flooringByCode,flooringPixels} from './floorings.js';
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeFabric,lightMountDrop} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
-import {cabinetCells,cabinetColumns} from './cabinet-design.js';
+import {cabinetCells,cabinetColumns,FRONT_GAP,FRONT_T,FRONT_Z} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
 // A flush fitting sends all of its light downward and glows like a panel, so straight below
 // it is several times brighter than under a bare bulb of the same output.
@@ -342,38 +342,39 @@ export class SpaceScene{
    for(const side of[-1,1])box(t,bodyHeight,d,x+side*(width/2-t/2),bottom+bodyHeight/2,0);
   }
   for(const cell of cabinetCells(f)){
-   const{x,y,w,h,bottom,front,id}=cell,innerW=Math.max(.02,w-2*t),frontW=Math.max(.02,innerW-.006),frontH=Math.max(.02,h-2*t-.006);
+   const{x,y,w,h,bottom,front,id}=cell,frontW=w-FRONT_GAP,frontH=h-FRONT_GAP,z=d/2+FRONT_Z;
    box(w,t,d,x,bottom+t/2,0);
    if(Math.abs(bottom+h-f.h)<.001)box(w,t,d,x,bottom+h-t/2,0);
    if(front==='open')continue;
    const addDoor=(hinge,sign,width)=>{
     const pivot=new T.Group;
-    pivot.position.set(hinge,y,d/2+.012);
+    pivot.position.set(hinge,y,z);
     g.add(pivot);
-    this.box(pivot,width,frontH,.018,sign*width/2,0,0,'wood',.003);
+    this.box(pivot,width,frontH,FRONT_T,sign*width/2,0,0,'wood',.003);
     this.box(pivot,.013,.09,.022,sign*(width-.045),0,.02,'metal',.003);
     parts.push({id,kind:'door',pivot,sign});
    };
-   if(front==='left')addDoor(x-w/2+t,1,frontW);
-   if(front==='right')addDoor(x+w/2-t,-1,frontW);
+   if(front==='left')addDoor(x-frontW/2,1,frontW);
+   if(front==='right')addDoor(x+frontW/2,-1,frontW);
    if(front==='double'){
-    addDoor(x-w/2+t,1,frontW/2);
-    addDoor(x+w/2-t,-1,frontW/2);
+    addDoor(x-frontW/2,1,(frontW-FRONT_GAP)/2);
+    addDoor(x+frontW/2,-1,(frontW-FRONT_GAP)/2);
    }
    if(front==='drawers'){
     const pivot=new T.Group;
-    pivot.position.set(x,y,d/2+.012);
+    pivot.position.set(x,y,z);
     g.add(pivot);
-    this.box(pivot,frontW,frontH,.018,0,0,0,'wood',.003);
+    this.box(pivot,frontW,frontH,FRONT_T,0,0,0,'wood',.003);
     this.box(pivot,Math.min(.16,frontW*.35),.015,.025,0,0,.02,'metal',.003);
     parts.push({id,kind:'drawer',pivot,base:pivot.position.z,travel:d*.55});
    }
    if(front==='sliding'){
+    // Two leaves on separate tracks, overlapping 1 cm at the middle.
     for(const sign of[-1,1]){
      const pivot=new T.Group;
-     pivot.position.set(x+sign*frontW/4,y,d/2+(sign>0?.022:.012));
+     pivot.position.set(x+sign*frontW/4,y,z+(sign>0?FRONT_T:0));
      g.add(pivot);
-     this.box(pivot,frontW/2+.01,frontH,.018,0,0,0,'wood',.003);
+     this.box(pivot,frontW/2+.01,frontH,FRONT_T,0,0,0,'wood',.003);
      parts.push({id,kind:'slide',pivot,base:pivot.position.x,travel:-sign*frontW*.45});
     }
    }

@@ -62,6 +62,11 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert}){
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
     svg.setAttribute('viewBox',`0 0 ${f.w*1000} ${f.h*1000}`);
     svg.setAttribute('role','img');svg.setAttribute('aria-label','櫃體正面分格圖');
+    // The drawing is scaled to fit, so labels and grips are sized from the
+    // cabinet's longer side to keep a similar on-screen size at any scale.
+    const span=Math.max(f.w,f.h)*1000,grip=span*.02;
+    svg.setAttribute('width',f.w*1000);svg.setAttribute('height',f.h*1000);
+    svg.style.fontSize=`${Math.min(span*.04,Math.min(...cells.map(cell=>cell.w))*1000*.28)}px`;
     for(const cell of cells){
       const r=document.createElementNS(svg.namespaceURI,'rect'),x=(cell.x-cell.w/2+f.w/2)*1000,y=(f.h-cell.bottom-cell.h)*1000;
       for(const [key,value]of Object.entries({x,y,width:cell.w*1000,height:cell.h*1000}))r.setAttribute(key,value);
@@ -95,7 +100,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert}){
     let boundary=0;
     columns.slice(0,-1).forEach((column,index)=>{
       boundary+=column.width;
-      handle({x:boundary*1000-10,y:0,width:20,height:f.h*1000},'ew-resize',delta=>edit(next=>{
+      handle({x:boundary*1000-grip/2,y:0,width:grip,height:f.h*1000},'ew-resize',delta=>edit(next=>{
         const left=next.columns[index],right=next.columns[index+1],limited=Math.max(.2-left.width,Math.min(right.width-.2,delta));
         left.width=Math.round((left.width+limited)*10000)/10000;
         right.width=Math.round((right.width-limited)*10000)/10000;
@@ -107,7 +112,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert}){
       column.cells.slice(0,-1).forEach((cell,rowIndex)=>{
         height+=cell.height;
         const x=columns[columnIndex].x-column.width/2+f.w/2,y=f.h-height;
-        handle({x:x*1000,y:y*1000-10,width:column.width*1000,height:20},'ns-resize',delta=>edit(next=>{
+        handle({x:x*1000,y:y*1000-grip/2,width:column.width*1000,height:grip},'ns-resize',delta=>edit(next=>{
           const lower=next.columns[columnIndex].cells[rowIndex],upper=next.columns[columnIndex].cells[rowIndex+1];
           const limited=Math.max(.15-lower.height,Math.min(upper.height-.15,delta));
           lower.height=Math.round((lower.height+limited)*10000)/10000;

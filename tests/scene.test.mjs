@@ -173,3 +173,15 @@ test('indoor light from above is not much brighter than light from below, so flo
  const lum=c=>{const col=new THREE.Color(Number(c));return .2126*col.r+.7152*col.g+.0722*col.b;};
  assert(lum(m[1])/lum(m[2])<1.5,'sky term close to the bounce term (it was 4.5 when floors washed out)');
 });
+
+test('a modular cabinet door covers its whole cell and sits on the carcass face',()=>{
+ const s=fixture(),g=new THREE.Group;
+ const f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'overlay',x:0,z:0,w:.6,d:.5,h:2.4,rot:0};
+ f.cabinetDesign={template:'custom',columns:[{id:'c',width:.6,bottom:0,cells:[{id:'low',height:1.2,front:'left'},{id:'high',height:1.2,front:'open'}]}]};
+ s.makeFurniture(g,f);g.updateMatrixWorld(true);
+ const [part]=s.actions.get('overlay').parts,box=new THREE.Box3().setFromObject(part.pivot);
+ const gap=.003,near=(a,b)=>Math.abs(a-b)<1e-6;
+ assert(near(box.min.x,-.3+gap/2)&&near(box.max.x,.3-gap/2),`door spans ${box.min.x}..${box.max.x}`);
+ assert(near(box.min.y,gap/2)&&near(box.max.y,1.2-gap/2),`door rises ${box.min.y}..${box.max.y}`);
+ assert(near(box.min.z,f.d/2),'door back rests on the carcass front');
+});

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects} from '../dist/cabinet-design.js';
+import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z} from '../dist/cabinet-design.js';
 import {furnitureInterference} from '../dist/geometry.js';
 import {validateFurniture} from '../dist/model.js';
 
@@ -9,6 +9,8 @@ const item=()=>({id:'modular',type:'wardrobe',name:'收納櫃',x:4,z:1,w:1.2,d:.
 test('a niche cabinet retains independently floating columns through validation and resize',()=>{
   const f=item();
   f.cabinetDesign=makeCabinetDesign(f,'niche');
+  f.cabinetDesign.columns[0].bottom=f.cabinetDesign.columns[1].bottom=.18;
+  f.cabinetDesign.columns[0].cells[0].height-=.18;f.cabinetDesign.columns[1].cells[0].height-=.18;
   const original=validateCabinetDesign(f,f.cabinetDesign);
   assert.equal(original.columns.length,3);
   assert.deepEqual(original.columns.map(c=>c.bottom),[.18,.18,0]);
@@ -46,4 +48,22 @@ test('invalid dimensions and unsupported fronts cannot enter saved furniture',()
   f.cabinetDesign=makeCabinetDesign(f,'niche');
   f.cabinetDesign.columns[0].cells[0].front='double';
   assert.throws(()=>validateFurniture([f]),/寬度不足/);
+});
+
+test('every cabinet template starts on the floor by default',()=>{
+  for(const template of Object.keys(cabinetTemplates)){
+    const f=item();
+    assert.ok(makeCabinetDesign(f,template).columns.every(c=>c.bottom===0),template);
+  }
+});
+
+test('cabinet fronts overlay the carcass and leave only the reveal gap',()=>{
+  const f=item();
+  f.cabinetDesign=makeCabinetDesign(f,'closed');
+  const cell=f.cabinetDesign.columns[0].cells[0];
+  cell.front='left';
+  const [leaf]=modularCabinetRects(f,{[cell.id]:1e-9});
+  assert.ok(Math.abs(leaf.w-(f.w-FRONT_GAP))<1e-9);
+  assert.ok(Math.abs(leaf.x-f.x)<1e-6);
+  assert.ok(Math.abs(leaf.z-(f.z+f.d/2+FRONT_Z))<1e-6);
 });
