@@ -119,3 +119,14 @@ test('a hanging cabinet always has a cabinet design and is drawn at its elevatio
  const s=fixture();s.items=[wideBeam,hanging];
  assert.ok(Math.abs(s.mountOffset(hanging)-(HEIGHT-.9))<1e-9);
 });
+
+test('top view stacks what hangs lower higher up, so light over cabinet over beam',()=>{
+ const s=fixture(),lamp={...linear,w:.5,lightKind:'ceiling'},stack=[wideBeam,hanging,lamp];s.items=stack;
+ s.mode='top';
+ const cabinetBottom=s.mountOffset(hanging),cabinetTop=cabinetBottom+hanging.h;
+ assert.ok(cabinetBottom>=HEIGHT,'the cabinet under a beam draws above the beam top');
+ const lampBottom=HEIGHT-Math.max(.02,lamp.h)+s.mountOffset(lamp);
+ assert.ok(lampBottom>cabinetTop,'the light under the cabinet draws above the cabinet');
+ s.items=[hanging];assert.ok(Math.abs(s.mountOffset(hanging)-(HEIGHT-.6))<1e-9,'a cabinet on the ceiling keeps its real height');
+ s.items=stack;s.mode='walk';assert.ok(Math.abs(s.mountOffset(hanging)-(HEIGHT-.9))<1e-9,'walk view is unchanged');
+});
