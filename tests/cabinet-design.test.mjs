@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,cellFinish,cellFinishSlots,nicheTvPlacement,nicheTvWarnings} from '../dist/cabinet-design.js';
+import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,cellFinish,cellFinishSlots,resizeCabinetEdge,nicheTvPlacement,nicheTvWarnings} from '../dist/cabinet-design.js';
 import {finishes} from '../dist/finishes.js';
 import {furnitureInterference} from '../dist/geometry.js';
 import {validateFurniture,issues} from '../dist/model.js';
@@ -134,4 +134,37 @@ test('furniture validation keeps niche mounting and cabinet part finishes',()=>{
   assert.equal(validateFurniture([{...tv,id:'x',supportCell:undefined}])[0].tvMount,'wall');
   assert.ok(!issues(t,[c,t]).some(m=>m.includes(c.name)),'the host cabinet is not an interference');
   assert.ok(!issues(c,[c,t]).some(m=>m.includes(t.name)));
+});
+
+test('dragging an outer edge changes only that side and keeps the opposite edge in place',()=>{
+  const f={...item(),x:4,z:1,rot:90};
+  f.cabinetDesign={template:'custom',columns:[{id:'a',width:.4,bottom:0,cells:[{id:'a1',height:1,front:'left'},{id:'a2',height:1.4,front:'open'}]},{id:'b',width:.8,bottom:.2,cells:[{id:'b1',height:2.2,front:'double'}]}]};
+  const edge=(g,side)=>{const a=g.rot*Math.PI/180,sign=side==='right'?1:-1;return{x:g.x+sign*g.w/2*Math.cos(a),z:g.z-sign*g.w/2*Math.sin(a)};};
+  const right=resizeCabinetEdge(f,'right',.3);
+  assert.ok(Math.abs(right.w-1.5)<1e-9);
+  assert.deepEqual(right.cabinetDesign.columns.map(c=>c.width),[.4,1.1],'only the right column widens');
+  for(const k of['x','z'])assert.ok(Math.abs(edge(right,'left')[k]-edge(f,'left')[k])<1e-9,'the left edge stays put');
+  const left=resizeCabinetEdge(f,'left',-.5);
+  assert.deepEqual(left.cabinetDesign.columns.map(c=>c.width),[.2,.8],'a column never drops below 20 cm');
+  for(const k of['x','z'])assert.ok(Math.abs(edge(left,'right')[k]-edge(f,'right')[k])<1e-9,'the right edge stays put');
+  const taller=resizeCabinetEdge(f,'top',.3,2.6);
+  assert.ok(Math.abs(taller.h-2.6)<1e-9,'height stops at the ceiling limit');
+  assert.deepEqual(taller.cabinetDesign.columns.map(c=>c.cells.at(-1).height),[1.6,2.4],'only the top cells grow');
+  assert.equal(taller.cabinetDesign.columns[0].cells[0].height,1);
+  assert.equal(taller.x,f.x);
+  for(const g of[right,left,taller])validateCabinetDesign(g,g.cabinetDesign);
+});
+
+test('a hanging cabinet grows downward from its lowest cells, widening a bottom gap first',()=>{
+  const f={...item(),type:'hangingCabinet',h:.6};
+  f.cabinetDesign={template:'custom',columns:[{id:'a',width:.6,bottom:0,cells:[{id:'a1',height:.6,front:'left'}]},{id:'b',width:.6,bottom:.1,cells:[{id:'b1',height:.2,front:'open'},{id:'b2',height:.3,front:'open'}]}]};
+  const deeper=resizeCabinetEdge(f,'bottom',.2);
+  assert.ok(Math.abs(deeper.h-.8)<1e-9);
+  assert.equal(deeper.cabinetDesign.columns[0].cells[0].height,.8);
+  assert.equal(deeper.cabinetDesign.columns[1].bottom,.3,'the gap widens, the cells keep their size');
+  const shallower=resizeCabinetEdge(f,'bottom',-.3);
+  assert.ok(Math.abs(shallower.h-.45)<1e-9,'shrinking stops when a cell would fall under 15 cm');
+  assert.equal(shallower.cabinetDesign.columns[1].bottom,0);
+  assert.ok(Math.abs(shallower.cabinetDesign.columns[1].cells[0].height-.15)<1e-9);
+  for(const g of[deeper,shallower])validateCabinetDesign(g,g.cabinetDesign);
 });

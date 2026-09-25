@@ -168,3 +168,27 @@ export function cellFinish(f,cell,slot){
   const key=cabinetFinishSlots.find(([s])=>s===slot)[1];
   return cell.finishes?.[slot]||f.partFinishes?.[key]||'';
 }
+
+// Drag one outer edge of a modular cabinet by `delta` metres (outward
+// positive): only the column or cells on that side change, and the opposite
+// edge stays put, so a side edge also moves the centre by half the change.
+// Top is for floor cabinets, bottom for hanging ones.
+export function resizeCabinetEdge(f,side,delta,maxHeight=Infinity){
+  const next=structuredClone(f),columns=next.cabinetDesign.columns;
+  if(side==='left'||side==='right'){
+    const column=side==='right'?columns.at(-1):columns[0],grow=Math.max(.2-column.width,delta),shift=(side==='right'?1:-1)*grow/2,angle=f.rot*Math.PI/180;
+    column.width=round(column.width+grow);next.w=round(f.w+grow);
+    next.x=f.x+shift*Math.cos(angle);next.z=f.z-shift*Math.sin(angle);
+  }else{
+    const top=side==='top',edgeCell=column=>top?column.cells.at(-1):column.cells[0];
+    const grow=Math.min(maxHeight-f.h,Math.max(...columns.map(column=>.15-edgeCell(column).height-(top?0:column.bottom)),delta));
+    for(const column of columns){
+      // Growing down under a gap widens the gap; shrinking uses it up first.
+      if(!top&&column.bottom>0){const gap=Math.max(0,column.bottom+grow);edgeCell(column).height=round(edgeCell(column).height+grow-(gap-column.bottom));column.bottom=round(gap);}
+      else edgeCell(column).height=round(edgeCell(column).height+grow);
+    }
+    next.h=round(f.h+grow);
+  }
+  next.cabinetDesign.template='custom';
+  return next;
+}

@@ -1,4 +1,4 @@
-import {cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign} from './cabinet-design.js';
+import {cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge} from './cabinet-design.js';
 
 const labels={open:'開放',left:'左開門',right:'右開門',double:'對開門',sliding:'滑門',drawers:'抽屜'};
 const cm=n=>Math.round(n*1000)/10;
@@ -12,7 +12,8 @@ const field=(label,value,change,min=0,max=500)=>{
   return wrap;
 };
 // placeTv and chooseFinish are optional: the media-wall module editor has neither.
-export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv,chooseFinish,finishLabel=code=>code||'預設'}){
+// placeTv, chooseFinish and resizeEdges are only for standalone cabinets.
+export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv,chooseFinish,finishLabel=code=>code||'預設',resizeEdges=false,maxHeight=Infinity}){
   const dialog=elt('dialog','cabinetDialog');
   dialog.innerHTML='<div class="cabinetHead" title="拖曳可移動視窗"><div><span class="eyebrow">CABINET EDITOR</span><h2>編輯櫃體</h2></div><div class="cabinetHeadButtons"><button type="button" class="dialogFold" aria-expanded="true">收合</button><button type="button" class="dialogClose" aria-label="關閉">×</button></div></div><div class="cabinetBody"><p class="muted">點選正面圖中的格子，再修改分區、層高與門面。尺寸單位為 cm。拖曳標題可移動視窗。</p><div class="cabinetFinishes"></div><div class="cabinetToolbar"></div><div class="cabinetElevation"></div><div class="cabinetFields"></div><p class="cabinetError" role="alert"></p></div>';
   document.body.append(dialog);
@@ -50,6 +51,15 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     catch(error){dialog.querySelector('.cabinetError').textContent=error.message;}
   };
   const edit=mutate=>{const f=item();if(!f)return;const next=structuredClone(f.cabinetDesign);mutate(next);save(next);};
+  // Dragging an outer edge changes only the column or cells on that side and
+  // keeps the opposite edge where it is; `exact` stops the commit from
+  // rescaling the design or shifting the cabinet to avoid clashes.
+  const resizeEdge=(side,delta)=>{
+    const f=item();if(!f||!delta)return;
+    const next=resizeCabinetEdge(f,side,delta,maxHeight);
+    try{if(commit(f,next,{exact:true})===false){dialog.querySelector('.cabinetError').textContent=commit.lastError||'尺寸無法套用';render();return;}dialog.querySelector('.cabinetError').textContent='';render();}
+    catch(error){dialog.querySelector('.cabinetError').textContent=error.message;}
+  };
   const button=(text,click)=>{const b=elt('button','',text);b.type='button';b.onclick=click;return b;};
   // Level two (all doors, shelves, backs, drawer boxes) sits at the top of the
   // editor; level three (this cell's own) sits with the cell's settings.
@@ -110,12 +120,13 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     })));
     const elevation=dialog.querySelector('.cabinetElevation');elevation.replaceChildren();
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
-    svg.setAttribute('viewBox',`0 0 ${f.w*1000} ${f.h*1000}`);
     svg.setAttribute('role','img');svg.setAttribute('aria-label','櫃體正面分格圖');
     // The drawing is scaled to fit, so labels and grips are sized from the
     // cabinet's longer side to keep a similar on-screen size at any scale.
-    const span=Math.max(f.w,f.h)*1000,grip=span*.02;
-    svg.setAttribute('width',f.w*1000);svg.setAttribute('height',f.h*1000);
+    // A margin of one grip lets the outer-edge grips straddle the outline.
+    const span=Math.max(f.w,f.h)*1000,grip=span*.02,pad=resizeEdges?grip:0,viewW=f.w*1000+2*pad,viewH=f.h*1000+2*pad;
+    svg.setAttribute('viewBox',`${-pad} ${-pad} ${viewW} ${viewH}`);
+    svg.setAttribute('width',viewW);svg.setAttribute('height',viewH);
     svg.style.fontSize=`${Math.min(span*.04,Math.min(...cells.map(cell=>cell.w))*1000*.28)}px`;
     for(const cell of cells){
       const r=document.createElementNS(svg.namespaceURI,'rect'),x=(cell.x-cell.w/2+f.w/2)*1000,y=(f.h-cell.bottom-cell.h)*1000;
@@ -134,21 +145,25 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       text.setAttribute('x',(cell.x+f.w/2)*1000);text.setAttribute('y',(f.h-cell.y)*1000);
       text.setAttribute('class','cabinetCellLabel');text.textContent=labels[cell.front];svg.append(text);
     }
-    const handle=(attrs,cursor,onFinish)=>{
+    // Screen pixels to drawing units (mm) and metres.
+    const unitsPerPixel=()=>viewW/svg.getBoundingClientRect().width;
+    const handle=(attrs,cursor,onFinish,className='cabinetDivider',onMove)=>{
       const grip=document.createElementNS(svg.namespaceURI,'rect');
       for(const [key,value]of Object.entries(attrs))grip.setAttribute(key,value);
-      grip.setAttribute('class','cabinetDivider');grip.style.cursor=cursor;
+      grip.setAttribute('class',className);grip.style.cursor=cursor;
       grip.onpointerdown=event=>{
         event.preventDefault();event.stopPropagation();
         const startX=event.clientX,startY=event.clientY,originalX=Number(grip.getAttribute('x')),originalY=Number(grip.getAttribute('y'));
         grip.setPointerCapture(event.pointerId);
         grip.onpointermove=move=>{
-          if(cursor==='ew-resize')grip.setAttribute('x',originalX+(move.clientX-startX)/svg.getBoundingClientRect().width*f.w*1000);
-          else grip.setAttribute('y',originalY+(move.clientY-startY)/svg.getBoundingClientRect().height*f.h*1000);
+          const dx=(move.clientX-startX)*unitsPerPixel(),dy=(move.clientY-startY)*unitsPerPixel();
+          if(cursor==='ew-resize')grip.setAttribute('x',originalX+dx);
+          else grip.setAttribute('y',originalY+dy);
+          onMove?.(cursor==='ew-resize'?dx:dy);
         };
         grip.onpointerup=up=>{
           grip.onpointermove=null;grip.onpointerup=null;
-          const delta=cursor==='ew-resize'?(up.clientX-startX)/svg.getBoundingClientRect().width*f.w:-(up.clientY-startY)/svg.getBoundingClientRect().height*f.h;
+          const delta=cursor==='ew-resize'?(up.clientX-startX)*unitsPerPixel()/1000:-(up.clientY-startY)*unitsPerPixel()/1000;
           onFinish(Math.round(delta*100)/100);
         };
       };
@@ -177,6 +192,19 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
           next.template='custom';
         }));
       });
+    }
+    if(resizeEdges){
+      // Outer edges: sides, and the top of a floor cabinet or the underside of
+      // a hanging one (the other end is fixed to the floor or what it hangs
+      // from). A dashed outline previews the new size while dragging.
+      const preview=document.createElementNS(svg.namespaceURI,'rect');
+      preview.setAttribute('class','cabinetResizePreview');preview.style.display='none';svg.append(preview);
+      const show=(x,y,w,h)=>{for(const [key,value]of Object.entries({x,y,width:Math.max(1,w),height:Math.max(1,h)}))preview.setAttribute(key,value);preview.style.display='';};
+      const W=f.w*1000,H=f.h*1000,hanging=f.type==='hangingCabinet';
+      handle({x:-grip,y:0,width:grip,height:H},'ew-resize',delta=>resizeEdge('left',-delta),'cabinetEdge',d=>show(d,0,W-d,H));
+      handle({x:W,y:0,width:grip,height:H},'ew-resize',delta=>resizeEdge('right',delta),'cabinetEdge',d=>show(0,0,W+d,H));
+      if(hanging)handle({x:0,y:H,width:W,height:grip},'ns-resize',delta=>resizeEdge('bottom',-delta),'cabinetEdge',d=>show(0,0,W,H+d));
+      else handle({x:0,y:-grip,width:W,height:grip},'ns-resize',delta=>resizeEdge('top',delta),'cabinetEdge',d=>show(0,d,W,H-d));
     }
     elevation.append(svg);
     const fields=dialog.querySelector('.cabinetFields');fields.replaceChildren();
