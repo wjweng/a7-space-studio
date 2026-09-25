@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,cellFinish,cellFinishSlots,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,nicheTvPlacement,nicheTvWarnings,designFromDoorStyle} from '../dist/cabinet-design.js';
+import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,cellFinish,cellFinishSlots,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,nicheTvPlacement,nicheTvWarnings,designFromDoorStyle,splitCabinetCell,removeCabinetPart,designLeaves} from '../dist/cabinet-design.js';
 import {finishes} from '../dist/finishes.js';
 import {furnitureInterference} from '../dist/geometry.js';
 import {validateFurniture,issues} from '../dist/model.js';
@@ -116,8 +116,9 @@ test('cell finishes follow the cabinet-wide level, then the cabinet finish',()=>
   assert.equal(cellFinish(f,low,'back'),'A07');
   assert.equal(cellFinish(f,low,'drawerBox'),'P86');
   assert.equal(cellFinish(f,low,'door'),'','unset levels fall back to the cabinet finish');
-  assert.deepEqual(cellFinishSlots(f,low).map(([slot])=>slot),['door','back','drawerBox'],'lowest cell has no shelf of its own');
-  assert.deepEqual(cellFinishSlots(f,high).map(([slot])=>slot),['shelf','back'],'open cell has no door');
+  const [lowRect,highRect]=cabinetCells(f);
+  assert.deepEqual(cellFinishSlots(f,lowRect).map(([slot])=>slot),['door','back','drawerBox'],'lowest cell has no shelf of its own');
+  assert.deepEqual(cellFinishSlots(f,highRect).map(([slot])=>slot),['shelf','back'],'open cell has no door');
 });
 
 test('furniture validation keeps niche mounting and cabinet part finishes',()=>{
@@ -238,4 +239,44 @@ test('a pre-modular cabinet converts to the fronts it already had',()=>{
   assert.deepEqual(fronts(designFromDoorStyle({...base,w:.35,doorStyle:'double'})),['left'],'too narrow for a pair');
   assert.deepEqual(fronts(designFromDoorStyle({...base,type:'console',w:1.8,h:.48,doorStyle:'drawers'})),['drawers','drawers','drawers']);
   for(const style of['double','left','right','multi','mixed','drawers','sliding']){const f={...base,doorStyle:style};validateCabinetDesign(f,designFromDoorStyle(f));}
+});
+
+test('a single layer splits side by side into parts that act as cells of their own',()=>{
+  const f=item();
+  f.cabinetDesign={template:'custom',columns:[{id:'c',width:1.2,bottom:0,cells:[{id:'low',height:.5,front:'drawers',finishes:{door:'P86'}},{id:'tv',height:1.3,front:'open'},{id:'top',height:.6,front:'double'}]}]};
+  let n=0;const next=splitCabinetCell(f.cabinetDesign,'low',()=>'p'+(++n));
+  const low=next.columns[0].cells[0];
+  assert.deepEqual(low.parts.map(p=>[p.id,p.width,p.front]),[['p1',.6,'drawers'],['p2',.6,'open']]);
+  assert.deepEqual(low.parts[0].finishes,{door:'P86'},'the left part keeps the layer finishes');
+  assert.equal(low.finishes,undefined);
+  const g={...f,cabinetDesign:validateCabinetDesign(f,next)};
+  const rects=cabinetCells(g).filter(c=>c.rowId==='low');
+  assert.deepEqual(rects.map(c=>c.id),['p1','p2']);
+  assert.ok(Math.abs(rects[0].insetR-CARCASS_T/2)<1e-9&&Math.abs(rects[1].insetL-CARCASS_T/2)<1e-9,'half a divider on each side of the split');
+  const opening=cellOpening(g,'p2');
+  assert.ok(Math.abs(opening.w-(.6-CARCASS_T*1.5))<1e-9);
+  assert.ok(Math.abs((opening.x+opening.w/2)-(.6-CARCASS_T))<1e-9,'the opening ends at the side panel');
+  assert.deepEqual(designLeaves(g.cabinetDesign).map(l=>l.id),['p1','p2','tv','top']);
+  const three=splitCabinetCell(next,'p2',()=>'p3');
+  assert.deepEqual(three.columns[0].cells[0].parts.map(p=>p.width),[.6,.3,.3]);
+  assert.equal(splitCabinetCell(three,'p3'),null,'a 30 cm part is too narrow to split');
+  const merged=removeCabinetPart(removeCabinetPart(three,'p3'),'p2');
+  assert.equal(merged.columns[0].cells[0].parts,undefined,'one part left becomes a plain layer again');
+  assert.equal(merged.columns[0].cells[0].front,'drawers');
+  assert.deepEqual(merged.columns[0].cells[0].finishes,{door:'P86'});
+});
+
+test('split layers keep their widths through resizes and validate their parts',()=>{
+  const f={...item(),w:1.2};
+  f.cabinetDesign={template:'custom',columns:[{id:'c',width:1.2,bottom:0,cells:[{id:'a',height:2.4,front:'open',parts:[{id:'l',width:.4,front:'left'},{id:'r',width:.8,front:'open'}]}]}]};
+  const wider=resizeCabinetEdge(f,'right',.3);
+  assert.deepEqual(wider.cabinetDesign.columns[0].cells[0].parts.map(p=>p.width),[.4,1.1],'only the part on the dragged side changes');
+  const leftWider=resizeCabinetEdge(f,'left',.2);
+  assert.deepEqual(leftWider.cabinetDesign.columns[0].cells[0].parts.map(p=>p.width),[.6,.8]);
+  const scaled=resizeCabinetDesign(f.cabinetDesign,{w:1.2,h:2.4},{w:1.5,h:2.4});
+  validateCabinetDesign({...f,w:1.5},scaled);
+  const bad=structuredClone(f.cabinetDesign);bad.columns[0].cells[0].parts[1].width=.5;
+  assert.throws(()=>validateCabinetDesign(f,bad),/總和/);
+  const narrow=structuredClone(f.cabinetDesign);narrow.columns[0].cells[0].parts[0].front='sliding';
+  assert.throws(()=>validateCabinetDesign(f,narrow),/寬度不足/);
 });

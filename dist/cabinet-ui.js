@@ -1,4 +1,4 @@
-import {cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,designFromDoorStyle} from './cabinet-design.js';
+import {cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,designFromDoorStyle,designLeaves,findLeaf,fitParts,splitCabinetCell,removeCabinetPart,CARCASS_T} from './cabinet-design.js';
 
 const labels={open:'開放',left:'左開門',right:'右開門',double:'對開門',sliding:'滑門',drawers:'抽屜'};
 const cm=n=>Math.round(n*1000)/10;
@@ -42,7 +42,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     head.onpointerup=head.onpointercancel=()=>{head.onpointermove=head.onpointerup=head.onpointercancel=null;};
   });
   addEventListener('resize',()=>{if(dialog.open)place(dialog.offsetLeft,dialog.offsetTop);});
-  let currentId=null,columnId=null,cellId=null;
+  let currentId=null,columnId=null,cellId=null,leafId=null;
   const item=()=>getItem(currentId);
   const save=design=>{
     const f=item();
@@ -77,11 +77,11 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
   // Level two (all doors, shelves, backs, drawer boxes) sits at the top of the
   // editor; level three (this cell's own) sits with the cell's settings.
   const partText=(f,key)=>f.partFinishes?.[key]?finishLabel(f.partFinishes[key]):'跟隨整體';
-  const clearSlot=(slot,only)=>edit(next=>{for(const cell of next.columns.flatMap(c=>c.cells))if(cell.finishes&&(!only||cell.id===only)){delete cell.finishes[slot];if(!Object.keys(cell.finishes).length)delete cell.finishes;}});
+  const clearSlot=(slot,only)=>edit(next=>{for(const cell of designLeaves(next))if(cell.finishes&&(!only||cell.id===only)){delete cell.finishes[slot];if(!Object.keys(cell.finishes).length)delete cell.finishes;}});
   function renderFinishes(f,selectedCell){
     const host=dialog.querySelector('.cabinetFinishes');host.replaceChildren();
     if(!chooseFinish)return;
-    const cells=f.cabinetDesign.columns.flatMap(c=>c.cells),hasDrawers=cells.some(c=>c.front==='drawers');
+    const cells=designLeaves(f.cabinetDesign),hasDrawers=cells.some(c=>c.front==='drawers');
     host.append(elt('h3','','材質（整座櫃）'));
     for(const [slot,key,label]of cabinetFinishSlots){
       if(slot==='drawerBox'&&!hasDrawers)continue;
@@ -106,6 +106,10 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     const selectedColumn=design.columns.find(c=>c.id===columnId);
     if(!selectedColumn.cells.some(c=>c.id===cellId))cellId=selectedColumn.cells[0].id;
     const selectedCell=selectedColumn.cells.find(c=>c.id===cellId);
+    // The selected smallest cell: the layer itself, or one part of it.
+    const rowCells=cells.filter(c=>c.rowId===cellId);
+    if(!rowCells.some(c=>c.id===leafId))leafId=rowCells[0].id;
+    const selectedLeaf=rowCells.find(c=>c.id===leafId);
     const toolbar=dialog.querySelector('.cabinetToolbar');toolbar.replaceChildren();
     const template=elt('select');template.setAttribute('aria-label','櫃體範本');
     template.add(new Option('自訂分格','custom'));
@@ -117,16 +121,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     template.value=design.template;
     template.onchange=()=>save(makeCabinetDesign(f,template.value));
     toolbar.append(template);
-    toolbar.append(button('＋直向分區',()=>edit(next=>{
-      if(next.columns.length>=8)return;
-      const index=next.columns.findIndex(c=>c.id===columnId),base=next.columns[index];
-      if(base.width<.4)return;
-      const width=Math.round(base.width*5000)/10000;
-      base.width-=width;
-      next.columns.splice(index+1,0,{id:id(),width,bottom:base.bottom,...(base.top?{top:base.top}:{}),cells:[{id:id(),height:f.h-base.bottom-(base.top||0),front:'open'}]});
-      next.template='custom';
-    })));
-    toolbar.append(button('－目前分區',()=>resizeEdges?commitItem(item(),removeCabinetColumn(item(),columnId)):edit(next=>{
+    if(design.columns.length>1)toolbar.append(button('－目前分區',()=>resizeEdges?commitItem(item(),removeCabinetColumn(item(),columnId)):edit(next=>{
       if(next.columns.length===1)return;
       const index=next.columns.findIndex(c=>c.id===columnId),removed=next.columns.splice(index,1)[0],recipient=next.columns[Math.max(0,index-1)];
       recipient.width+=removed.width;columnId=recipient.id;next.template='custom';
@@ -144,8 +139,8 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     for(const cell of cells){
       const r=document.createElementNS(svg.namespaceURI,'rect'),x=(cell.x-cell.w/2+f.w/2)*1000,y=(f.h-cell.bottom-cell.h)*1000;
       for(const [key,value]of Object.entries({x,y,width:cell.w*1000,height:cell.h*1000}))r.setAttribute(key,value);
-      r.setAttribute('class','cabinetCell'+(cell.id===cellId?' selected':'')+(cell.front==='open'?' open':''));
-      r.addEventListener('click',()=>{columnId=cell.columnId;cellId=cell.id;render();});
+      r.setAttribute('class','cabinetCell'+(cell.id===leafId?' selected':'')+(cell.front==='open'?' open':''));
+      r.addEventListener('click',()=>{columnId=cell.columnId;cellId=cell.rowId;leafId=cell.id;render();});
       svg.append(r);
       if(cell.finishes){
         // Marks a cell whose own finish overrides the cabinet-wide one.
@@ -206,6 +201,15 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
         }));
       });
     }
+    // Dividers between the parts of a split layer.
+    for(const cell of cells.filter(c=>c.insetR<CARCASS_T)){
+      const x=(cell.x+cell.w/2+f.w/2)*1000,y=(f.h-cell.bottom-cell.h)*1000;
+      handle({x:x-grip/2,y,width:grip,height:cell.h*1000},'ew-resize',delta=>edit(next=>{
+        const row=next.columns.find(c=>c.id===cell.columnId).cells.find(r=>r.id===cell.rowId),i=row.parts.findIndex(p=>p.id===cell.id),left=row.parts[i],right=row.parts[i+1];
+        const limited=Math.max(.15-left.width,Math.min(right.width-.15,delta));
+        left.width=Math.round((left.width+limited)*10000)/10000;right.width=Math.round((right.width-limited)*10000)/10000;next.template='custom';
+      }));
+    }
     if(resizeEdges){
       // Outer edges: sides, and the top of a floor cabinet or the underside of
       // a hanging one (the other end is fixed to the floor or what it hangs
@@ -221,13 +225,14 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     }
     elevation.append(svg);
     const fields=dialog.querySelector('.cabinetFields');fields.replaceChildren();
-    const colTitle=elt('h3','',`分區 ${design.columns.indexOf(selectedColumn)+1}`);
-    fields.append(colTitle,field('分區寬度',selectedColumn.width,value=>edit(next=>{
+    const many=design.columns.length>1;
+    if(many)fields.append(elt('h3','',`分區 ${design.columns.indexOf(selectedColumn)+1}`),field('分區寬度',selectedColumn.width,value=>edit(next=>{
       const index=next.columns.findIndex(c=>c.id===columnId),other=index===next.columns.length-1?index-1:index+1;
       if(other<0)return;
       const delta=value-next.columns[index].width;
-      next.columns[index].width=value;next.columns[other].width-=delta;next.template='custom';
-    }),20),field(f.type==='hangingCabinet'?'底部留空':'底部離地',selectedColumn.bottom,value=>edit(next=>{
+      next.columns[index].width=value;next.columns[other].width-=delta;fitParts(next.columns[index]);fitParts(next.columns[other]);next.template='custom';
+    }),20));
+    fields.append(field(f.type==='hangingCabinet'?'底部留空':'底部離地',selectedColumn.bottom,value=>edit(next=>{
       const c=next.columns.find(c=>c.id===columnId),delta=value-c.bottom;c.bottom=value;c.cells.at(-1).height-=delta;next.template='custom';
     }),0,cm(f.h-.15)));
     const row=elt('div','cabinetToolbar');
@@ -236,12 +241,13 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       if(c.cells.length>=10||cell.height<.3)return;
       const half=Math.round(cell.height*5000)/10000;cell.height-=half;
       c.cells.splice(c.cells.indexOf(cell)+1,0,{id:id(),height:half,front:'open'});next.template='custom';
-    })),button('－目前層格',()=>resizeEdges?commitItem(item(),removeCabinetCell(item(),columnId,cellId)):edit(next=>{
+    })),button('＋單層直向分區',()=>{const next=splitCabinetCell(item().cabinetDesign,leafId,id);if(next)save(next);else dialog.querySelector('.cabinetError').textContent='這格寬度不足 40 cm，無法再分成兩格';}),
+    ...(selectedCell.parts?[button('－目前直向分區',()=>{const next=removeCabinetPart(item().cabinetDesign,leafId);if(next)save(next);})]:[]),button('－目前層格',()=>resizeEdges?commitItem(item(),removeCabinetCell(item(),columnId,cellId)):edit(next=>{
       const c=next.columns.find(c=>c.id===columnId);if(c.cells.length===1)return;
       const index=c.cells.findIndex(r=>r.id===cellId),removed=c.cells.splice(index,1)[0],neighbor=c.cells[Math.max(0,index-1)];
       neighbor.height+=removed.height;cellId=neighbor.id;next.template='custom';
     })));
-    fields.append(row,elt('h3','',`層格 ${selectedColumn.cells.indexOf(selectedCell)+1}`));
+    fields.append(row,elt('h3','',`層格 ${selectedColumn.cells.indexOf(selectedCell)+1}`+(selectedCell.parts?` · 第 ${selectedCell.parts.findIndex(p=>p.id===leafId)+1} 格`:'')));
     fields.append(field('層格高度',selectedCell.height,value=>edit(next=>{
       const c=next.columns.find(c=>c.id===columnId),index=c.cells.findIndex(r=>r.id===cellId),other=index===c.cells.length-1?index-1:index+1;
       if(other<0)return;
@@ -249,11 +255,11 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     }),15));
     const frontLabel=elt('label','cabinetField','門面形式'),front=elt('select');
     for(const kind of cabinetFronts)front.add(new Option(labels[kind],kind));
-    front.value=selectedCell.front;front.onchange=()=>edit(next=>{next.columns.find(c=>c.id===columnId).cells.find(r=>r.id===cellId).front=front.value;next.template='custom';});
+    front.value=selectedLeaf.front;front.onchange=()=>edit(next=>{findLeaf(next,leafId).front=front.value;next.template='custom';});
     frontLabel.append(front);fields.append(frontLabel);
-    if(selectedCell.front!=='open')fields.append(button(f.openCells?.[cellId]?'關閉這格':'打開這格',()=>{toggleCell(f,cellId);render();}));
-    if(selectedCell.front==='open'&&placeTv)fields.append(button('在這格掛電視',()=>placeTv(f,cellId)));
-    renderFinishes(f,selectedCell);
+    if(selectedLeaf.front!=='open')fields.append(button(f.openCells?.[leafId]?'關閉這格':'打開這格',()=>{toggleCell(f,leafId);render();}));
+    if(selectedLeaf.front==='open'&&placeTv)fields.append(button('在這格掛電視',()=>placeTv(f,leafId)));
+    renderFinishes(f,selectedLeaf);
   }
   return{refresh(){if(dialog.open)render();},open(f,{onClose:closed}={}){
     if(dialog.open)dialog.close();
@@ -262,11 +268,11 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     const original=item();
     if(!original?.cabinetDesign){
       // Keep the existing fronts; an open cabinet stays open.
-      const design=designFromDoorStyle(original),openCells=original.open?Object.fromEntries(design.columns.flatMap(c=>c.cells).filter(c=>c.front!=='open').map(c=>[c.id,1])):{};
+      const design=designFromDoorStyle(original),openCells=original.open?Object.fromEntries(designLeaves(design).filter(c=>c.front!=='open').map(c=>[c.id,1])):{};
       const converted=commit(original,{...original,cabinetDesign:design,openCells});
       if(converted!==false)onConvert?.(original);
     }
-    const updated=item();columnId=updated.cabinetDesign.columns[0].id;cellId=updated.cabinetDesign.columns[0].cells[0].id;
+    const updated=item();columnId=updated.cabinetDesign.columns[0].id;cellId=updated.cabinetDesign.columns[0].cells[0].id;leafId=null;
     render();
     dialog.classList.remove('folded');fold.textContent='收合';fold.setAttribute('aria-expanded','true');
     dialog.show();

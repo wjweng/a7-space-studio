@@ -353,13 +353,18 @@ export class SpaceScene{
    for(const side of[-1,1])box(t,bodyHeight,d,x+side*(width/2-t/2),bottom+bodyHeight/2,0);
   }
   for(const cell of cabinetCells(f)){
-   const{x,y,w,h,bottom,front,id,last}=cell,frontW=w-FRONT_GAP,frontH=h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cellFinish(f,cell,'door'));
+   const{x,y,w,h,bottom,front,id,last,insetL,insetR}=cell,frontW=w-FRONT_GAP,frontH=h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cellFinish(f,cell,'door'));
    // Boards and the back sit between the side panels, so only the sides show
    // on the outer faces; shelves stop at the back panel instead of passing it.
-   box(w-2*t,h,t,x,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));
+   // In a split layer the back stops at the dividers while the shelf and top
+   // board run under and over them; `cx` is the centre of the clear opening.
+   const innerW=w-insetL-insetR,cx=x+(insetL-insetR)/2,boardL=insetL<t?0:t,boardR=insetR<t?0:t,boardW=w-boardL-boardR,boardX=x+(boardL-boardR)/2;
+   box(innerW,h,t,cx,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));
    const lowest=cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom;
-   box(w-2*t,t,d-t,x,bottom+t/2,t/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
-   if(last)box(w-2*t,t,d-t,x,bottom+h-t/2,t/2);
+   box(boardW,t,d-t,boardX,bottom+t/2,t/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
+   if(last)box(boardW,t,d-t,boardX,bottom+h-t/2,t/2);
+   // A divider between two parts of a layer, drawn by the part on its left.
+   if(insetR<t)box(t,h-t-(last?t:0),d-t,x+w/2,bottom+t+(h-t-(last?t:0))/2,t/2);
    if(front==='open')continue;
    const addDoor=(hinge,sign,width)=>{
     const pivot=new T.Group;
@@ -377,7 +382,7 @@ export class SpaceScene{
    }
    // Clear opening between the side panels, above this cell's bottom board
    // and below the top board when the cell reaches the top.
-   const innerW=w-2*t,openBottom=bottom+t,openTop=bottom+h-(last?t:0),openH=openTop-openBottom;
+   const openBottom=bottom+t,openTop=bottom+h-(last?t:0),openH=openTop-openBottom;
    if(front==='drawers'){
     const pivot=new T.Group;
     pivot.position.set(x,y,z);
@@ -391,10 +396,10 @@ export class SpaceScene{
     // Sliding leaves run inside the carcass on two tracks just behind the
     // front edge, overlapping 2 cm; opening slides the rear leaf behind the front one.
     const track=.008,leafH=openH-2*track-.004,leafW=innerW/2+.01,frontZ=d/2-.006-FRONT_T/2,backZ=frontZ-FRONT_T-.004;
-    for(const ty of[openBottom+track/2,openTop-track/2])box(innerW,track,FRONT_T*2+.012,x,ty,(frontZ+backZ)/2,'metal');
+    for(const ty of[openBottom+track/2,openTop-track/2])box(innerW,track,FRONT_T*2+.012,cx,ty,(frontZ+backZ)/2,'metal');
     for(const sign of[-1,1]){
      const pivot=new T.Group;
-     pivot.position.set(x+sign*(innerW/2-leafW/2),(openBottom+openTop)/2,sign>0?frontZ:backZ);
+     pivot.position.set(cx+sign*(innerW/2-leafW/2),(openBottom+openTop)/2,sign>0?frontZ:backZ);
      g.add(pivot);
      this.box(pivot,leafW,leafH,FRONT_T,0,0,0,face,.003);
      this.box(pivot,.012,.14,.004,sign*(leafW/2-.03),0,FRONT_T/2+.002,'dark',.002);

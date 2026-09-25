@@ -256,3 +256,17 @@ test('a column with a top gap stops its sides and top board at its last cell',()
  const topBoard=g.children.find(m=>m.isMesh&&m.position.x<0&&Math.abs(m.position.y-(1.2-t/2))<1e-6&&Math.abs(m.geometry.parameters.height-t)<1e-6);
  assert.ok(topBoard,'the last cell carries the top board');
 });
+
+test('a split layer gets a divider board and fronts that stay within each part',()=>{
+ const s=fixture(),g=new THREE.Group,t=.018;
+ const f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'split',x:0,z:0,w:1.2,d:.5,h:2,rot:0};
+ f.cabinetDesign={template:'custom',columns:[{id:'c',width:1.2,bottom:0,cells:[{id:'low',height:.6,front:'open',parts:[{id:'a',width:.5,front:'drawers'},{id:'b',width:.7,front:'left'}]},{id:'high',height:1.4,front:'open'}]}]};
+ s.makeFurniture(g,f);g.updateMatrixWorld(true);
+ const divider=g.children.find(m=>m.isMesh&&Math.abs(m.geometry.parameters?.width-t)<1e-6&&Math.abs(m.position.x-(-.1))<1e-6);
+ assert.ok(divider,'a vertical board sits on the boundary 50 cm from the left side');
+ assert.ok(Math.abs(divider.geometry.parameters.height-(.6-t))<1e-6,'it stands on the shelf and reaches the next layer');
+ const [drawer,door]=s.actions.get('split').parts,front=part=>new THREE.Box3().setFromObject(part.pivot.children[0]);
+ assert.ok(front(drawer).max.x<=-.1+1e-6&&front(door).min.x>=-.1-1e-6,'each front covers only its own part');
+ const box=new THREE.Box3();for(const piece of drawer.pivot.children.slice(2))box.expandByObject(piece);
+ assert.ok(box.max.x<=-.1-t/2+1e-6,'the drawer body clears the divider');
+});
