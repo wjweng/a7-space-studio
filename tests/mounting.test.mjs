@@ -130,3 +130,15 @@ test('top view stacks what hangs lower higher up, so light over cabinet over bea
  s.items=[hanging];assert.ok(Math.abs(s.mountOffset(hanging)-(HEIGHT-.6))<1e-9,'a cabinet on the ceiling keeps its real height');
  s.items=stack;s.mode='walk';assert.ok(Math.abs(s.mountOffset(hanging)-(HEIGHT-.9))<1e-9,'walk view is unchanged');
 });
+
+test('in top view a lifted light keeps its lamp at the real height',()=>{
+ const s=fixture(),lamp={...linear,id:'lamp',w:.5,lightKind:'ceiling',on:true},stack=[wideBeam,hanging,lamp];s.items=stack;
+ const g=new THREE.Group;s.makeFurniture(g,lamp);
+ const spot=s.lightObjects.find(o=>o.f===lamp).point,worldY=()=>g.position.y+spot.position.y,targetY=()=>g.position.y+spot.target.position.y;
+ s.mode='walk';g.position.y=s.mountOffset(lamp);s.keepLampAtRealHeight(lamp,g);
+ const real=worldY(),realTarget=targetY();
+ s.mode='top';g.position.y=s.mountOffset(lamp);s.keepLampAtRealHeight(lamp,g);
+ assert.ok(g.position.y>0,'the fixture is lifted');
+ assert.ok(Math.abs(worldY()-real)<1e-9,'the lamp is not');
+ assert.ok(Math.abs(targetY()-realTarget)<1e-9,'and still points the same way');
+});
