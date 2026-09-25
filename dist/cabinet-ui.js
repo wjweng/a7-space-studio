@@ -13,7 +13,7 @@ const field=(label,value,change,min=0,max=500)=>{
 };
 // placeTv and chooseFinish are optional: the media-wall module editor has neither.
 // placeTv, chooseFinish and resizeEdges are only for standalone cabinets.
-export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv,chooseFinish,finishLabel=code=>code||'預設',resizeEdges=false,maxHeight=Infinity,checkFit,notify}){
+export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv,chooseFinish,finishLabel=code=>code||'預設',resizeEdges=false,maxHeight=Infinity,checkFit,notify,hostedTvs}){
   const dialog=elt('dialog','cabinetDialog');
   dialog.innerHTML='<div class="cabinetHead" title="拖曳可移動視窗"><div><span class="eyebrow">CABINET EDITOR</span><h2>編輯櫃體</h2></div><div class="cabinetHeadButtons"><button type="button" class="dialogFold" aria-expanded="true">收合</button><button type="button" class="dialogClose" aria-label="關閉">×</button></div></div><div class="cabinetBody"><p class="muted">點選正面圖中的格子，再修改分區、層高與門面。尺寸單位為 cm。拖曳標題可移動視窗。</p><div class="cabinetFinishes"></div><div class="cabinetToolbar"></div><div class="cabinetElevation"></div><div class="cabinetFields"></div><p class="cabinetError" role="alert"></p></div>';
   document.body.append(dialog);
@@ -54,6 +54,16 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
   // Dragging an outer edge changes only the column or cells on that side and
   // keeps the opposite edge where it is; `exact` stops the commit from
   // rescaling the design or shifting the cabinet to avoid clashes.
+  // A change that would take away the cell a TV hangs in (split, delete, a
+  // new front or template) is refused with the TV's name, rather than
+  // leaving the TV floating where the cell used to be.
+  const blockedByTv=(ids,action)=>{
+    const tv=hostedTvs?.(item()).find(entry=>ids.includes(entry.cell));
+    if(!tv)return false;
+    const message=`這格掛著「${tv.name}」，請先把電視移到別格或改成壁掛，再${action}。`;
+    dialog.querySelector('.cabinetError').textContent=message;notify?.(message);
+    return true;
+  };
   // Item-level changes (size, position) from edge drags and deletions.
   const commitItem=(f,next,note='')=>{
     if(!f||!next)return false;
@@ -119,9 +129,9 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       template.add(option);
     }
     template.value=design.template;
-    template.onchange=()=>save(makeCabinetDesign(f,template.value));
+    template.onchange=()=>{if(blockedByTv(cells.map(c=>c.id),'換範本')){template.value=design.template;return;}save(makeCabinetDesign(f,template.value));};
     toolbar.append(template);
-    if(design.columns.length>1)toolbar.append(button('－目前分區',()=>resizeEdges?commitItem(item(),removeCabinetColumn(item(),columnId)):edit(next=>{
+    if(design.columns.length>1)toolbar.append(button('－目前分區',()=>blockedByTv(cells.filter(c=>c.columnId===columnId).map(c=>c.id),'刪除分區')?null:resizeEdges?commitItem(item(),removeCabinetColumn(item(),columnId)):edit(next=>{
       if(next.columns.length===1)return;
       const index=next.columns.findIndex(c=>c.id===columnId),removed=next.columns.splice(index,1)[0],recipient=next.columns[Math.max(0,index-1)];
       recipient.width+=removed.width;columnId=recipient.id;next.template='custom';
@@ -241,8 +251,8 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       if(c.cells.length>=10||cell.height<.3)return;
       const half=Math.round(cell.height*5000)/10000;cell.height-=half;
       c.cells.splice(c.cells.indexOf(cell)+1,0,{id:id(),height:half,front:'open'});next.template='custom';
-    })),button('＋單層直向分區',()=>{const next=splitCabinetCell(item().cabinetDesign,leafId,id);if(next)save(next);else dialog.querySelector('.cabinetError').textContent='這格寬度不足 40 cm，無法再分成兩格';}),
-    ...(selectedCell.parts?[button('－目前直向分區',()=>{const next=removeCabinetPart(item().cabinetDesign,leafId);if(next)save(next);})]:[]),button('－目前層格',()=>resizeEdges?commitItem(item(),removeCabinetCell(item(),columnId,cellId)):edit(next=>{
+    })),button('＋單層直向分區',()=>{if(blockedByTv([leafId],'切分'))return;const next=splitCabinetCell(item().cabinetDesign,leafId,id);if(next)save(next);else dialog.querySelector('.cabinetError').textContent='這格寬度不足 40 cm，無法再分成兩格';}),
+    ...(selectedCell.parts?[button('－目前直向分區',()=>{if(blockedByTv([leafId],'刪除'))return;const next=removeCabinetPart(item().cabinetDesign,leafId);if(next)save(next);})]:[]),button('－目前層格',()=>blockedByTv(rowCells.map(c=>c.id),'刪除層格')?null:resizeEdges?commitItem(item(),removeCabinetCell(item(),columnId,cellId)):edit(next=>{
       const c=next.columns.find(c=>c.id===columnId);if(c.cells.length===1)return;
       const index=c.cells.findIndex(r=>r.id===cellId),removed=c.cells.splice(index,1)[0],neighbor=c.cells[Math.max(0,index-1)];
       neighbor.height+=removed.height;cellId=neighbor.id;next.template='custom';
@@ -255,7 +265,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     }),15));
     const frontLabel=elt('label','cabinetField','門面形式'),front=elt('select');
     for(const kind of cabinetFronts)front.add(new Option(labels[kind],kind));
-    front.value=selectedLeaf.front;front.onchange=()=>edit(next=>{findLeaf(next,leafId).front=front.value;next.template='custom';});
+    front.value=selectedLeaf.front;front.onchange=()=>{if(front.value!=='open'&&blockedByTv([leafId],'加上門面')){front.value=selectedLeaf.front;return;}edit(next=>{findLeaf(next,leafId).front=front.value;next.template='custom';});};
     frontLabel.append(front);fields.append(frontLabel);
     if(selectedLeaf.front!=='open')fields.append(button(f.openCells?.[leafId]?'關閉這格':'打開這格',()=>{toggleCell(f,leafId);render();}));
     if(selectedLeaf.front==='open'&&placeTv)fields.append(button('在這格掛電視',()=>placeTv(f,leafId)));

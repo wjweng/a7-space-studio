@@ -270,3 +270,15 @@ test('a split layer gets a divider board and fronts that stay within each part',
  const box=new THREE.Box3();for(const piece of drawer.pivot.children.slice(2))box.expandByObject(piece);
  assert.ok(box.max.x<=-.1-t/2+1e-6,'the drawer body clears the divider');
 });
+
+test('a niche TV whose cell no longer exists is not drawn',()=>{
+ const s=fixture();
+ const cabinet={...initialFurniture.find(f=>f.type==='wardrobe'),id:'host',x:0,z:0,w:1.2,d:.5,h:2,rot:0};
+ cabinet.cabinetDesign={template:'custom',columns:[{id:'c',width:1.2,bottom:0,cells:[{id:'tv',height:2,front:'open'}]}]};
+ const tv={id:'t',type:'television',name:'電視',x:0,z:0,w:.8,h:.45,d:.06,rot:0,elevation:1,tvMount:'niche',supportId:'host',supportCell:'tv'};
+ s.items=[cabinet,tv];
+ const shown=new THREE.Group;s.makeFurniture(shown,tv);
+ assert.ok(shown.children.length>0);
+ const orphan=new THREE.Group;s.makeFurniture(orphan,{...tv,supportCell:'gone'});
+ assert.equal(orphan.children.length,0);
+});

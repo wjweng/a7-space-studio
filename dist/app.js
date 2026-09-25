@@ -138,6 +138,7 @@ const cabinetEditor=createCabinetEditor({
  getItem:id=>items.find(f=>f.id===id),
  commit:commitFurniture,
  resizeEdges:true,maxHeight:HEIGHT,notify,
+ hostedTvs:f=>items.filter(tv=>hostsNicheTv(f,tv)).map(tv=>({name:tv.name,cell:tv.supportCell})),
  // Whether a resized cabinet stays inside the apartment and adds no clash it
  // did not already have; `reason` names the first new problem.
  checkFit(f,next){

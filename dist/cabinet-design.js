@@ -204,8 +204,10 @@ export function fitParts(column,side='right'){
     else{const scale=column.width/(column.width-diff);let used=0;cell.parts.forEach((p,i)=>{p.width=i===cell.parts.length-1?round(column.width-used):round(p.width*scale);used+=p.width;});}
   }
 }
-// Split one smallest cell side by side into two equal parts; the left keeps
-// its front and finishes. Returns null when too narrow (parts are 20 cm+).
+// Split one smallest cell side by side into two equal parts. The left part
+// keeps the cell's id, front and finishes, so its open state and anything
+// keyed to it carry over; a first split gives the layer a new id instead.
+// Returns null when too narrow (parts are 20 cm+).
 export function splitCabinetCell(design,leafId,makePartId=makeId){
   const next=structuredClone(design);
   for(const column of next.columns)for(const cell of column.cells){
@@ -214,7 +216,7 @@ export function splitCabinetCell(design,leafId,makePartId=makeId){
     const part=parts[index];
     if(part.width<.4||parts.length>=8)return null;
     const half=round(part.width/2),left={...part,width:half};
-    if(!cell.parts){left.id=makePartId();delete cell.finishes;}
+    if(!cell.parts){cell.id=makePartId();delete cell.finishes;}
     const right={id:makePartId(),width:round(part.width-half),front:'open'};
     parts.splice(index,1,left,right);cell.parts=parts;next.template='custom';
     return next;
@@ -222,7 +224,8 @@ export function splitCabinetCell(design,leafId,makePartId=makeId){
   return null;
 }
 // Remove one part of a split layer; its left neighbour (or right, for the
-// first) takes the width. A layer left with one part becomes unsplit again.
+// first) takes the width. A layer left with one part becomes unsplit again
+// and takes that part's id, so the part's open state carries over.
 export function removeCabinetPart(design,partId){
   const next=structuredClone(design);
   for(const column of next.columns)for(const cell of column.cells){
@@ -230,7 +233,7 @@ export function removeCabinetPart(design,partId){
     if(index<0)continue;
     const [removed]=cell.parts.splice(index,1),neighbour=cell.parts[Math.max(0,index-1)];
     neighbour.width=round(neighbour.width+removed.width);
-    if(cell.parts.length===1){const [only]=cell.parts;cell.front=only.front;if(only.finishes)cell.finishes=only.finishes;delete cell.parts;}
+    if(cell.parts.length===1){const [only]=cell.parts;cell.id=only.id;cell.front=only.front;if(only.finishes)cell.finishes=only.finishes;delete cell.parts;}
     next.template='custom';
     return next;
   }

@@ -7,7 +7,7 @@ import {flooringByCode,flooringPixels} from './floorings.js';
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeFabric,lightMountDrop,hangingElevation} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
-import {cabinetCells,cabinetColumns,cellFinish,FRONT_GAP,FRONT_T,FRONT_Z} from './cabinet-design.js';
+import {cabinetCells,cabinetColumns,cellFinish,cellOpening,FRONT_GAP,FRONT_T,FRONT_Z} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
 // A flush fitting sends all of its light downward and glows like a panel, so straight below
 // it is several times brighter than under a bare bulb of the same output.
@@ -421,6 +421,10 @@ export class SpaceScene{
  if(['table','desk'].includes(type)){legs(h-.04);let top=box(w,.045,d,0,h-.022,0,'wood',type==='table'?.08:.01);if(type==='desk'){const drawer=new T.Group;drawer.position.set(0,h-.12,d/2-.16);g.add(drawer);this.box(drawer,w*.65,.13,.3,0,0,0,'wood');this.box(drawer,.16,.018,.02,0,0,.16,'metal');this.actions.set(f.id,{type:'drawer',pivot:drawer,base:drawer.position.z,travel:.3,item:f,amount:f.open||0});}return;}
  if(type==='chair'){legs(h*.52);box(w,.065,d,0,h*.52,0,'fabric',.03);box(w,h*.43,.055,0,h*.75,-d/2+.02,'wood',.035);return;}
  if(type==='television'){
+  // A TV whose cabinet cell is gone is not drawn until it gets a new place;
+  // its warning says so. Drawing it where the cell was would cut through
+  // whatever replaced the cell.
+  if(f.tvMount==='niche'){const host=this.items?.find(item=>item.id===f.supportId);if(!host?.cabinetDesign||!cellOpening(host,f.supportCell))return;}
   box(w,h,Math.max(.035,d*.7),0,f.elevation+h/2,0,'dark',.012);
   box(w*.96,h*.94,.008,0,f.elevation+h/2,d*.36,'accent',.007);
   if(f.tvMount==='cabinet'){box(.07,.07,.06,0,f.elevation-.03,0,'dark');box(Math.min(.4,w*.4),.018,.16,0,f.elevation-.065,.02,'dark',.008);}
