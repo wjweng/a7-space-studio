@@ -7,7 +7,9 @@ export function roomAt(x,z){
  if(x>=6.57&&z>=4.4)return '工作陽台';
  if(x>=1.4&&x<=3.08&&z>=4.75&&z<=7.25)return '衛浴 A';
  if(x>=3.08&&z>=5.78)return '廚房';
- if((x>=5.18&&z<=2.7)||(x>=3.83&&x<=6.57&&z>=2.78&&z<=3.72))return '主臥室';
+ // The master bedroom and its corridor meet in an open passage at z 2.70-2.78,
+ // which must belong to them too, or it falls through to the living room.
+ if((x>=5.18&&z<=2.78)||(x>=3.83&&x<=6.57&&z>=2.78&&z<=3.72))return '主臥室';
  if(x<=1.85&&z>=6.65)return '玄關';
  return '客餐廳';
 }
