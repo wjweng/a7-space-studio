@@ -349,17 +349,17 @@ export class SpaceScene{
   // resolves to the cabinet's finish or the palette; see cabinetFinishSlots.
   const finish=(code,fallback='wood')=>code&&this.finishMaterial(code)||fallback;
   for(const column of cabinetColumns(f)){
-   const{width,bottom,x}=column,bodyHeight=f.h-bottom;
+   const{width,bottom,x}=column,bodyHeight=f.h-bottom-(column.top||0);
    for(const side of[-1,1])box(t,bodyHeight,d,x+side*(width/2-t/2),bottom+bodyHeight/2,0);
   }
   for(const cell of cabinetCells(f)){
-   const{x,y,w,h,bottom,front,id}=cell,frontW=w-FRONT_GAP,frontH=h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cellFinish(f,cell,'door'));
+   const{x,y,w,h,bottom,front,id,last}=cell,frontW=w-FRONT_GAP,frontH=h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cellFinish(f,cell,'door'));
    // Boards and the back sit between the side panels, so only the sides show
    // on the outer faces; shelves stop at the back panel instead of passing it.
    box(w-2*t,h,t,x,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));
    const lowest=cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom;
    box(w-2*t,t,d-t,x,bottom+t/2,t/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
-   if(Math.abs(bottom+h-f.h)<.001)box(w-2*t,t,d-t,x,bottom+h-t/2,t/2);
+   if(last)box(w-2*t,t,d-t,x,bottom+h-t/2,t/2);
    if(front==='open')continue;
    const addDoor=(hinge,sign,width)=>{
     const pivot=new T.Group;
@@ -377,7 +377,7 @@ export class SpaceScene{
    }
    // Clear opening between the side panels, above this cell's bottom board
    // and below the top board when the cell reaches the top.
-   const innerW=w-2*t,openBottom=bottom+t,openTop=bottom+h-(Math.abs(bottom+h-f.h)<.001?t:0),openH=openTop-openBottom;
+   const innerW=w-2*t,openBottom=bottom+t,openTop=bottom+h-(last?t:0),openH=openTop-openBottom;
    if(front==='drawers'){
     const pivot=new T.Group;
     pivot.position.set(x,y,z);

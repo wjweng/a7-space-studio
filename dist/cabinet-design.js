@@ -42,8 +42,8 @@ export function validateCabinetDesign(f,design){
   const columns=design.columns.map(column=>{
     if(!column||typeof column.id!=='string'||ids.has(column.id))throw Error('櫃體分區編號不正確');
     ids.add(column.id);
-    const{width,bottom}=column;
-    if(!Number.isFinite(width)||width<.2||!Number.isFinite(bottom)||bottom<0||bottom>f.h-.15)throw Error('櫃體分區寬度至少 20 cm，底部須保留 15 cm 以上櫃體');
+    const{width,bottom}=column,top=column.top??0;
+    if(!Number.isFinite(width)||width<.2||!Number.isFinite(bottom)||bottom<0||!Number.isFinite(top)||top<0||bottom+top>f.h-.15)throw Error('櫃體分區寬度至少 20 cm，底部須保留 15 cm 以上櫃體');
     if(!Array.isArray(column.cells)||!column.cells.length||column.cells.length>10)throw Error('每區層格數量須為 1 至 10');
     let used=0;
     const cells=column.cells.map(cell=>{
@@ -55,9 +55,9 @@ export function validateCabinetDesign(f,design){
       if(!finishes.door&&isFinish(cell.finish))finishes.door=cell.finish; // before 2026-09-25 a cell had one front finish
       return{id:cell.id,height:round(cell.height),front:cell.front,...(Object.keys(finishes).length?{finishes}:{})};
     });
-    if(Math.abs(used+bottom-f.h)>.002)throw Error('層格高度加離地高度必須等於櫃體總高');
+    if(Math.abs(used+bottom+top-f.h)>.002)throw Error('層格高度加上下留空必須等於櫃體總高');
     total+=width;
-    return{id:column.id,width:round(width),bottom:round(bottom),cells};
+    return{id:column.id,width:round(width),bottom:round(bottom),...(top>0?{top:round(top)}:{}),cells};
   });
   if(Math.abs(total-f.w)>.002)throw Error('分區寬度總和必須等於櫃體總寬');
   return{template:typeof design.template==='string'&&cabinetTemplates[design.template]?design.template:'custom',columns};
@@ -69,7 +69,8 @@ export function resizeCabinetDesign(design,oldSize,newSize){
     column.width=index===next.columns.length-1?round(newSize.w-x):round(column.width*newSize.w/oldSize.w);
     x+=column.width;
     column.bottom=round(Math.min(column.bottom,Math.max(0,newSize.h-.15)));
-    const oldHeight=oldSize.h-design.columns[index].bottom,available=newSize.h-column.bottom;
+    if(column.top)column.top=round(Math.min(column.top,Math.max(0,newSize.h-column.bottom-.15)));
+    const old=design.columns[index],oldHeight=oldSize.h-old.bottom-(old.top||0),available=newSize.h-column.bottom-(column.top||0);
     let y=0;
     column.cells.forEach((cell,row)=>{cell.height=row===column.cells.length-1?round(available-y):round(cell.height*available/oldHeight);y+=cell.height;});
   });
@@ -80,7 +81,8 @@ export function cabinetCells(f){
   let x=-f.w/2;
   return f.cabinetDesign.columns.flatMap(column=>{
     let y=column.bottom;
-    const cells=column.cells.map(cell=>{const rect={...cell,columnId:column.id,x:x+column.width/2,y:y+cell.height/2,w:column.width,h:cell.height,bottom:y};y+=cell.height;return rect;});
+    // `last` marks the column's top cell, which carries the column's top board.
+    const cells=column.cells.map((cell,row)=>{const rect={...cell,columnId:column.id,x:x+column.width/2,y:y+cell.height/2,w:column.width,h:cell.height,bottom:y,last:row===column.cells.length-1};y+=cell.height;return rect;});
     x+=column.width;
     return cells;
   });
@@ -96,7 +98,7 @@ export function cabinetOccupiedRects(f){
   const angle=f.rot*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),base=baseHeight(f);
   return cabinetColumns(f).map(column=>({
     x:f.x+column.x*c,z:f.z-column.x*s,w:column.width,d:f.d,rot:f.rot,
-    yMin:base+column.bottom,yMax:base+f.h
+    yMin:base+column.bottom,yMax:base+f.h-(column.top||0)
   }));
 }
 export function modularCabinetRects(f,amounts={}){
@@ -128,7 +130,7 @@ export function modularCabinetRects(f,amounts={}){
 export function cellOpening(f,cellId){
   const cell=cabinetCells(f).find(c=>c.id===cellId);
   if(!cell)return null;
-  const bottom=cell.bottom+CARCASS_T,top=cell.bottom+cell.h-(Math.abs(cell.bottom+cell.h-f.h)<.001?CARCASS_T:0);
+  const bottom=cell.bottom+CARCASS_T,top=cell.bottom+cell.h-(cell.last?CARCASS_T:0);
   return{cell,x:cell.x,w:cell.w-2*CARCASS_T,bottom,h:top-bottom,depth:f.d-CARCASS_T};
 }
 // A TV hung inside an open cell: centred in the opening, its back on a 1 cm
@@ -180,15 +182,54 @@ export function resizeCabinetEdge(f,side,delta,maxHeight=Infinity){
     column.width=round(column.width+grow);next.w=round(f.w+grow);
     next.x=f.x+shift*Math.cos(angle);next.z=f.z-shift*Math.sin(angle);
   }else{
-    const top=side==='top',edgeCell=column=>top?column.cells.at(-1):column.cells[0];
-    const grow=Math.min(maxHeight-f.h,Math.max(...columns.map(column=>.15-edgeCell(column).height-(top?0:column.bottom)),delta));
+    const top=side==='top',gapKey=top?'top':'bottom',edgeCell=column=>top?column.cells.at(-1):column.cells[0];
+    const grow=Math.min(maxHeight-f.h,Math.max(...columns.map(column=>.15-edgeCell(column).height-(column[gapKey]||0)),delta));
     for(const column of columns){
-      // Growing down under a gap widens the gap; shrinking uses it up first.
-      if(!top&&column.bottom>0){const gap=Math.max(0,column.bottom+grow);edgeCell(column).height=round(edgeCell(column).height+grow-(gap-column.bottom));column.bottom=round(gap);}
+      // A column with a gap on the dragged side widens the gap when growing
+      // and uses it up first when shrinking; its cells keep their size.
+      const gap=column[gapKey]||0;
+      if(gap>0){const next=Math.max(0,gap+grow);edgeCell(column).height=round(edgeCell(column).height+grow-(next-gap));if(next>0)column[gapKey]=round(next);else if(top)delete column.top;else column.bottom=0;}
       else edgeCell(column).height=round(edgeCell(column).height+grow);
     }
     next.h=round(f.h+grow);
   }
   next.cabinetDesign.template='custom';
   return next;
+}
+
+// Deleting a cell or column never makes its neighbours grow to fill the
+// space at the cabinet's free edge: a floor cabinet's top cell or a hanging
+// cabinet's bottom cell leaves a gap in its column, and an end column takes
+// its width with it (the opposite edge stays put). When every column has a
+// gap at the free edge, the cabinet shrinks by the smallest one. A cell
+// elsewhere is absorbed by its neighbour, a middle column by its left one.
+export function removeCabinetCell(f,columnId,cellId){
+  const next=structuredClone(f),column=next.cabinetDesign.columns.find(c=>c.id===columnId);
+  if(!column||column.cells.length===1)return null;
+  const index=column.cells.findIndex(c=>c.id===cellId),hanging=f.type==='hangingCabinet';
+  if(index<0)return null;
+  const [removed]=column.cells.splice(index,1);
+  if(!hanging&&index===column.cells.length)column.top=round((column.top||0)+removed.height);
+  else if(hanging&&index===0)column.bottom=round(column.bottom+removed.height);
+  else{const neighbour=column.cells[Math.max(0,index-1)];neighbour.height=round(neighbour.height+removed.height);}
+  next.cabinetDesign.template='custom';
+  return trimCabinetGap(next);
+}
+export function removeCabinetColumn(f,columnId){
+  const next=structuredClone(f),columns=next.cabinetDesign.columns,index=columns.findIndex(c=>c.id===columnId);
+  if(index<0||columns.length===1)return null;
+  const [removed]=columns.splice(index,1);
+  if(index===0||index===columns.length){
+    const shift=(index===0?1:-1)*removed.width/2,angle=f.rot*Math.PI/180;
+    next.w=round(f.w-removed.width);next.x=f.x+shift*Math.cos(angle);next.z=f.z-shift*Math.sin(angle);
+  }else columns[index-1].width=round(columns[index-1].width+removed.width);
+  next.cabinetDesign.template='custom';
+  return trimCabinetGap(next);
+}
+function trimCabinetGap(f){
+  const key=f.type==='hangingCabinet'?'bottom':'top',columns=f.cabinetDesign.columns,gap=Math.min(...columns.map(c=>c[key]||0));
+  if(gap<=0)return f;
+  for(const column of columns){const rest=round((column[key]||0)-gap);if(key==='top'&&!rest)delete column.top;else column[key]=rest;}
+  f.h=round(f.h-gap);
+  return f;
 }

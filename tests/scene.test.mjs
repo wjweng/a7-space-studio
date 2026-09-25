@@ -244,3 +244,15 @@ test('cabinet boards stay between the side panels and a rebuild keeps open parts
  assert.equal(door.amount,1);
  assert(Math.abs(Math.abs(door.pivot.rotation.y)-Math.PI/2)<1e-9,'the open door is built already open');
 });
+
+test('a column with a top gap stops its sides and top board at its last cell',()=>{
+ const s=fixture(),g=new THREE.Group,t=.018;
+ const f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'gap',x:0,z:0,w:1.2,d:.5,h:2,rot:0};
+ f.cabinetDesign={template:'custom',columns:[{id:'a',width:.6,bottom:0,top:.8,cells:[{id:'a1',height:1.2,front:'open'}]},{id:'b',width:.6,bottom:0,cells:[{id:'b1',height:2,front:'open'}]}]};
+ s.makeFurniture(g,f);g.updateMatrixWorld(true);
+ const left=new THREE.Box3();
+ for(const m of g.children.filter(m=>m.isMesh&&m.position.x<0))left.expandByObject(m);
+ assert.ok(Math.abs(left.max.y-1.2)<1e-6,`left column tops out at ${left.max.y}`);
+ const topBoard=g.children.find(m=>m.isMesh&&m.position.x<0&&Math.abs(m.position.y-(1.2-t/2))<1e-6&&Math.abs(m.geometry.parameters.height-t)<1e-6);
+ assert.ok(topBoard,'the last cell carries the top board');
+});

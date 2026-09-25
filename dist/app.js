@@ -137,7 +137,16 @@ const renderWithFabric=renderProps;renderProps=()=>{renderWithFabric();const f=i
 const cabinetEditor=createCabinetEditor({
  getItem:id=>items.find(f=>f.id===id),
  commit:commitFurniture,
- resizeEdges:true,maxHeight:HEIGHT,
+ resizeEdges:true,maxHeight:HEIGHT,notify,
+ // Whether a resized cabinet stays inside the apartment and adds no clash it
+ // did not already have; `reason` names the first new problem.
+ checkFit(f,next){
+  let valid;
+  try{valid=validateFurniture([next])[0];}catch(error){return{ok:false,reason:error.message};}
+  if(placeAtTarget(f,valid,items).blocked||!insideShell(valid))return{ok:false,reason:'超出 A7 戶型外框'};
+  const before=new Set(issues(f,items)),added=issues(valid,items).filter(message=>!before.has(message));
+  return added.length?{ok:false,reason:added[0]}:{ok:true};
+ },
  chooseFinish:(f,target)=>openFinishDialog({...target,id:f.id}),
  finishLabel:code=>finishText(code),
  placeTv(f,cellId){

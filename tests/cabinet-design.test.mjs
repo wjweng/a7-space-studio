@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,cellFinish,cellFinishSlots,resizeCabinetEdge,nicheTvPlacement,nicheTvWarnings} from '../dist/cabinet-design.js';
+import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,cellFinish,cellFinishSlots,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,nicheTvPlacement,nicheTvWarnings} from '../dist/cabinet-design.js';
 import {finishes} from '../dist/finishes.js';
 import {furnitureInterference} from '../dist/geometry.js';
 import {validateFurniture,issues} from '../dist/model.js';
@@ -167,4 +167,62 @@ test('a hanging cabinet grows downward from its lowest cells, widening a bottom 
   assert.equal(shallower.cabinetDesign.columns[1].bottom,0);
   assert.ok(Math.abs(shallower.cabinetDesign.columns[1].cells[0].height-.15)<1e-9);
   for(const g of[deeper,shallower])validateCabinetDesign(g,g.cabinetDesign);
+});
+
+test('deleting a floor cabinet top cell leaves a gap instead of stretching the cell below',()=>{
+  const f=item();
+  f.cabinetDesign={template:'custom',columns:[{id:'a',width:.6,bottom:0,cells:[{id:'a1',height:1.4,front:'left'},{id:'a2',height:1,front:'open'}]},{id:'b',width:.6,bottom:0,cells:[{id:'b1',height:2.4,front:'double'}]}]};
+  const next=removeCabinetCell(f,'a','a2');
+  assert.equal(next.h,2.4,'the other column still reaches the top');
+  assert.equal(next.cabinetDesign.columns[0].cells[0].height,1.4);
+  assert.equal(next.cabinetDesign.columns[0].top,1);
+  validateCabinetDesign(next,next.cabinetDesign);
+  const cells=cabinetCells(next);
+  assert.ok(cells.find(c=>c.id==='a1').last,'the remaining cell now carries the top board');
+  assert.ok(Math.abs(cabinetOccupiedRects(next)[0].yMax-1.4)<1e-9,'the empty space no longer counts as cabinet');
+  // once every column has a top gap, the cabinet itself gets shorter
+  const both=removeCabinetCell({...f,cabinetDesign:{...f.cabinetDesign,columns:[f.cabinetDesign.columns[0],{id:'b',width:.6,bottom:0,cells:[{id:'b1',height:1.8,front:'double'},{id:'b2',height:.6,front:'open'}]}]}},'b','b2');
+  const shorter=removeCabinetCell(both,'a','a2');
+  assert.ok(Math.abs(shorter.h-1.8)<1e-9);
+  assert.deepEqual(shorter.cabinetDesign.columns.map(c=>c.top??0).map(n=>Math.round(n*100)),[40,0]);
+  validateCabinetDesign(shorter,shorter.cabinetDesign);
+  const middle=removeCabinetCell({...f,cabinetDesign:{template:'custom',columns:[{id:'a',width:1.2,bottom:0,cells:[{id:'x',height:.8,front:'open'},{id:'y',height:.8,front:'open'},{id:'z',height:.8,front:'open'}]}]}},'a','y');
+  assert.deepEqual(middle.cabinetDesign.columns[0].cells.map(c=>c.height),[1.6,.8],'a middle cell is absorbed by the one below');
+  assert.equal(removeCabinetCell(f,'b','b1'),null,'a column keeps at least one cell');
+});
+
+test('a hanging cabinet losing its bottom cell leaves a gap below the cell above',()=>{
+  const f={...item(),type:'hangingCabinet',h:.8};
+  f.cabinetDesign={template:'custom',columns:[{id:'a',width:.6,bottom:0,cells:[{id:'a1',height:.3,front:'open'},{id:'a2',height:.5,front:'left'}]},{id:'b',width:.6,bottom:0,cells:[{id:'b1',height:.8,front:'left'}]}]};
+  const next=removeCabinetCell(f,'a','a1');
+  assert.equal(next.h,.8);
+  assert.equal(next.cabinetDesign.columns[0].bottom,.3);
+  assert.equal(next.cabinetDesign.columns[0].cells[0].height,.5);
+  validateCabinetDesign(next,next.cabinetDesign);
+});
+
+test('deleting an end column narrows the cabinet and keeps the opposite edge in place',()=>{
+  const f={...item(),x:3,z:2,rot:0};
+  f.cabinetDesign={template:'custom',columns:[{id:'a',width:.3,bottom:0,cells:[{id:'a1',height:2.4,front:'open'}]},{id:'b',width:.5,bottom:0,cells:[{id:'b1',height:2.4,front:'open'}]},{id:'c',width:.4,bottom:0,cells:[{id:'c1',height:2.4,front:'open'}]}]};
+  const right=removeCabinetColumn(f,'c');
+  assert.ok(Math.abs(right.w-.8)<1e-9);
+  assert.deepEqual(right.cabinetDesign.columns.map(c=>c.width),[.3,.5],'the neighbour does not widen');
+  assert.ok(Math.abs((right.x-right.w/2)-(f.x-f.w/2))<1e-9,'left edge fixed');
+  const left=removeCabinetColumn(f,'a');
+  assert.ok(Math.abs((left.x+left.w/2)-(f.x+f.w/2))<1e-9,'right edge fixed');
+  const middle=removeCabinetColumn(f,'b');
+  assert.equal(middle.w,f.w);
+  assert.deepEqual(middle.cabinetDesign.columns.map(c=>c.width),[.8,.4],'a middle column is absorbed by its left neighbour');
+  for(const g of[right,left,middle])validateCabinetDesign(g,g.cabinetDesign);
+});
+
+test('a top edge drag over a column with a top gap widens the gap',()=>{
+  const f=item();
+  f.cabinetDesign={template:'custom',columns:[{id:'a',width:.6,bottom:0,top:.4,cells:[{id:'a1',height:2,front:'left'}]},{id:'b',width:.6,bottom:0,cells:[{id:'b1',height:2.4,front:'left'}]}]};
+  const taller=resizeCabinetEdge(f,'top',.2);
+  assert.ok(Math.abs(taller.cabinetDesign.columns[0].top-.6)<1e-9);
+  assert.equal(taller.cabinetDesign.columns[0].cells[0].height,2);
+  const lower=resizeCabinetEdge(f,'top',-.5);
+  assert.equal(lower.cabinetDesign.columns[0].top,undefined,'a used-up gap disappears');
+  validateCabinetDesign(lower,lower.cabinetDesign);
 });

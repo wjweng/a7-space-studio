@@ -1,4 +1,4 @@
-import {cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge} from './cabinet-design.js';
+import {cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn} from './cabinet-design.js';
 
 const labels={open:'開放',left:'左開門',right:'右開門',double:'對開門',sliding:'滑門',drawers:'抽屜'};
 const cm=n=>Math.round(n*1000)/10;
@@ -13,7 +13,7 @@ const field=(label,value,change,min=0,max=500)=>{
 };
 // placeTv and chooseFinish are optional: the media-wall module editor has neither.
 // placeTv, chooseFinish and resizeEdges are only for standalone cabinets.
-export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv,chooseFinish,finishLabel=code=>code||'預設',resizeEdges=false,maxHeight=Infinity}){
+export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv,chooseFinish,finishLabel=code=>code||'預設',resizeEdges=false,maxHeight=Infinity,checkFit,notify}){
   const dialog=elt('dialog','cabinetDialog');
   dialog.innerHTML='<div class="cabinetHead" title="拖曳可移動視窗"><div><span class="eyebrow">CABINET EDITOR</span><h2>編輯櫃體</h2></div><div class="cabinetHeadButtons"><button type="button" class="dialogFold" aria-expanded="true">收合</button><button type="button" class="dialogClose" aria-label="關閉">×</button></div></div><div class="cabinetBody"><p class="muted">點選正面圖中的格子，再修改分區、層高與門面。尺寸單位為 cm。拖曳標題可移動視窗。</p><div class="cabinetFinishes"></div><div class="cabinetToolbar"></div><div class="cabinetElevation"></div><div class="cabinetFields"></div><p class="cabinetError" role="alert"></p></div>';
   document.body.append(dialog);
@@ -54,11 +54,24 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
   // Dragging an outer edge changes only the column or cells on that side and
   // keeps the opposite edge where it is; `exact` stops the commit from
   // rescaling the design or shifting the cabinet to avoid clashes.
+  // Item-level changes (size, position) from edge drags and deletions.
+  const commitItem=(f,next,note='')=>{
+    if(!f||!next)return false;
+    const message=dialog.querySelector('.cabinetError');
+    try{if(commit(f,next,{exact:true})===false){message.textContent=commit.lastError||'尺寸無法套用';render();return false;}message.textContent=note;render();return true;}
+    catch(error){message.textContent=error.message;return false;}
+  };
+  // A drag that would clash or leave the apartment stops at the largest
+  // clear size in whole centimetres, and says why.
   const resizeEdge=(side,delta)=>{
     const f=item();if(!f||!delta)return;
-    const next=resizeCabinetEdge(f,side,delta,maxHeight);
-    try{if(commit(f,next,{exact:true})===false){dialog.querySelector('.cabinetError').textContent=commit.lastError||'尺寸無法套用';render();return;}dialog.querySelector('.cabinetError').textContent='';render();}
-    catch(error){dialog.querySelector('.cabinetError').textContent=error.message;}
+    const attempt=d=>resizeCabinetEdge(f,side,d,maxHeight),wanted=checkFit?.(f,attempt(delta));
+    if(!wanted||wanted.ok){commitItem(f,attempt(delta));return;}
+    const sign=Math.sign(delta);let lo=0,hi=Math.round(Math.abs(delta)*100);
+    while(lo<hi){const mid=Math.ceil((lo+hi)/2);if(checkFit(f,attempt(sign*mid/100)).ok)lo=mid;else hi=mid-1;}
+    if(!lo){dialog.querySelector('.cabinetError').textContent=`${wanted.reason}，這個方向已經沒有空間`;notify?.(wanted.reason);return;}
+    const next=attempt(sign*lo/100),note=`${wanted.reason}；已停在最大可用尺寸：寬 ${cm(next.w)} × 高 ${cm(next.h)} cm`;
+    if(commitItem(f,next,note))notify?.(note);
   };
   const button=(text,click)=>{const b=elt('button','',text);b.type='button';b.onclick=click;return b;};
   // Level two (all doors, shelves, backs, drawer boxes) sits at the top of the
@@ -110,10 +123,10 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       if(base.width<.4)return;
       const width=Math.round(base.width*5000)/10000;
       base.width-=width;
-      next.columns.splice(index+1,0,{id:id(),width,bottom:base.bottom,cells:[{id:id(),height:f.h-base.bottom,front:'open'}]});
+      next.columns.splice(index+1,0,{id:id(),width,bottom:base.bottom,...(base.top?{top:base.top}:{}),cells:[{id:id(),height:f.h-base.bottom-(base.top||0),front:'open'}]});
       next.template='custom';
     })));
-    toolbar.append(button('－目前分區',()=>edit(next=>{
+    toolbar.append(button('－目前分區',()=>resizeEdges?commitItem(item(),removeCabinetColumn(item(),columnId)):edit(next=>{
       if(next.columns.length===1)return;
       const index=next.columns.findIndex(c=>c.id===columnId),removed=next.columns.splice(index,1)[0],recipient=next.columns[Math.max(0,index-1)];
       recipient.width+=removed.width;columnId=recipient.id;next.template='custom';
@@ -223,7 +236,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       if(c.cells.length>=10||cell.height<.3)return;
       const half=Math.round(cell.height*5000)/10000;cell.height-=half;
       c.cells.splice(c.cells.indexOf(cell)+1,0,{id:id(),height:half,front:'open'});next.template='custom';
-    })),button('－目前層格',()=>edit(next=>{
+    })),button('－目前層格',()=>resizeEdges?commitItem(item(),removeCabinetCell(item(),columnId,cellId)):edit(next=>{
       const c=next.columns.find(c=>c.id===columnId);if(c.cells.length===1)return;
       const index=c.cells.findIndex(r=>r.id===cellId),removed=c.cells.splice(index,1)[0],neighbor=c.cells[Math.max(0,index-1)];
       neighbor.height+=removed.height;cellId=neighbor.id;next.template='custom';
