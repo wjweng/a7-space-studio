@@ -35,9 +35,11 @@ export function tableLegRects(f){const leg=Math.min(.09,Math.max(.045,Math.min(f
 export function chairBackRect(f){const depth=Math.min(.12,f.d*.28);return localRect(f,0,-f.d/2+depth/2,Math.max(.05,f.w*.9),depth);}
 export function tableChairInterference(chair,table){if(!isTableLike(table))return false;return overlaps(chairBackRect(chair),table,EPS)||tableLegRects(table).some(leg=>overlaps(chair,leg,EPS));}
 export function furnitureInterference(a,b){
- const ay=a.type==='television'?a.elevation||0:0,by=b.type==='television'?b.elevation||0:0;
+ // TVs and hanging cabinets carry their underside height as `elevation`.
+ const lifted=f=>['television','hangingCabinet'].includes(f.type)?f.elevation||0:0,ay=lifted(a),by=lifted(b);
  if(ay+a.h<=by+EPS||by+b.h<=ay+EPS)return false;
  if(['rug','light','beam'].includes(a.type)||['rug','light','beam'].includes(b.type))return false;
+ if(a.type==='hangingCabinet'&&b.type==='hangingCabinet')return false; // ceiling stacking is checked separately
  if(a.cabinetDesign||b.cabinetDesign){
   const aa=a.cabinetDesign?cabinetOccupiedRects(a):[{...a,yMin:ay,yMax:ay+a.h}];
   const bb=b.cabinetDesign?cabinetOccupiedRects(b):[{...b,yMin:by,yMax:by+b.h}];

@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {SpaceScene,floorBoardRects} from '../dist/scene.js';
-import {issues,mountedOn,lightMountDrop,validateFurniture,initialFurniture,wallRects,HEIGHT} from '../dist/model.js';
+import {issues,mountedOn,mountDrop,hangingElevation,lightMountDrop,validateFurniture,initialFurniture,wallRects,HEIGHT} from '../dist/model.js';
 import {blocksCamera} from '../dist/spatial.js';
 
 const beam={id:'b',type:'beam',name:'樑',x:2,z:3,w:3,d:.2,h:.3,rot:0};
@@ -68,4 +68,54 @@ test('refreshing the scene moves a mounted light group to the beam underside and
  s.refreshValidity();assert.equal(g.position.y,-.3);
  s.mode='top';s.refreshValidity();assert(g.position.y>0);
  s.items=[linear];s.mode='walk';s.refreshValidity();assert.equal(g.position.y,0);
+});
+
+// Ceiling -> beam -> hanging cabinet -> light: each hangs from the one above
+// only when its whole footprint lies under it.
+const wideBeam={...beam,d:.6};
+const hanging={id:'h',type:'hangingCabinet',name:'吊櫃',x:2,z:3,w:1,d:.35,h:.6,rot:0};
+const named=(list,name)=>list.some(m=>m.includes(name));
+
+test('a hanging cabinet hangs from the ceiling or a beam wholly above it, and lights hang below it',()=>{
+ assert.equal(mountDrop(hanging,[hanging]),0);
+ assert.equal(hangingElevation(hanging,[hanging]),HEIGHT-.6);
+ const lamp={...linear,w:.5,lightKind:'ceiling'};
+ assert(mountedOn(lamp,hanging));
+ assert.ok(Math.abs(mountDrop(lamp,[lamp,hanging])-.6)<1e-9,'a light under the cabinet is pushed down to its underside');
+ assert(!named(issues(lamp,[lamp,hanging]),'吊櫃'));
+ const stack=[wideBeam,hanging,lamp];
+ assert.ok(Math.abs(mountDrop(hanging,stack)-.3)<1e-9);
+ assert.ok(Math.abs(hangingElevation(hanging,stack)-(HEIGHT-.9))<1e-9);
+ assert.ok(Math.abs(mountDrop(lamp,stack)-.9)<1e-9,'the drop accumulates through beam and cabinet');
+ assert(!named(issues(hanging,stack),'樑'));
+});
+
+test('nothing may hang partly over empty space, and the order never inverts',()=>{
+ const straddling={...hanging,z:3.25};
+ assert(!mountedOn(straddling,wideBeam));
+ assert(named(issues(straddling,[wideBeam,straddling]),'樑'),'a cabinet half under a beam clashes');
+ const edgeLamp={...linear,w:.5,lightKind:'ceiling',x:2.6};
+ assert(named(issues(edgeLamp,[hanging,edgeLamp]),'吊櫃'),'a light half under a cabinet clashes');
+ assert(!mountedOn(wideBeam,{...hanging,w:4,d:1}),'a beam never hangs from a cabinet');
+ assert(!mountedOn({...hanging,w:.3,d:.02},{...linear,w:.5,d:.5}),'a cabinet never hangs from a light');
+ assert.equal(mountDrop(hanging,[{...wideBeam,draft:true},hanging]),0,'a draft beam holds nothing');
+});
+
+test('hanging cabinets clash with floor furniture only where their heights overlap',()=>{
+ const tall={id:'w',type:'wardrobe',name:'衣櫃',x:2,z:3,w:.8,d:.35,h:2.35,rot:0};
+ assert(!named(issues(hanging,[hanging,tall]),'衣櫃'),'a 2.35 m wardrobe fits under a cabinet whose underside is at 2.4 m');
+ assert(!named(issues(tall,[hanging,tall]),'吊櫃'));
+ const taller={...tall,h:2.5};
+ assert(named(issues(hanging,[hanging,taller]),'衣櫃'));
+ assert(named(issues(taller,[hanging,taller]),'吊櫃'));
+ assert(!blocksCamera({...hanging,elevation:2.4}),'a cabinet above head height does not block the walk camera');
+ assert(blocksCamera({...hanging,h:1.8,elevation:1.2}));
+});
+
+test('a hanging cabinet always has a cabinet design and is drawn at its elevation',()=>{
+ const [valid]=validateFurniture([{...hanging,elevation:2.4}]);
+ assert.equal(valid.cabinetDesign.columns.length,1);
+ assert.equal(valid.elevation,2.4);
+ const s=fixture();s.items=[wideBeam,hanging];
+ assert.ok(Math.abs(s.mountOffset(hanging)-(HEIGHT-.9))<1e-9);
 });

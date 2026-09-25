@@ -186,7 +186,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       if(other<0)return;
       const delta=value-next.columns[index].width;
       next.columns[index].width=value;next.columns[other].width-=delta;next.template='custom';
-    }),20),field('底部離地',selectedColumn.bottom,value=>edit(next=>{
+    }),20),field(f.type==='hangingCabinet'?'底部留空':'底部離地',selectedColumn.bottom,value=>edit(next=>{
       const c=next.columns.find(c=>c.id===columnId),delta=value-c.bottom;c.bottom=value;c.cells.at(-1).height-=delta;next.template='custom';
     }),0,cm(f.h-.15)));
     const row=elt('div','cabinetToolbar');

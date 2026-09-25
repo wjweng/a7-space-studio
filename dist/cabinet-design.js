@@ -90,16 +90,18 @@ export function cabinetColumns(f){
   let x=-f.w/2;
   return f.cabinetDesign.columns.map(column=>{const result={...column,x:x+column.width/2};x+=column.width;return result;});
 }
+// A hanging cabinet's heights start at its underside (`elevation`).
+const baseHeight=f=>f.type==='hangingCabinet'?f.elevation||0:0;
 export function cabinetOccupiedRects(f){
-  const angle=f.rot*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle);
+  const angle=f.rot*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),base=baseHeight(f);
   return cabinetColumns(f).map(column=>({
     x:f.x+column.x*c,z:f.z-column.x*s,w:column.width,d:f.d,rot:f.rot,
-    yMin:column.bottom,yMax:f.h
+    yMin:base+column.bottom,yMax:base+f.h
   }));
 }
 export function modularCabinetRects(f,amounts={}){
   const angle=f.rot*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle);
-  const world=(x,z)=>({x:f.x+x*c+z*s,z:f.z-x*s+z*c});
+  const world=(x,z)=>({x:f.x+x*c+z*s,z:f.z-x*s+z*c}),base=baseHeight(f);
   const result=[];
   for(const cell of cabinetCells(f)){
     const amount=Math.max(0,Math.min(1,Number(amounts[cell.id])||0));
@@ -107,7 +109,7 @@ export function modularCabinetRects(f,amounts={}){
     const width=cell.w-FRONT_GAP,z=f.d/2+FRONT_Z;
     const door=(hinge,sign,panelWidth)=>{
       const turn=-sign*amount*Math.PI/2,p=world(hinge+sign*Math.cos(turn)*panelWidth/2,z-sign*Math.sin(turn)*panelWidth/2);
-      result.push({...p,w:panelWidth,d:.04,rot:f.rot+turn*180/Math.PI,yMin:cell.bottom,yMax:cell.bottom+cell.h,cellId:cell.id});
+      result.push({...p,w:panelWidth,d:.04,rot:f.rot+turn*180/Math.PI,yMin:base+cell.bottom,yMax:base+cell.bottom+cell.h,cellId:cell.id});
     };
     const left=cell.x-width/2,right=cell.x+width/2;
     if(cell.front==='left')door(left,1,width);
@@ -115,7 +117,7 @@ export function modularCabinetRects(f,amounts={}){
     if(cell.front==='double'){door(left,1,(width-FRONT_GAP)/2);door(right,-1,(width-FRONT_GAP)/2);}
     if(cell.front==='drawers'){
       const travel=amount*f.d*.55,p=world(cell.x,z+travel/2);
-      result.push({...p,w:width,d:travel,rot:f.rot,yMin:cell.bottom,yMax:cell.bottom+cell.h,cellId:cell.id});
+      result.push({...p,w:width,d:travel,rot:f.rot,yMin:base+cell.bottom,yMax:base+cell.bottom+cell.h,cellId:cell.id});
     }
   }
   return result;
