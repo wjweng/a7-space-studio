@@ -2,8 +2,9 @@ import * as T from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {roofCanopyGeometry,sideRingGeometry} from './facade-geometry.js';
-import {BOARD,finishByCode,finishPixels} from './finishes.js';
-import {flooringByCode,flooringPixels} from './floorings.js';
+import {BOARD,finishByCode} from './finishes.js';
+import {flooringByCode,tileSize} from './floorings.js';
+import {requestTexture,texturePixelsNow,texturesAsync} from './texture-cache.js';
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeFabric,lightMountDrop,hangingElevation,mountDrop} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
@@ -305,15 +306,27 @@ export class SpaceScene{
   // ceiling lights, a little stronger on the ceiling, which the hemisphere barely reaches.
   for(const m of this.lobby){if(m.userData.lamp)continue;m.emissive.copy(m.color);m.emissiveIntensity=(m.userData.ceiling?.55:.25)*(night?1.15:1);}
  }
+ // Give a generated finish or flooring material its texture: at once where
+ // textures are made synchronously (Node), otherwise when the cache or a
+ // worker delivers it. Until then the material shows the median colour.
+ fillTexture(material,kind,code,setup){
+  const apply=({pixels,width,height})=>{
+   const texture=new T.DataTexture(pixels,width,height,T.RGBAFormat);
+   Object.assign(texture,{wrapS:T.RepeatWrapping,wrapT:T.RepeatWrapping,magFilter:T.LinearFilter,minFilter:T.LinearMipmapLinearFilter,generateMipmaps:true,colorSpace:T.SRGBColorSpace,anisotropy:this.renderer?.capabilities.getMaxAnisotropy()||1,needsUpdate:true});
+   setup?.(texture);
+   material.map=texture;material.color.set(0xffffff);material.needsUpdate=true;
+  };
+  if(!texturesAsync()){apply(texturePixelsNow(kind,code));return;}
+  requestTexture(kind,code).then(apply);
+ }
  // An SPC flooring: one repeating tile of planks, scaled to the floor's board-sized UVs.
  flooringMaterial(code){
   const flooring=flooringByCode(code);if(!flooring)return null;
   if(!this.flooringMaterials)this.flooringMaterials=new Map;
   if(!this.flooringMaterials.has(code)){
-   const {pixels,width,height,size}=flooringPixels(flooring),texture=new T.DataTexture(pixels,width,height,T.RGBAFormat);
-   Object.assign(texture,{wrapS:T.RepeatWrapping,wrapT:T.RepeatWrapping,magFilter:T.LinearFilter,minFilter:T.LinearMipmapLinearFilter,generateMipmaps:true,colorSpace:T.SRGBColorSpace,anisotropy:this.renderer?.capabilities.getMaxAnisotropy()||1,needsUpdate:true});
-   texture.repeat.set(BOARD.w/size[0],BOARD.h/size[1]);
-   this.flooringMaterials.set(code,new T.MeshStandardMaterial({map:texture,roughness:.5}));
+   const material=new T.MeshStandardMaterial({color:flooring.colors[2],roughness:.5}),size=tileSize(flooring);
+   this.fillTexture(material,'flooring',code,texture=>texture.repeat.set(BOARD.w/size[0],BOARD.h/size[1]));
+   this.flooringMaterials.set(code,material);
   }
   return this.flooringMaterials.get(code);
  }
@@ -321,9 +334,9 @@ export class SpaceScene{
   const finish=finishByCode(code);if(!finish)return null;
   if(!this.finishMaterials)this.finishMaterials=new Map;
   if(!this.finishMaterials.has(code)){
-   const texture=new T.DataTexture(finishPixels(finish,512,1024),512,1024,T.RGBAFormat);
-   Object.assign(texture,{wrapS:T.RepeatWrapping,wrapT:T.RepeatWrapping,magFilter:T.LinearFilter,minFilter:T.LinearMipmapLinearFilter,generateMipmaps:true,colorSpace:T.SRGBColorSpace,anisotropy:this.renderer?.capabilities.getMaxAnisotropy()||1,needsUpdate:true});
-   const material=new T.MeshStandardMaterial({map:texture,roughness:.62});material.userData.board=true;this.finishMaterials.set(code,material);
+   const material=new T.MeshStandardMaterial({color:finish.colors[1],roughness:.62});material.userData.board=true;
+   this.fillTexture(material,'finish',code);
+   this.finishMaterials.set(code,material);
   }
   return this.finishMaterials.get(code);
  }

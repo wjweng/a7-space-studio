@@ -32,7 +32,10 @@ export function doorRects(d,amount=1,maxAngle=d.maxAngle??90){
  const rect=(x,z,width,depth)=>({x:hx+x*c+z*s,z:hz-x*s+z*c,w:width,d:depth,rot:angle*180/Math.PI});
  return [rect(w/2,0,w,.045),rect(w-.12,.055,.105,.07),rect(w-.12,-.055,.105,.07)];
 }
-export function fixedDoorLimit(d){const obstacles=wallRects();let safe=0;for(let degrees=0;degrees<=90;degrees+=.25){if(doorRects(d,1,degrees).some(r=>obstacles.some(w=>signedDistance(r,w)<-EPS)))break;safe=degrees;}return Math.max(0,safe-1);}
+// Every leaf and handle rect at any angle lies within reach of the hinge, so
+// only walls overlapping a square around it can stop the swing; testing just
+// those gives the same limit as testing every wall, far faster.
+export function fixedDoorLimit(d){const [leaf]=doorRects(d,1,0),a=leaf.rot*Math.PI/180,w=leaf.w,hx=leaf.x-w/2*Math.cos(a),hz=leaf.z+w/2*Math.sin(a),reach=Math.hypot(w,.09)+.02,near={x:hx,z:hz,w:2*reach,d:2*reach,rot:0},obstacles=wallRects().filter(r=>signedDistance(r,near)<EPS);let safe=0;for(let degrees=0;degrees<=90;degrees+=.25){if(doorRects(d,1,degrees).some(r=>obstacles.some(w=>signedDistance(r,w)<-EPS)))break;safe=degrees;}return Math.max(0,safe-1);}
 export function pointClear(x,z,obstacles,radius=.10){
  if(!inside(x,z))return false;
  for(const r of obstacles){const a=r.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=x-r.x,dz=z-r.z,lx=dx*c-dz*s,lz=dx*s+dz*c,ex=Math.max(Math.abs(lx)-r.w/2,0),ez=Math.max(Math.abs(lz)-r.d/2,0);if(ex*ex+ez*ez<radius*radius)return false;}
