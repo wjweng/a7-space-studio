@@ -7,7 +7,7 @@ import {flooringByCode,flooringPixels} from './floorings.js';
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeFabric,lightMountDrop} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
-import {cabinetCells,cabinetColumns,FRONT_GAP,FRONT_T,FRONT_Z} from './cabinet-design.js';
+import {cabinetCells,cabinetColumns,cellFinish,FRONT_GAP,FRONT_T,FRONT_Z} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
 // A flush fitting sends all of its light downward and glows like a panel, so straight below
 // it is several times brighter than under a bare bulb of the same output.
@@ -337,28 +337,27 @@ export class SpaceScene{
  // An open-topped drawer box behind a drawer front: bottom, two sides and a
  // back, so a pulled-out drawer shows its body. `y` is the box's underside and
  // `z` the back face of the front, both in the drawer's local frame.
- drawerBox(p,width,height,depth,y,z){
+ drawerBox(p,width,height,depth,y,z,mat='wood'){
   const b=.012;
-  this.box(p,width,b,depth,0,y+b/2,z-depth/2,'white');
-  for(const side of[-1,1])this.box(p,b,height,depth,side*(width/2-b/2),y+height/2,z-depth/2,'white');
-  this.box(p,width-2*b,height,b,0,y+height/2,z-depth+b/2,'white');
+  this.box(p,width,b,depth,0,y+b/2,z-depth/2,mat);
+  for(const side of[-1,1])this.box(p,b,height,depth,side*(width/2-b/2),y+height/2,z-depth/2,mat);
+  this.box(p,width-2*b,height,b,0,y+height/2,z-depth+b/2,mat);
  }
  makeModularCabinet(g,f,box){
   const t=.018,d=f.d,parts=[];
-  // A part without its own finish passes 'wood', which box() resolves to the
-  // cabinet's overall finish or the palette's wood.
-  const finish=code=>code&&this.finishMaterial(code)||'wood',own=f.partFinishes||{};
-  const body=finish(own.body),interior=finish(own.interior);
+  // Sides, top and each column's lowest board pass 'wood', which box()
+  // resolves to the cabinet's finish or the palette; see cabinetFinishSlots.
+  const finish=(code,fallback='wood')=>code&&this.finishMaterial(code)||fallback;
   for(const column of cabinetColumns(f)){
    const{width,bottom,x}=column,bodyHeight=f.h-bottom;
-   box(width,bodyHeight,t,x,bottom+bodyHeight/2,-d/2+t/2,interior);
-   for(const side of[-1,1])box(t,bodyHeight,d,x+side*(width/2-t/2),bottom+bodyHeight/2,0,body);
+   for(const side of[-1,1])box(t,bodyHeight,d,x+side*(width/2-t/2),bottom+bodyHeight/2,0);
   }
   for(const cell of cabinetCells(f)){
-   const{x,y,w,h,bottom,front,id}=cell,frontW=w-FRONT_GAP,frontH=h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cell.finish||own.fronts);
-   // The lowest board of a column belongs to the body, the others are shelves.
-   box(w,t,d,x,bottom+t/2,0,cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom?body:interior);
-   if(Math.abs(bottom+h-f.h)<.001)box(w,t,d,x,bottom+h-t/2,0,body);
+   const{x,y,w,h,bottom,front,id}=cell,frontW=w-FRONT_GAP,frontH=h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cellFinish(f,cell,'door'));
+   box(w,h,t,x,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));
+   const lowest=cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom;
+   box(w,t,d,x,bottom+t/2,0,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
+   if(Math.abs(bottom+h-f.h)<.001)box(w,t,d,x,bottom+h-t/2,0);
    if(front==='open')continue;
    const addDoor=(hinge,sign,width)=>{
     const pivot=new T.Group;
@@ -383,7 +382,7 @@ export class SpaceScene{
     g.add(pivot);
     this.box(pivot,frontW,frontH,FRONT_T,0,0,0,face,.003);
     this.box(pivot,Math.min(.16,frontW*.35),.015,.025,0,0,.02,'metal',.003);
-    this.drawerBox(pivot,innerW-.026,Math.min(openH-.03,Math.max(.1,openH*.6)),d-t-.02,openBottom+.01-y,-FRONT_T/2);
+    this.drawerBox(pivot,innerW-.026,Math.min(openH-.03,Math.max(.1,openH*.6)),d-t-.02,openBottom+.01-y,-FRONT_T/2,finish(cellFinish(f,cell,'drawerBox')));
     parts.push({id,kind:'drawer',pivot,base:pivot.position.z,travel:d*.55});
    }
    if(front==='sliding'){
@@ -445,7 +444,7 @@ export class SpaceScene{
   return;
  }
  if(['wardrobe','console'].includes(type)&&f.cabinetDesign){this.makeModularCabinet(g,f,box);return;}
- if(['wardrobe','drawer','console','kitchen','fridge'].includes(type)){const bodyMat=type==='fridge'?'white':'wood';box(w,h,.025,0,h/2,-d/2,bodyMat);for(let x of[-w/2+.012,w/2-.012])box(.024,h,d,x,h/2,0,bodyMat);for(let y of[.04,h-.015])box(w,.028,d,0,y,0,bodyMat);if(type!=='drawer')for(let y=.45;y<h-.1;y+=.45)box(w-.05,.02,d-.04,0,y,0,'white');const layout=type==='drawer'?{doors:[],drawers:[{x:0,width:w-.03,rows:3}],slides:[]}:cabinetLayout(f),pivots=[],drawers=[],slides=[];for(const leaf of layout.doors){const p=new T.Group;p.position.set(leaf.hinge,h/2,d/2);p.userData.swing=-leaf.sign;g.add(p);this.box(p,leaf.width-.008,h-.065,.025,leaf.sign*leaf.width/2,0,0,bodyMat,.006);this.box(p,.018,.12,.028,leaf.sign*(leaf.width-.055),0,.03,'metal',.006);pivots.push(p);}for(const front of layout.drawers){const rows=front.rows||3;for(let row=0;row<rows;row++){const p=new T.Group;p.position.set(front.x,(row+.5)*h/rows,d/2);g.add(p);this.box(p,front.width-.008,h/rows-.018,.025,0,0,0,bodyMat,.006);this.box(p,Math.min(.18,front.width*.35),.018,.03,0,0,.03,'metal',.006);if(type==='drawer')this.drawerBox(p,front.width-.06,h/rows-.09,d-.045,-h/rows/2+.06,-.0125);drawers.push(p);}}for(const front of layout.slides){const p=new T.Group;p.position.set(front.x,h/2,d/2+(front.sign>0?.012:.027));p.userData.baseX=front.x;p.userData.travelX=front.sign*front.width*.82;g.add(p);this.box(p,front.width,h-.065,.025,0,0,0,bodyMat,.006);this.box(p,.018,.12,.03,-front.sign*(front.width/2-.035),0,.03,'metal',.006);slides.push(p);}this.actions.set(f.id,{type:type==='drawer'?'cabdrawer':'cabinet',pivots,drawers,slides,item:f,travel:d*(type==='drawer'?.75:.55),base:d/2,amount:f.open||0});if(type==='console'){box(w*.78,.72,.04,0,h+.48,-d*.3,'dark',.025);box(w*.74,.66,.01,0,h+.48,-d*.3+.027,'accent');box(.05,.12,.1,0,h+.08,-d*.3,'dark');}
+ if(['wardrobe','drawer','console','kitchen','fridge'].includes(type)){const bodyMat=type==='fridge'?'white':'wood';box(w,h,.025,0,h/2,-d/2,bodyMat);for(let x of[-w/2+.012,w/2-.012])box(.024,h,d,x,h/2,0,bodyMat);for(let y of[.04,h-.015])box(w,.028,d,0,y,0,bodyMat);if(type!=='drawer')for(let y=.45;y<h-.1;y+=.45)box(w-.05,.02,d-.04,0,y,0,'white');const layout=type==='drawer'?{doors:[],drawers:[{x:0,width:w-.03,rows:3}],slides:[]}:cabinetLayout(f),pivots=[],drawers=[],slides=[];for(const leaf of layout.doors){const p=new T.Group;p.position.set(leaf.hinge,h/2,d/2);p.userData.swing=-leaf.sign;g.add(p);this.box(p,leaf.width-.008,h-.065,.025,leaf.sign*leaf.width/2,0,0,bodyMat,.006);this.box(p,.018,.12,.028,leaf.sign*(leaf.width-.055),0,.03,'metal',.006);pivots.push(p);}for(const front of layout.drawers){const rows=front.rows||3;for(let row=0;row<rows;row++){const p=new T.Group;p.position.set(front.x,(row+.5)*h/rows,d/2);g.add(p);this.box(p,front.width-.008,h/rows-.018,.025,0,0,0,bodyMat,.006);this.box(p,Math.min(.18,front.width*.35),.018,.03,0,0,.03,'metal',.006);if(type==='drawer')this.drawerBox(p,front.width-.06,h/rows-.09,d-.045,-h/rows/2+.06,-.0125,bodyMat);drawers.push(p);}}for(const front of layout.slides){const p=new T.Group;p.position.set(front.x,h/2,d/2+(front.sign>0?.012:.027));p.userData.baseX=front.x;p.userData.travelX=front.sign*front.width*.82;g.add(p);this.box(p,front.width,h-.065,.025,0,0,0,bodyMat,.006);this.box(p,.018,.12,.03,-front.sign*(front.width/2-.035),0,.03,'metal',.006);slides.push(p);}this.actions.set(f.id,{type:type==='drawer'?'cabdrawer':'cabinet',pivots,drawers,slides,item:f,travel:d*(type==='drawer'?.75:.55),base:d/2,amount:f.open||0});if(type==='console'){box(w*.78,.72,.04,0,h+.48,-d*.3,'dark',.025);box(w*.74,.66,.01,0,h+.48,-d*.3+.027,'accent');box(.05,.12,.1,0,h+.08,-d*.3,'dark');}
  if(type==='kitchen'){const parts=normalizeKitchenParts(f),sink=parts.sink,cooktop=parts.cooktop,sinkX=w*.23,cooktopX=-w*.30;box(w+.03,.04,d+.03,0,h,0,'stone',.008);box(sink.w,.015,sink.d,sinkX,h+.028,0,'metal',Math.min(.05,sink.w/4,sink.d/4));box(Math.max(.04,sink.w-.1),.018,Math.max(.04,sink.d-.09),sinkX,h+.037,0,'dark',.05);let faucet=this.cyl(g,.016,.016,.25,sinkX,h+.13,-Math.min(d*.29,sink.d*.35),'metal');box(.02,.025,.15,sinkX,h+.25,-Math.min(d*.18,sink.d*.24),'metal',.01);box(cooktop.w,.018,cooktop.d,cooktopX,h+.035,0,'dark',.03);for(let x of[cooktopX-cooktop.w*.27,cooktopX+cooktop.w*.27])this.cyl(g,Math.min(.09,cooktop.w*.14),Math.min(.09,cooktop.w*.14),.015,x,h+.055,0,'metal');}
  return;}
  if(type==='washer'){box(w,h,d,0,h/2,0,'white',.035);box(w*.76,h*.7,.045,0,h*.47,d/2+.024,'dark',.06);let drum=this.cyl(g,w*.29,w*.29,.035,0,h*.47,d/2+.052,'dark');drum.rotation.x=Math.PI/2;let door=new T.Group;door.position.set(-w*.33,h*.48,d/2+.08);g.add(door);this.box(door,w*.72,.055,.06,w*.33,0,0,'white',.035);let glass=this.cyl(door,w*.25,w*.25,.035,w*.33,0,.038,'glass');glass.rotation.x=Math.PI/2;let rim=this.cyl(door,w*.31,w*.31,.025,w*.33,0,.03,'metal');rim.rotation.x=Math.PI/2;box(w*.75,.08,.015,0,h*.86,d/2+.01,'metal',.008);this.actions.set(f.id,{type:'washer',pivot:door,item:f,amount:f.open||0});return;}

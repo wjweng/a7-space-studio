@@ -12,9 +12,13 @@ export const cabinetTemplates={
 // Fronts are full overlay: each covers its cell's carcass edges, leaving a
 // FRONT_GAP reveal to its neighbours, with its back face on the carcass face.
 export const FRONT_GAP=.003,FRONT_T=.018,FRONT_Z=FRONT_T/2,CARCASS_T=.018;
-// Parts of a modular cabinet that can take their own board finish; a cell's
-// own `finish` overrides `fronts` for that cell's door or drawer front.
-export const cabinetFinishParts=[['body','櫃身'],['fronts','門片／抽屜面'],['interior','層板與背板']];
+// Finishes form three levels: the cabinet's `finish` (sides, top and each
+// column's lowest board), then `partFinishes` for all doors, shelves, backs or
+// drawer boxes, then a cell's own `finishes`. An unset level follows the one
+// above, down to the cabinet's finish or the palette's wood.
+// A cell's shelf is the board under it; a column's lowest board is body.
+// [cell slot, cabinet-wide key, label]; doors include drawer and sliding fronts.
+export const cabinetFinishSlots=[['door','doors','門'],['shelf','shelves','層板'],['back','backs','背板'],['drawerBox','drawerBoxes','抽屜盒']];
 const round=n=>Math.round(n*10000)/10000;
 const makeId=()=>globalThis.crypto?.randomUUID?.()||Math.random().toString(36).slice(2);
 export function makeCabinetDesign(f,template=f.type==='console'?'low':'niche'){
@@ -46,7 +50,10 @@ export function validateCabinetDesign(f,design){
       if(!cell||typeof cell.id!=='string'||ids.has(cell.id)||!cabinetFronts.includes(cell.front)||!Number.isFinite(cell.height)||cell.height<.15)throw Error('層格尺寸或形式不正確；高度至少 15 cm');
       if(cell.front==='double'&&width<.4||cell.front==='sliding'&&width<.5||cell.front==='drawers'&&width<.25)throw Error('此分區寬度不足以使用所選門面');
       ids.add(cell.id);used+=cell.height;
-      return{id:cell.id,height:round(cell.height),front:cell.front,...(typeof cell.finish==='string'&&isFinish(cell.finish)?{finish:cell.finish}:{})};
+      const finishes={};
+      for(const [slot]of cabinetFinishSlots)if(isFinish(cell.finishes?.[slot]))finishes[slot]=cell.finishes[slot];
+      if(!finishes.door&&isFinish(cell.finish))finishes.door=cell.finish; // before 2026-09-25 a cell had one front finish
+      return{id:cell.id,height:round(cell.height),front:cell.front,...(Object.keys(finishes).length?{finishes}:{})};
     });
     if(Math.abs(used+bottom-f.h)>.002)throw Error('層格高度加離地高度必須等於櫃體總高');
     total+=width;
@@ -147,3 +154,15 @@ export function nicheTvWarnings(tv,support){
   return messages;
 }
 export const hostsNicheTv=(host,tv)=>tv?.type==='television'&&tv.tvMount==='niche'&&tv.supportId===host?.id;
+
+// Which cell slots apply: no door on an open cell, no shelf on a column's
+// lowest cell (that board is body), a drawer box only behind drawers.
+export function cellFinishSlots(f,cell){
+  const column=f.cabinetDesign.columns.find(c=>c.cells.some(r=>r.id===cell.id));
+  return cabinetFinishSlots.filter(([slot])=>slot==='door'?cell.front!=='open':slot==='shelf'?column.cells[0].id!==cell.id:slot==='drawerBox'?cell.front==='drawers':true);
+}
+// Resolved finish code for a cell slot, or '' for the level-one fallback.
+export function cellFinish(f,cell,slot){
+  const key=cabinetFinishSlots.find(([s])=>s===slot)[1];
+  return cell.finishes?.[slot]||f.partFinishes?.[key]||'';
+}

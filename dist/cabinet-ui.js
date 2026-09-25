@@ -1,4 +1,4 @@
-import {cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishParts,makeCabinetDesign,validateCabinetDesign} from './cabinet-design.js';
+import {cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign} from './cabinet-design.js';
 
 const labels={open:'開放',left:'左開門',right:'右開門',double:'對開門',sliding:'滑門',drawers:'抽屜'};
 const cm=n=>Math.round(n*1000)/10;
@@ -14,7 +14,7 @@ const field=(label,value,change,min=0,max=500)=>{
 // placeTv and chooseFinish are optional: the media-wall module editor has neither.
 export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv,chooseFinish,finishLabel=code=>code||'預設'}){
   const dialog=elt('dialog','cabinetDialog');
-  dialog.innerHTML='<div class="cabinetHead" title="拖曳可移動視窗"><div><span class="eyebrow">CABINET EDITOR</span><h2>編輯櫃體</h2></div><div class="cabinetHeadButtons"><button type="button" class="dialogFold" aria-expanded="true">收合</button><button type="button" class="dialogClose" aria-label="關閉">×</button></div></div><div class="cabinetBody"><p class="muted">點選正面圖中的格子，再修改分區、層高與門面。尺寸單位為 cm。拖曳標題可移動視窗。</p><div class="cabinetToolbar"></div><div class="cabinetElevation"></div><div class="cabinetFields"></div><p class="cabinetError" role="alert"></p></div>';
+  dialog.innerHTML='<div class="cabinetHead" title="拖曳可移動視窗"><div><span class="eyebrow">CABINET EDITOR</span><h2>編輯櫃體</h2></div><div class="cabinetHeadButtons"><button type="button" class="dialogFold" aria-expanded="true">收合</button><button type="button" class="dialogClose" aria-label="關閉">×</button></div></div><div class="cabinetBody"><p class="muted">點選正面圖中的格子，再修改分區、層高與門面。尺寸單位為 cm。拖曳標題可移動視窗。</p><div class="cabinetFinishes"></div><div class="cabinetToolbar"></div><div class="cabinetElevation"></div><div class="cabinetFields"></div><p class="cabinetError" role="alert"></p></div>';
   document.body.append(dialog);
   let onClose=null;
   dialog.querySelector('.dialogClose').onclick=()=>dialog.close();
@@ -27,7 +27,10 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
   const place=(left,top)=>{
     const width=dialog.offsetWidth,head=dialog.querySelector('.cabinetHead').offsetHeight+24;
     dialog.style.left=Math.max(8-width+80,Math.min(innerWidth-80,left))+'px';
-    dialog.style.top=Math.max(8,Math.min(innerHeight-head,top))+'px';
+    const y=Math.max(8,Math.min(innerHeight-head,top));
+    dialog.style.top=y+'px';
+    // Scroll inside the window rather than past the bottom of the screen.
+    dialog.style.maxHeight=Math.max(head,innerHeight-y-8)+'px';
   };
   dialog.querySelector('.cabinetHead').addEventListener('pointerdown',event=>{
     if(event.target.closest('button'))return;
@@ -48,6 +51,31 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
   };
   const edit=mutate=>{const f=item();if(!f)return;const next=structuredClone(f.cabinetDesign);mutate(next);save(next);};
   const button=(text,click)=>{const b=elt('button','',text);b.type='button';b.onclick=click;return b;};
+  // Level two (all doors, shelves, backs, drawer boxes) sits at the top of the
+  // editor; level three (this cell's own) sits with the cell's settings.
+  const partText=(f,key)=>f.partFinishes?.[key]?finishLabel(f.partFinishes[key]):'跟隨整體';
+  const clearSlot=(slot,only)=>edit(next=>{for(const cell of next.columns.flatMap(c=>c.cells))if(cell.finishes&&(!only||cell.id===only)){delete cell.finishes[slot];if(!Object.keys(cell.finishes).length)delete cell.finishes;}});
+  function renderFinishes(f,selectedCell){
+    const host=dialog.querySelector('.cabinetFinishes');host.replaceChildren();
+    if(!chooseFinish)return;
+    const cells=f.cabinetDesign.columns.flatMap(c=>c.cells),hasDrawers=cells.some(c=>c.front==='drawers');
+    host.append(elt('h3','','材質（整座櫃）'));
+    for(const [slot,key,label]of cabinetFinishSlots){
+      if(slot==='drawerBox'&&!hasDrawers)continue;
+      const row=elt('div','cabinetFinishRow'),count=cells.filter(c=>c.finishes?.[slot]).length;
+      row.append(elt('span','cabinetFinishName',`所有的${label}`),button(partText(f,key),()=>chooseFinish(f,{part:key})));
+      if(count)row.append(elt('small','',`另有 ${count} 格另外指定`),button('全部改回跟隨',()=>clearSlot(slot)));
+      host.append(row);
+    }
+    const fields=dialog.querySelector('.cabinetFields');
+    fields.append(elt('h3','','這格的材質'));
+    for(const [slot,key,label]of cellFinishSlots(f,selectedCell)){
+      const own=selectedCell.finishes?.[slot],row=elt('div','cabinetFinishRow');
+      row.append(elt('span','cabinetFinishName',`這格的${label}`),button(own?finishLabel(own):`跟隨：所有的${label}（${partText(f,key)}）`,()=>chooseFinish(f,{cell:selectedCell.id,slot})));
+      if(own)row.append(button('改回跟隨',()=>clearSlot(slot,selectedCell.id)));
+      fields.append(row);
+    }
+  }
   function render(){
     const f=item();if(!f?.cabinetDesign){dialog.close();return;}
     const design=f.cabinetDesign,columns=cabinetColumns(f),cells=cabinetCells(f);
@@ -95,6 +123,13 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       r.setAttribute('class','cabinetCell'+(cell.id===cellId?' selected':'')+(cell.front==='open'?' open':''));
       r.addEventListener('click',()=>{columnId=cell.columnId;cellId=cell.id;render();});
       svg.append(r);
+      if(cell.finishes){
+        // Marks a cell whose own finish overrides the cabinet-wide one.
+        const mark=document.createElementNS(svg.namespaceURI,'circle');
+        mark.setAttribute('cx',x+cell.w*1000-span*.03);mark.setAttribute('cy',y+span*.03);mark.setAttribute('r',span*.014);
+        mark.setAttribute('class','cabinetFinishMark');mark.appendChild(document.createElementNS(svg.namespaceURI,'title')).textContent='這格另外指定了材質';
+        svg.append(mark);
+      }
       const text=document.createElementNS(svg.namespaceURI,'text');
       text.setAttribute('x',(cell.x+f.w/2)*1000);text.setAttribute('y',(f.h-cell.y)*1000);
       text.setAttribute('class','cabinetCellLabel');text.textContent=labels[cell.front];svg.append(text);
@@ -177,11 +212,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     frontLabel.append(front);fields.append(frontLabel);
     if(selectedCell.front!=='open')fields.append(button(f.openCells?.[cellId]?'關閉這格':'打開這格',()=>{toggleCell(f,cellId);render();}));
     if(selectedCell.front==='open'&&placeTv)fields.append(button('在這格掛電視',()=>placeTv(f,cellId)));
-    if(selectedCell.front!=='open'&&chooseFinish)fields.append(button(`這格門面材質：${selectedCell.finish?finishLabel(selectedCell.finish):'跟隨門片'}`,()=>chooseFinish(f,{cell:cellId})));
-    if(chooseFinish){
-      fields.append(elt('h3','','材質'));
-      for(const [key,label]of cabinetFinishParts)fields.append(button(`${label}：${f.partFinishes?.[key]?finishLabel(f.partFinishes[key]):'跟隨整體'}`,()=>chooseFinish(f,{part:key})));
-    }
+    renderFinishes(f,selectedCell);
   }
   return{refresh(){if(dialog.open)render();},open(f,{onClose:closed}={}){
     if(dialog.open)dialog.close();

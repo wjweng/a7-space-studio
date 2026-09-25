@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,nicheTvPlacement,nicheTvWarnings} from '../dist/cabinet-design.js';
+import {makeCabinetDesign,validateCabinetDesign,resizeCabinetDesign,cabinetCells,cabinetOccupiedRects,modularCabinetRects,cabinetTemplates,FRONT_GAP,FRONT_Z,CARCASS_T,NICHE_BRACKET,cellOpening,cellFinish,cellFinishSlots,nicheTvPlacement,nicheTvWarnings} from '../dist/cabinet-design.js';
 import {finishes} from '../dist/finishes.js';
 import {furnitureInterference} from '../dist/geometry.js';
 import {validateFurniture,issues} from '../dist/model.js';
@@ -95,23 +95,41 @@ test('a niche TV that does not fit is warned about, never resized',()=>{
   assert.ok(nicheTvWarnings({...tv,supportCell:'gone'},f)[0].includes('找不到'));
 });
 
-test('cabinet cells keep a valid own finish and drop an unknown one',()=>{
+test('cell finishes keep valid slots, drop unknown codes and migrate the old single front finish',()=>{
   const f=item();
   f.cabinetDesign=makeCabinetDesign(f,'closed');
-  f.cabinetDesign.columns[0].cells[0].finish='nope';
-  assert.equal(validateCabinetDesign(f,f.cabinetDesign).columns[0].cells[0].finish,undefined);
-  f.cabinetDesign.columns[0].cells[0].finish=finishes[0].code;
-  assert.equal(validateCabinetDesign(f,f.cabinetDesign).columns[0].cells[0].finish,finishes[0].code);
+  const cell=f.cabinetDesign.columns[0].cells[0];
+  cell.finishes={door:'nope',back:finishes[1].code,other:finishes[2].code};
+  assert.deepEqual(validateCabinetDesign(f,f.cabinetDesign).columns[0].cells[0].finishes,{back:finishes[1].code});
+  delete cell.finishes;cell.finish=finishes[0].code;
+  const migrated=validateCabinetDesign(f,f.cabinetDesign).columns[0].cells[0];
+  assert.deepEqual(migrated.finishes,{door:finishes[0].code});
+  assert.equal(migrated.finish,undefined);
+});
+
+test('cell finishes follow the cabinet-wide level, then the cabinet finish',()=>{
+  const f=item();
+  f.cabinetDesign={template:'custom',columns:[{id:'c',width:1.2,bottom:0,cells:[{id:'low',height:.6,front:'drawers'},{id:'high',height:1.8,front:'open',finishes:{back:'B18'}}]}]};
+  f.partFinishes={backs:'A07',drawerBoxes:'P86'};
+  const [low,high]=f.cabinetDesign.columns[0].cells;
+  assert.equal(cellFinish(f,high,'back'),'B18');
+  assert.equal(cellFinish(f,low,'back'),'A07');
+  assert.equal(cellFinish(f,low,'drawerBox'),'P86');
+  assert.equal(cellFinish(f,low,'door'),'','unset levels fall back to the cabinet finish');
+  assert.deepEqual(cellFinishSlots(f,low).map(([slot])=>slot),['door','back','drawerBox'],'lowest cell has no shelf of its own');
+  assert.deepEqual(cellFinishSlots(f,high).map(([slot])=>slot),['shelf','back'],'open cell has no door');
 });
 
 test('furniture validation keeps niche mounting and cabinet part finishes',()=>{
   const cabinet=item();
   cabinet.cabinetDesign=makeCabinetDesign(cabinet,'niche');
-  cabinet.partFinishes={body:finishes[0].code,fronts:'bad',interior:finishes[1].code,extra:finishes[2].code};
+  cabinet.partFinishes={body:finishes[0].code,fronts:'bad',interior:finishes[1].code,extra:finishes[2].code,drawerBoxes:finishes[3].code};
   const cell=cabinet.cabinetDesign.columns[1].cells[0].id;
   const tv={id:'tv',type:'television',name:'電視',x:cabinet.x,z:cabinet.z,w:.3,h:.2,d:.06,rot:0,open:0,elevation:1,tvMount:'niche',supportId:cabinet.id,supportCell:cell};
   const [c,t]=validateFurniture([cabinet,tv]);
-  assert.deepEqual(c.partFinishes,{body:finishes[0].code,interior:finishes[1].code});
+  // the first release's body/fronts/interior map onto the three-level keys
+  assert.deepEqual(c.partFinishes,{shelves:finishes[1].code,backs:finishes[1].code,drawerBoxes:finishes[3].code});
+  assert.equal(c.finish,finishes[0].code,'an old body finish becomes the cabinet finish when none is set');
   assert.equal(t.tvMount,'niche');assert.equal(t.supportCell,cell);
   assert.equal(validateFurniture([{...tv,id:'x',supportCell:undefined}])[0].tvMount,'wall');
   assert.ok(!issues(t,[c,t]).some(m=>m.includes(c.name)),'the host cabinet is not an interference');

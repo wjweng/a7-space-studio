@@ -53,6 +53,7 @@
 .cabinetFields h3{width:100%;margin:10px 0 0;font-size:14px}
 .cabinetField{display:flex;flex-direction:column;gap:4px;min-width:120px;font-size:12px}
 .cabinetField input,.cabinetField select{width:100%}
+.cabinetFinishes h3{margin:4px 0 6px;font-size:14px}.cabinetFinishRow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%;margin:4px 0}.cabinetFinishRow button{padding:6px 10px;font-size:12px}.cabinetFinishRow small{color:#8d6a3f;font-size:12px}.cabinetFinishName{min-width:72px;font-size:12px}.cabinetFinishMark{fill:#bf6c38;stroke:#fff;stroke-width:1.5px;vector-effect:non-scaling-stroke;pointer-events:none}
 .cabinetError{color:#aa3f30;margin:8px 0 0}.cabinetError:empty{display:none}
 @media(max-width:600px){.cabinetDialog{padding:14px}.cabinetField{flex:1 1 42%}}
 .mediaDialog{width:min(94vw,900px);max-height:92vh;overflow:auto;background:var(--panel,#f8f8f5);color:var(--text,#252b29);border:1px solid var(--line,#bbb);border-radius:12px;padding:22px}
