@@ -61,4 +61,6 @@
 .tvControls label{display:flex;flex-direction:column;gap:4px}
 .cabinetDoorGroup{fill:none;stroke:#25302e;stroke-width:3px;stroke-dasharray:6 4;vector-effect:non-scaling-stroke;pointer-events:none}
 .cabinetHint{color:#5d625c;font-size:12px}
-.cabinetField.checkline{display:flex;flex-direction:row;align-items:center;gap:6px}
+/* Text then its checkbox as one control, as tall as the buttons beside it. */
+.cabinetField.checkline{flex-direction:row;align-items:center;gap:6px;min-width:0;flex:0 0 auto;white-space:nowrap;font-size:14px;padding:9px 12px;border:1px solid transparent;cursor:pointer}
+.cabinetField.checkline input{width:auto;margin:0}

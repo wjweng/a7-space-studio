@@ -166,14 +166,15 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       text.setAttribute('class','cabinetCellLabel');text.textContent=labels[cell.front];
       if(!doorGroupOf(design,cell.id))svg.append(text);
     }
-    // A shared door is outlined over all its cells and labelled once.
+    // A shared door is outlined over all its cells and labelled once, in its
+    // largest cell: the door's own centre often falls on a shelf between cells.
     for(const group of design.doorGroups||[]){
-      const box=boundsOf(cells.filter(c=>group.cells.includes(c.id))),outline=document.createElementNS(svg.namespaceURI,'rect');
+      const members=cells.filter(c=>group.cells.includes(c.id)),box=boundsOf(members),home=members.reduce((a,b)=>b.w*b.h>a.w*a.h?b:a),outline=document.createElementNS(svg.namespaceURI,'rect');
       for(const [key,value]of Object.entries({x:(box.x-box.w/2+f.w/2)*1000,y:(f.h-box.bottom-box.h)*1000,width:box.w*1000,height:box.h*1000}))outline.setAttribute(key,value);
       outline.setAttribute('class','cabinetDoorGroup');svg.append(outline);
       const text=document.createElementNS(svg.namespaceURI,'text');
-      text.setAttribute('x',(box.x+f.w/2)*1000);text.setAttribute('y',(f.h-box.y)*1000);text.setAttribute('class','cabinetCellLabel');
-      text.textContent=labels[cells.find(c=>c.id===group.cells[0]).front]+'（共用）';svg.append(text);
+      text.setAttribute('x',(home.x+f.w/2)*1000);text.setAttribute('y',(f.h-home.y)*1000);text.setAttribute('class','cabinetCellLabel');
+      text.textContent=labels[home.front];svg.append(text);
     }
     // Screen pixels to drawing units (mm) and metres.
     const unitsPerPixel=()=>viewW/svg.getBoundingClientRect().width;
@@ -277,7 +278,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     if(selectedLeaf.front!=='open'){
       const handleLabel=elt('label','cabinetField checkline'),handle=elt('input');handle.type='checkbox';handle.checked=!!selectedLeaf.handle;
       handle.onchange=()=>setAll(leaf=>{if(handle.checked)leaf.handle=true;else delete leaf.handle;});
-      handleLabel.append(handle,document.createTextNode('畫出手把'));fields.append(handleLabel);
+      handleLabel.append(document.createTextNode('畫出手把'),handle);fields.append(handleLabel);
       fields.append(button(f.openCells?.[members[0]]?'關閉門板':'打開門板',()=>{toggleCell(f,members);render();}));
       if(group)fields.append(button('拆開門板',()=>save(splitDoorGroup(design,leafId))));
     }
