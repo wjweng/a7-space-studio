@@ -2,7 +2,7 @@
 
 ## Cleanup after owner review — 2026-09-26
 
-All 172 automated tests pass. The owner confirmed on the live site: a TV standing on a cabinet shelf rests its foot on the shelf (`d746353`), a dragged ratio-locked resize, the A1 and A8 handles, SPC flooring display, and the herringbone knots as they are.
+All 187 automated tests pass (172 at the first row). The owner confirmed on the live site: a TV standing on a cabinet shelf rests its foot on the shelf (`d746353`), a dragged ratio-locked resize, the A1 and A8 handles, SPC flooring display, and the herringbone knots as they are.
 
 | Commit | Work completed | How it was checked |
 | --- | --- | --- |
@@ -12,10 +12,19 @@ All 172 automated tests pass. The owner confirmed on the live site: a TV standin
 | `9a21510` | Door collision and swing limits use the rendered leaf and handles (the old collision leaf was 6-9 cm shorter); swing limits move by at most 1.5° | New test matching collision and drawn corners at 0/30/60/max°; wall sweep tests |
 | `ea7922d` | Furniture inside a room door's swing is a clash (`擋住…開啟範圍`) and opening the door warns about it; default bedroom B wardrobe 68 cm with sliding doors | New test; browser (bedroom B wardrobe in an older saved layout turns red when edited, with the door message) |
 | `9fbabe5` | TV-wall object removed: a back panel (`panel`) plus ordinary cabinets and a TV; saved TV walls split into those parts, construction notes dropped | New tests at four rotations; browser (old TV wall in localStorage loads as panel, cabinet and TV without the recovery prompt; panel height field and wall snap work) |
+| `85e1b49`, `ff5c093` | Cabinet editor: template picker removed; adjacent cells that make a rectangle share one hinged door; handles optional, off by default; shared-door label in its largest cell | Tests; browser (Shift-click merge, handle, split; editor screenshot) |
+| `9a98fc2`, `c22ded0` | 3D drawn only when it changes; edits rebuild one item; list clash dots cached; a press only redraws when it is over the 3D view | CPU profiles before/after (edit 156–253 → 58–78 ms, select ~70 → ~4 ms); draw-call counts during idle and while dragging the editor (0); owner confirmed it is much smoother |
+| `cba95d9` | Open cabinet doors checked at their drawn thickness (1.8 cm, was 4 cm) | Test; owner's exported layout (bedroom B wardrobe 0.5 cm from the bed really touches it by 0.25 cm) |
+| `93d3477`, `533e131`, `7ff0c20` | Light coves: board, strip, additive ceiling and wall wash; no lamp of its own; all coves share one soft light from above; new items validated on placement | Tests; night walk-view screenshots (no ceiling hot spot); floor brightness with one cove on/off 34.9 / 32.9; placed over the sofa without a clash |
+| `8f3c81c`, `dabd14a` | Walk view lights a room only from its own lamps (bounce and cove fill per room, unshadowed lamps elsewhere at 0), easing over about half a second | Tests; browser (living room lamps off, doors shut: mean brightness 57.2 with indoor lights on vs 57.1 off) |
+| `54fdf38`, `f4c59ea` | Old TV walls load even with parts below today's minimums; TV cabinets from 15 cm | Test; the owner's set-aside layout (58 items load, plinth 15 cm, tall cabinet on it) |
+| `dbf06b8`, `3d0043e`, `2439823`, `b49bc3d` | Corner shelves: quarter-round open shelving edited in the cabinet editor's shelving mode; top board as thick as a shelf; per-cell shelf and back finishes on both straight boards | Tests; browser (editor mode, add shelf, heights, top switch, per-cell finish drawn) |
 
-The owner confirmed room doors other than the front door open correctly. Still not verified in a browser: the paused-autosave path when storage is full.
+The owner confirmed room doors other than the front door open correctly, the drag-start stutter fix, and that corner shelf finishes were missing (fixed in `2439823`). Still not verified in a browser: the paused-autosave path when storage is full; cove brightness and frame time on the owner's GPU.
 
 ## Modular cabinets and TV walls — 2026-09-24
+
+> The TV-wall object and its construction records described below were removed on 2026-09-26 (`9fbabe5`); TV walls are now a back panel plus ordinary furniture. Kept as history.
 
 The new cabinet editor supports template layouts, independent column widths and bottom clearances, adjustable shelf heights, per-cell open/door/drawer fronts, and a draggable elevation divider. TV cabinets can keep a TV as a separately positioned wall-mounted or cabinet-supported object. A TV wall combines a backboard, lower and upper cabinets, a TV, a wall anchor, editable outlet/conduit records, cable exits, access openings and a site-fact log; it exports an elevation SVG and a text schedule. A missing-data and obstruction-overlap list highlights records for field review.
 
