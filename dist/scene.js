@@ -6,7 +6,7 @@ import {BOARD,finishByCode} from './finishes.js';
 import {flooringByCode,tileSize} from './floorings.js';
 import {requestTexture,texturePixelsNow,texturesAsync} from './texture-cache.js';
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
-import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeFabric,lightMountDrop,hangingElevation,mountDrop} from './model.js';
+import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeCove,normalizeFabric,lightMountDrop,hangingElevation,mountDrop} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
 import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,frontPanels,groupFronts,FRONT_GAP,FRONT_T,FRONT_Z} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
@@ -22,6 +22,24 @@ function lampShadow(light,size){light.castShadow=true;light.shadow.mapSize.set(s
 export const linearLightCount=length=>Math.max(1,Math.min(3,Math.round(length/.6)));
 // A fixture owns its lens material so its visible glow can change without relighting other lamps.
 function fixtureLens(base,color){const lens=base.clone();lens.userData.fixtureLens=true;lens.userData.onColor=lens.color.clone();lens.color.set('#8d9295');lens.emissive.set(color);lens.emissiveIntensity=0;return lens;}
+// Light-cove wash: greyscale ramps, tinted by the lamp colour and added on top
+// of the ceiling and wall, so a cove looks lit without a real area light (those
+// more than doubled frame time). u runs along the cove and fades past its ends;
+// v runs away from the LED strip.
+const COVE_REACH=.9,COVE_OVERHANG=.3,COVE_GAIN=.45;
+const coveRamps={};
+function coveRamp(kind){
+ if(coveRamps[kind])return coveRamps[kind];
+ const size=64,data=new Uint8Array(size*size*4);
+ for(let j=0;j<size;j++)for(let i=0;i<size;i++){
+  const u=i/(size-1),v=j/(size-1),edge=Math.min(1,Math.min(u,1-u)/.22),ends=edge*edge*(3-2*edge);
+  const along=kind==='ceiling'?Math.pow(1-v,2.2):.55+.45*(1-v);
+  const value=Math.round(255*ends*along),k=(j*size+i)*4;data[k]=data[k+1]=data[k+2]=value;data[k+3]=255;
+ }
+ const texture=new T.DataTexture(data,size,size,T.RGBAFormat);texture.needsUpdate=true;texture.magFilter=texture.minFilter=T.LinearFilter; // DataTexture defaults to nearest, which bands
+
+ return coveRamps[kind]=texture;
+}
 function setFixtureLens(lens,level){if(!lens)return;lens.color.set('#8d9295').lerp(lens.userData.onColor,Math.min(1,Math.sqrt(level)));lens.emissiveIntensity=Math.min(2.8,1.9*level);}
 // Night-time ceiling bounce, in proportion to the lamps switched on (1200 lm at 100% = 1).
 export const ceilingBounce=lights=>Math.min(1,.12*lights.reduce((sum,light)=>sum+light.lumens/1200*light.dimming/100,0));
@@ -186,7 +204,7 @@ export class SpaceScene{
  // view focus cast shadows; the count stays fixed, so moving never recompiles shaders.
  shadowBudget(){return Math.max(0,Math.min(8,(this.renderer?.capabilities?.maxTextures??16)-8));}
  viewFocus(){if(this.mode==='walk')return this.camera?.position;if(this.mode==='top')return this.topCamera?.position;return this.controls?.target||this.camera?.position;}
- assignLampShadows(){const focus=this.viewFocus?.(),budget=this.shadowBudget(),lamps=(this.lightObjects||[]).map(({point})=>point).filter(point=>point.visible);const at=new T.Vector3,dist=point=>focus?Math.hypot(point.getWorldPosition(at).x-focus.x,at.z-focus.z):0;const chosen=new Set(lamps.map(point=>({point,d:dist(point)})).sort((a,b)=>a.d-b.d).slice(0,budget).map(({point})=>point));let changed=false;for(const {point}of this.lightObjects||[]){const cast=chosen.has(point);if(point.castShadow!==cast){point.castShadow=cast;changed=true;}}if(changed)this.shadowsDirty=true;this.shadowFocus=focus?{x:focus.x,z:focus.z}:null;}
+ assignLampShadows(){const focus=this.viewFocus?.(),budget=this.shadowBudget(),lamps=(this.lightObjects||[]).map(({point})=>point).filter(point=>point.visible&&!point.userData?.noShadow);const at=new T.Vector3,dist=point=>focus?Math.hypot(point.getWorldPosition(at).x-focus.x,at.z-focus.z):0;const chosen=new Set(lamps.map(point=>({point,d:dist(point)})).sort((a,b)=>a.d-b.d).slice(0,budget).map(({point})=>point));let changed=false;for(const {point}of this.lightObjects||[]){const cast=chosen.has(point);if(point.castShadow!==cast){point.castShadow=cast;changed=true;}}if(changed)this.shadowsDirty=true;this.shadowFocus=focus?{x:focus.x,z:focus.z}:null;}
  downlight(g,x,y,color){const spot=new T.SpotLight(color,0,6,1.25,.6,2);spot.position.set(x,y,0);spot.target.position.set(x,0,0);spot.userData.baseY=y;lampShadow(spot,512);g.add(spot,spot.target);return spot;}
  // Neighbouring towers, street, sky and the lift lobby. Shown only in walk view, where they
  // are seen through windows and the front door; they neither cast nor receive shadows.
@@ -451,6 +469,22 @@ export class SpaceScene{
   if(f.tvMount==='cabinet'){box(.07,.07,.06,0,f.elevation-.03,0,'dark');box(Math.min(.4,w*.4),.018,.16,0,f.elevation-.065,.02,'dark',.008);}
   return;
  }
+ if(type==='cove'){
+  const light=normalizeCove(f),y=f.elevation||0,temperature={white:['lightWhite','#eef6ff'],natural:['lightNatural','#fff0cf'],warm:['lightWarm','#ffc26f']}[light.colorTemperature],back=-d/2;
+  box(w,h,d,0,y+h/2,0,f.finish?'wood':'white',Math.min(.004,h/3));
+  // The LED strip sits on the board near the wall, hidden from below.
+  const lens=fixtureLens(this.m[temperature[0]],temperature[1]);box(Math.max(.02,w-.02),.012,.02,0,y+h+.006,back+.03,lens);
+  const glow=(width,height,kind)=>{const material=new T.MeshBasicMaterial({map:coveRamp(kind),color:temperature[1],transparent:true,opacity:0,blending:T.AdditiveBlending,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-8});const mesh=new T.Mesh(new T.PlaneGeometry(width,height),material);mesh.castShadow=mesh.receiveShadow=false;mesh.renderOrder=2;g.add(mesh);return{mesh,material};};
+  // Ceiling wash, facing down, from the wall outwards; wall wash above the board.
+  const ceiling=glow(w+2*COVE_OVERHANG,COVE_REACH,'ceiling');ceiling.mesh.rotation.x=Math.PI/2;ceiling.mesh.position.set(0,HEIGHT-.01,back+COVE_REACH/2); // under the ceiling, which is itself pulled forward by a polygon offset
+  const wall=glow(w+COVE_OVERHANG,Math.max(.02,HEIGHT-y-h),'wall');wall.mesh.position.set(0,(y+h+HEIGHT)/2,back+.003);
+  // One weak unshadowed lamp so the room itself brightens a little. It sits
+  // under the ceiling well out from the wall: next to the board it painted a
+  // hot spot on the wall below, which a real cove leaves dim.
+  const point=new T.PointLight(temperature[1],0,Math.max(2.5,2+w),2);point.position.set(0,HEIGHT-.08,back+d+.4);point.userData.noShadow=true;point.castShadow=false;g.add(point);
+  if(!this.lightObjects)this.lightObjects=[];this.lightObjects.push({f,point,lens,cove:true,glows:[ceiling.material,wall.material]});
+  return;
+ }
  if(type==='panel'){box(w,h,d,0,(f.elevation||0)+h/2,0,'wood',Math.min(.004,d/3));return;}
  if(['wardrobe','console','hangingCabinet'].includes(type)&&f.cabinetDesign){this.makeModularCabinet(g,f,box);return;}
  if(['wardrobe','drawer','console','kitchen','fridge'].includes(type)){const bodyMat=type==='fridge'?'white':'wood';box(w,h,.025,0,h/2,-d/2,bodyMat);for(let x of[-w/2+.012,w/2-.012])box(.024,h,d,x,h/2,0,bodyMat);for(let y of[.04,h-.015])box(w,.028,d,0,y,0,bodyMat);if(type!=='drawer')for(let y=.45;y<h-.1;y+=.45)box(w-.05,.02,d-.04,0,y,0,'white');const layout=type==='drawer'?{doors:[],drawers:[{x:0,width:w-.03,rows:3}],slides:[]}:cabinetLayout(f),pivots=[],drawers=[],slides=[];for(const leaf of layout.doors){const p=new T.Group;p.position.set(leaf.hinge,h/2,d/2);p.userData.swing=-leaf.sign;g.add(p);this.box(p,leaf.width-.008,h-.065,.025,leaf.sign*leaf.width/2,0,0,bodyMat,.006);this.box(p,.018,.12,.028,leaf.sign*(leaf.width-.055),0,.03,'metal',.006);pivots.push(p);}for(const front of layout.drawers){const rows=front.rows||3;for(let row=0;row<rows;row++){const p=new T.Group;p.position.set(front.x,(row+.5)*h/rows,d/2);g.add(p);this.box(p,front.width-.008,h/rows-.018,.025,0,0,0,bodyMat,.006);this.box(p,Math.min(.18,front.width*.35),.018,.03,0,0,.03,'metal',.006);if(type==='drawer')this.drawerBox(p,front.width-.06,h/rows-.09,d-.045,-h/rows/2+.06,-.0125,bodyMat);drawers.push(p);}}for(const front of layout.slides){const p=new T.Group;p.position.set(front.x,h/2,d/2+(front.sign>0?.012:.027));p.userData.baseX=front.x;p.userData.travelX=front.sign*front.width*.82;g.add(p);this.box(p,front.width,h-.065,.025,0,0,0,bodyMat,.006);this.box(p,.018,.12,.03,-front.sign*(front.width/2-.035),0,.03,'metal',.006);slides.push(p);}this.actions.set(f.id,{type:type==='drawer'?'cabdrawer':'cabinet',pivots,drawers,slides,item:f,travel:d*(type==='drawer'?.75:.55),base:d/2,amount:f.open||0});if(type==='console'){box(w*.78,.72,.04,0,h+.48,-d*.3,'dark',.025);box(w*.74,.66,.01,0,h+.48,-d*.3+.027,'accent');box(.05,.12,.1,0,h+.08,-d*.3,'dark');}
@@ -474,7 +508,7 @@ export class SpaceScene{
  setFloors(floors){this.floors=floors;this.buildHouse();this.buildFurniture(this.items);}
  setCutaway(v){this.cutaway=v;const cut=v&&this.mode!=='walk';for(const {mesh,h,y}of this.wallMeshes){let nh=Math.max(0,Math.min(y+h,.85)-y);mesh.visible=!cut||nh>0;mesh.scale.y=cut?nh/h:1;mesh.position.y=y+(cut?nh:h)/2;}this.ceiling.visible=this.mode==='walk';for(const c of this.curtains)c.visible=this.mode!=='top';this.updateBeamVisibility();}
  updateBeamVisibility(){const hidden=this.mode==='orbit'&&this.cutaway;for(const f of this.items||[]){if(f.type!=='beam')continue;const g=this.groups?.get(f.id);if(g)g.visible=hidden?false:(this.mode==='top'||!f.draft);}const selected=this.items?.find(f=>f.id===this.selected);if(this.selection&&selected?.type==='beam')this.selection.visible=hidden?false:(this.mode==='top'||!selected.draft);}
- updateLight(){this.updateOutdoor?.();this.hemi.intensity=this.night?.28:2.2;if(this.fill)this.fill.intensity=this.night?.1:1.05;this.sun.intensity=this.night?.08:.6;this.scene.background.set(this.night?'#77818a':'#dce4e2');for(const {f,point,lens,share=1,span=Math.max(f.w,f.d)}of this.lightObjects||[]){const light=normalizeLight(f),spread=light.lightKind==='linear'?1:Math.max(.75,Math.min(1.6,Math.sqrt(Math.max(.01,f.w*f.d)/.0576))),base=(light.lumens/1200)*spread*share,color={white:'#eef6ff',natural:'#fff0cf',warm:'#ffc26f'}[light.colorTemperature];point.color?.set(color);point.distance=Math.max(2.8,5.5+span*2);const intensity=this.lightsOn&&light.on?(base*(light.dimming/100))*(this.night?1.2:.32):0;point.intensity=intensity*(point.isSpotLight?DOWNLIGHT_GAIN:1);point.visible=intensity>0;setFixtureLens(lens,this.lightsOn&&light.on?light.lumens/1200*light.dimming/100:0);}this.assignLampShadows();if(this.bounce)this.bounce.intensity=this.night?ceilingBounce(this.lightsOn?[...new Set((this.lightObjects||[]).map(({f})=>f))].map(normalizeLight).filter(light=>light.on):[]):0;}
+ updateLight(){this.updateOutdoor?.();this.hemi.intensity=this.night?.28:2.2;if(this.fill)this.fill.intensity=this.night?.1:1.05;this.sun.intensity=this.night?.08:.6;this.scene.background.set(this.night?'#77818a':'#dce4e2');for(const {f,point,lens,cove,glows,share=1,span=Math.max(f.w,f.d)}of this.lightObjects||[]){if(cove){const light=normalizeCove(f),on=this.lightsOn&&light.on,level=on?light.lumens/1000*light.dimming/100:0,color={white:'#eef6ff',natural:'#fff0cf',warm:'#ffc26f'}[light.colorTemperature];point.color.set(color);point.intensity=level*COVE_GAIN*(this.night?1.2:.32);point.visible=point.intensity>0;for(const glow of glows){glow.color.set(color);glow.opacity=Math.min(1,level*(this.night?.9:.3));glow.visible=glow.opacity>0;}setFixtureLens(lens,level);continue;}const light=normalizeLight(f),spread=light.lightKind==='linear'?1:Math.max(.75,Math.min(1.6,Math.sqrt(Math.max(.01,f.w*f.d)/.0576))),base=(light.lumens/1200)*spread*share,color={white:'#eef6ff',natural:'#fff0cf',warm:'#ffc26f'}[light.colorTemperature];point.color?.set(color);point.distance=Math.max(2.8,5.5+span*2);const intensity=this.lightsOn&&light.on?(base*(light.dimming/100))*(this.night?1.2:.32):0;point.intensity=intensity*(point.isSpotLight?DOWNLIGHT_GAIN:1);point.visible=intensity>0;setFixtureLens(lens,this.lightsOn&&light.on?light.lumens/1200*light.dimming/100:0);}this.assignLampShadows();if(this.bounce)this.bounce.intensity=this.night?ceilingBounce(this.lightsOn?[...new Set((this.lightObjects||[]).map(({f})=>f))].map(normalizeLight).filter(light=>light.on):[]):0;}
  resize(){let w=this.host.clientWidth,h=this.host.clientHeight;this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();let span=6;this.topCamera.left=-span*w/h;this.topCamera.right=span*w/h;this.topCamera.top=span;this.topCamera.bottom=-span;this.topCamera.updateProjectionMatrix();}
  get activeCamera(){return this.mode==='top'?this.topCamera:this.camera;}
  setMode(mode){
