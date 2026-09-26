@@ -11,7 +11,6 @@ const field=(label,value,change,min=0,max=500)=>{
   wrap.append(input);
   return wrap;
 };
-// placeTv and chooseFinish are optional: the media-wall module editor has neither.
 // placeTv, chooseFinish and resizeEdges are only for standalone cabinets.
 export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv,chooseFinish,finishLabel=code=>code||'預設',resizeEdges=false,maxHeight=Infinity,checkFit,notify,hostedTvs}){
   const dialog=elt('dialog','cabinetDialog');

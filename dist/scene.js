@@ -444,33 +444,7 @@ export class SpaceScene{
   if(f.tvMount==='cabinet'){box(.07,.07,.06,0,f.elevation-.03,0,'dark');box(Math.min(.4,w*.4),.018,.16,0,f.elevation-.065,.02,'dark',.008);}
   return;
  }
- if(type==='mediaWall'){
-  const media=f.mediaWall,back=-d/2+.012;
-  const panel=media.panel;
-  box(panel.w,panel.h,panel.thickness,panel.x,panel.y+panel.h/2,back+panel.thickness/2,panel.finish?this.finishMaterial(panel.finish)||'wood':'wood');
-  for(const module of[media.base,media.upper]){
-   if(!module)continue;
-   const child=new T.Group;
-   child.position.set(module.x,module.y,module===media.base?0:back+module.d/2+panel.thickness);
-   g.add(child);
-   const moduleBox=(ww,hh,dd,x,y,z,mat='wood',r=0)=>this.box(child,ww,hh,dd,x,y,z,mat,r);
-   this.makeModularCabinet(child,module,moduleBox);
-  }
-  const tv=media.tv,tvZ=tv.mount==='wall'?back+panel.thickness+.035:d/2+.055;
-  box(tv.w,tv.h,.04,tv.x,tv.y+tv.h/2,tvZ,'dark',.015);
-  box(tv.w*.96,tv.h*.94,.008,tv.x,tv.y+tv.h/2,tvZ+.025,'accent',.008);
-  if(tv.mount==='base')box(.08,Math.max(.04,tv.y-(media.base?.y||0)-(media.base?.h||0)+.04),.1,tv.x,tv.y-.02,tvZ-.045,'dark');
-  const markers=new T.Group;markers.name='media-markers';markers.visible=!!this.showMediaMarkers;g.add(markers);
-  for(const outlet of media.outlets){const color=outlet.kind==='power'?'metal':outlet.kind==='data'?'accent':'stone';this.box(markers,.07,.07,.01,outlet.x,outlet.y,back+panel.thickness+.015,color,.008);}
-  for(const point of media.servicePoints||[])this.box(markers,point.w,point.h,.012,point.x,point.y+point.h/2,back+panel.thickness+.025,point.kind==='access'?'stone':'metal',.005);
-  for(const conduit of media.conduits)for(let i=1;i<conduit.points.length;i++){
-   const a=conduit.points[i-1],b=conduit.points[i],length=Math.hypot(b.x-a.x,b.y-a.y);
-   if(length<.005)continue;
-   const tube=this.cyl(markers,.006,.006,length,(a.x+b.x)/2,(a.y+b.y)/2,back+panel.thickness+.02,'metal');
-   tube.rotation.z=Math.atan2(a.x-b.x,b.y-a.y);
-  }
-  return;
- }
+ if(type==='panel'){box(w,h,d,0,(f.elevation||0)+h/2,0,'wood',Math.min(.004,d/3));return;}
  if(['wardrobe','console','hangingCabinet'].includes(type)&&f.cabinetDesign){this.makeModularCabinet(g,f,box);return;}
  if(['wardrobe','drawer','console','kitchen','fridge'].includes(type)){const bodyMat=type==='fridge'?'white':'wood';box(w,h,.025,0,h/2,-d/2,bodyMat);for(let x of[-w/2+.012,w/2-.012])box(.024,h,d,x,h/2,0,bodyMat);for(let y of[.04,h-.015])box(w,.028,d,0,y,0,bodyMat);if(type!=='drawer')for(let y=.45;y<h-.1;y+=.45)box(w-.05,.02,d-.04,0,y,0,'white');const layout=type==='drawer'?{doors:[],drawers:[{x:0,width:w-.03,rows:3}],slides:[]}:cabinetLayout(f),pivots=[],drawers=[],slides=[];for(const leaf of layout.doors){const p=new T.Group;p.position.set(leaf.hinge,h/2,d/2);p.userData.swing=-leaf.sign;g.add(p);this.box(p,leaf.width-.008,h-.065,.025,leaf.sign*leaf.width/2,0,0,bodyMat,.006);this.box(p,.018,.12,.028,leaf.sign*(leaf.width-.055),0,.03,'metal',.006);pivots.push(p);}for(const front of layout.drawers){const rows=front.rows||3;for(let row=0;row<rows;row++){const p=new T.Group;p.position.set(front.x,(row+.5)*h/rows,d/2);g.add(p);this.box(p,front.width-.008,h/rows-.018,.025,0,0,0,bodyMat,.006);this.box(p,Math.min(.18,front.width*.35),.018,.03,0,0,.03,'metal',.006);if(type==='drawer')this.drawerBox(p,front.width-.06,h/rows-.09,d-.045,-h/rows/2+.06,-.0125,bodyMat);drawers.push(p);}}for(const front of layout.slides){const p=new T.Group;p.position.set(front.x,h/2,d/2+(front.sign>0?.012:.027));p.userData.baseX=front.x;p.userData.travelX=front.sign*front.width*.82;g.add(p);this.box(p,front.width,h-.065,.025,0,0,0,bodyMat,.006);this.box(p,.018,.12,.03,-front.sign*(front.width/2-.035),0,.03,'metal',.006);slides.push(p);}this.actions.set(f.id,{type:type==='drawer'?'cabdrawer':'cabinet',pivots,drawers,slides,item:f,travel:d*(type==='drawer'?.75:.55),base:d/2,amount:f.open||0});if(type==='console'){box(w*.78,.72,.04,0,h+.48,-d*.3,'dark',.025);box(w*.74,.66,.01,0,h+.48,-d*.3+.027,'accent');box(.05,.12,.1,0,h+.08,-d*.3,'dark');}
  if(type==='kitchen'){const parts=normalizeKitchenParts(f),sink=parts.sink,cooktop=parts.cooktop,sinkX=w*.23,cooktopX=-w*.30;box(w+.03,.04,d+.03,0,h,0,'stone',.008);box(sink.w,.015,sink.d,sinkX,h+.028,0,'metal',Math.min(.05,sink.w/4,sink.d/4));box(Math.max(.04,sink.w-.1),.018,Math.max(.04,sink.d-.09),sinkX,h+.037,0,'dark',.05);let faucet=this.cyl(g,.016,.016,.25,sinkX,h+.13,-Math.min(d*.29,sink.d*.35),'metal');box(.02,.025,.15,sinkX,h+.25,-Math.min(d*.18,sink.d*.24),'metal',.01);box(cooktop.w,.018,cooktop.d,cooktopX,h+.035,0,'dark',.03);for(let x of[cooktopX-cooktop.w*.27,cooktopX+cooktop.w*.27])this.cyl(g,Math.min(.09,cooktop.w*.14),Math.min(.09,cooktop.w*.14),.015,x,h+.055,0,'metal');}
