@@ -46,4 +46,6 @@ test('corner shelf finishes follow the cabinet rules: a cell, then all shelves o
   for(const code of['P92','P64','P87','B35'])assert(used.has(s.finishMaterial(code)),code+' is drawn');
   let p87=0,p64=0;g.traverse(o=>{if(o.geometry?.type==='CylinderGeometry'){if(o.material===s.finishMaterial('P87'))p87++;if(o.material===s.finishMaterial('P64'))p64++;}});
   assert.equal(p87,1,'the cell with its own shelf finish');assert.equal(p64,2,'the other shelves follow all shelves');
+  let b35=0;g.traverse(o=>{if(o.geometry?.type==='BoxGeometry'&&o.material===s.finishMaterial('B35'))b35++;});
+  assert.equal(b35,2,'that cell\'s back finish covers both straight boards, the wall one and the side one');
 });
