@@ -26,7 +26,7 @@ function fixtureLens(base,color){const lens=base.clone();lens.userData.fixtureLe
 // of the ceiling and wall, so a cove looks lit without a real area light (those
 // more than doubled frame time). u runs along the cove and fades past its ends;
 // v runs away from the LED strip.
-const COVE_REACH=.9,COVE_OVERHANG=.3,COVE_GAIN=.45;
+const COVE_REACH=.9,COVE_OVERHANG=.3;
 const coveRamps={};
 function coveRamp(kind){
  if(coveRamps[kind])return coveRamps[kind];
@@ -204,7 +204,7 @@ export class SpaceScene{
  // view focus cast shadows; the count stays fixed, so moving never recompiles shaders.
  shadowBudget(){return Math.max(0,Math.min(8,(this.renderer?.capabilities?.maxTextures??16)-8));}
  viewFocus(){if(this.mode==='walk')return this.camera?.position;if(this.mode==='top')return this.topCamera?.position;return this.controls?.target||this.camera?.position;}
- assignLampShadows(){const focus=this.viewFocus?.(),budget=this.shadowBudget(),lamps=(this.lightObjects||[]).map(({point})=>point).filter(point=>point.visible&&!point.userData?.noShadow);const at=new T.Vector3,dist=point=>focus?Math.hypot(point.getWorldPosition(at).x-focus.x,at.z-focus.z):0;const chosen=new Set(lamps.map(point=>({point,d:dist(point)})).sort((a,b)=>a.d-b.d).slice(0,budget).map(({point})=>point));let changed=false;for(const {point}of this.lightObjects||[]){const cast=chosen.has(point);if(point.castShadow!==cast){point.castShadow=cast;changed=true;}}if(changed)this.shadowsDirty=true;this.shadowFocus=focus?{x:focus.x,z:focus.z}:null;}
+ assignLampShadows(){const focus=this.viewFocus?.(),budget=this.shadowBudget(),lamps=(this.lightObjects||[]).map(({point})=>point).filter(point=>point?.visible);const at=new T.Vector3,dist=point=>focus?Math.hypot(point.getWorldPosition(at).x-focus.x,at.z-focus.z):0;const chosen=new Set(lamps.map(point=>({point,d:dist(point)})).sort((a,b)=>a.d-b.d).slice(0,budget).map(({point})=>point));let changed=false;for(const {point}of this.lightObjects||[]){if(!point)continue;const cast=chosen.has(point);if(point.castShadow!==cast){point.castShadow=cast;changed=true;}}if(changed)this.shadowsDirty=true;this.shadowFocus=focus?{x:focus.x,z:focus.z}:null;}
  downlight(g,x,y,color){const spot=new T.SpotLight(color,0,6,1.25,.6,2);spot.position.set(x,y,0);spot.target.position.set(x,0,0);spot.userData.baseY=y;lampShadow(spot,512);g.add(spot,spot.target);return spot;}
  // Neighbouring towers, street, sky and the lift lobby. Shown only in walk view, where they
  // are seen through windows and the front door; they neither cast nor receive shadows.
@@ -478,11 +478,11 @@ export class SpaceScene{
   // Ceiling wash, facing down, from the wall outwards; wall wash above the board.
   const ceiling=glow(w+2*COVE_OVERHANG,COVE_REACH,'ceiling');ceiling.mesh.rotation.x=Math.PI/2;ceiling.mesh.position.set(0,HEIGHT-.01,back+COVE_REACH/2); // under the ceiling, which is itself pulled forward by a polygon offset
   const wall=glow(w+COVE_OVERHANG,Math.max(.02,HEIGHT-y-h),'wall');wall.mesh.position.set(0,(y+h+HEIGHT)/2,back+.003);
-  // One weak unshadowed lamp so the room itself brightens a little. It sits
-  // under the ceiling well out from the wall: next to the board it painted a
-  // hot spot on the wall below, which a real cove leaves dim.
-  const point=new T.PointLight(temperature[1],0,Math.max(2.5,2+w),2);point.position.set(0,HEIGHT-.08,back+d+.4);point.userData.noShadow=true;point.castShadow=false;g.add(point);
-  if(!this.lightObjects)this.lightObjects=[];this.lightObjects.push({f,point,lens,cove:true,glows:[ceiling.material,wall.material]});
+  // No lamp of its own: a point light under the ceiling painted a hot spot
+  // on it, which a real cove never shows. A cove's light reaches the room
+  // only after bouncing off the ceiling, so it feeds the ceiling bounce
+  // (`ceilingBounce` in updateLight) like the other lamps that are on.
+  if(!this.lightObjects)this.lightObjects=[];this.lightObjects.push({f,lens,cove:true,glows:[ceiling.material,wall.material]});
   return;
  }
  if(type==='panel'){box(w,h,d,0,(f.elevation||0)+h/2,0,'wood',Math.min(.004,d/3));return;}
@@ -508,7 +508,7 @@ export class SpaceScene{
  setFloors(floors){this.floors=floors;this.buildHouse();this.buildFurniture(this.items);}
  setCutaway(v){this.cutaway=v;const cut=v&&this.mode!=='walk';for(const {mesh,h,y}of this.wallMeshes){let nh=Math.max(0,Math.min(y+h,.85)-y);mesh.visible=!cut||nh>0;mesh.scale.y=cut?nh/h:1;mesh.position.y=y+(cut?nh:h)/2;}this.ceiling.visible=this.mode==='walk';for(const c of this.curtains)c.visible=this.mode!=='top';this.updateBeamVisibility();}
  updateBeamVisibility(){const hidden=this.mode==='orbit'&&this.cutaway;for(const f of this.items||[]){if(f.type!=='beam')continue;const g=this.groups?.get(f.id);if(g)g.visible=hidden?false:(this.mode==='top'||!f.draft);}const selected=this.items?.find(f=>f.id===this.selected);if(this.selection&&selected?.type==='beam')this.selection.visible=hidden?false:(this.mode==='top'||!selected.draft);}
- updateLight(){this.updateOutdoor?.();this.hemi.intensity=this.night?.28:2.2;if(this.fill)this.fill.intensity=this.night?.1:1.05;this.sun.intensity=this.night?.08:.6;this.scene.background.set(this.night?'#77818a':'#dce4e2');for(const {f,point,lens,cove,glows,share=1,span=Math.max(f.w,f.d)}of this.lightObjects||[]){if(cove){const light=normalizeCove(f),on=this.lightsOn&&light.on,level=on?light.lumens/1000*light.dimming/100:0,color={white:'#eef6ff',natural:'#fff0cf',warm:'#ffc26f'}[light.colorTemperature];point.color.set(color);point.intensity=level*COVE_GAIN*(this.night?1.2:.32);point.visible=point.intensity>0;for(const glow of glows){glow.color.set(color);glow.opacity=Math.min(1,level*(this.night?.9:.3));glow.visible=glow.opacity>0;}setFixtureLens(lens,level);continue;}const light=normalizeLight(f),spread=light.lightKind==='linear'?1:Math.max(.75,Math.min(1.6,Math.sqrt(Math.max(.01,f.w*f.d)/.0576))),base=(light.lumens/1200)*spread*share,color={white:'#eef6ff',natural:'#fff0cf',warm:'#ffc26f'}[light.colorTemperature];point.color?.set(color);point.distance=Math.max(2.8,5.5+span*2);const intensity=this.lightsOn&&light.on?(base*(light.dimming/100))*(this.night?1.2:.32):0;point.intensity=intensity*(point.isSpotLight?DOWNLIGHT_GAIN:1);point.visible=intensity>0;setFixtureLens(lens,this.lightsOn&&light.on?light.lumens/1200*light.dimming/100:0);}this.assignLampShadows();if(this.bounce)this.bounce.intensity=this.night?ceilingBounce(this.lightsOn?[...new Set((this.lightObjects||[]).map(({f})=>f))].map(normalizeLight).filter(light=>light.on):[]):0;}
+ updateLight(){this.updateOutdoor?.();this.hemi.intensity=this.night?.28:2.2;if(this.fill)this.fill.intensity=this.night?.1:1.05;this.sun.intensity=this.night?.08:.6;this.scene.background.set(this.night?'#77818a':'#dce4e2');for(const {f,point,lens,cove,glows,share=1,span=Math.max(f.w,f.d)}of this.lightObjects||[]){if(cove){const light=normalizeCove(f),on=this.lightsOn&&light.on,level=on?light.lumens/1000*light.dimming/100:0,color={white:'#eef6ff',natural:'#fff0cf',warm:'#ffc26f'}[light.colorTemperature];for(const glow of glows){glow.color.set(color);glow.opacity=Math.min(1,level*(this.night?.9:.3));glow.visible=glow.opacity>0;}setFixtureLens(lens,level);continue;}const light=normalizeLight(f),spread=light.lightKind==='linear'?1:Math.max(.75,Math.min(1.6,Math.sqrt(Math.max(.01,f.w*f.d)/.0576))),base=(light.lumens/1200)*spread*share,color={white:'#eef6ff',natural:'#fff0cf',warm:'#ffc26f'}[light.colorTemperature];point.color?.set(color);point.distance=Math.max(2.8,5.5+span*2);const intensity=this.lightsOn&&light.on?(base*(light.dimming/100))*(this.night?1.2:.32):0;point.intensity=intensity*(point.isSpotLight?DOWNLIGHT_GAIN:1);point.visible=intensity>0;setFixtureLens(lens,this.lightsOn&&light.on?light.lumens/1200*light.dimming/100:0);}this.assignLampShadows();if(this.bounce)this.bounce.intensity=this.night?ceilingBounce(this.lightsOn?[...new Set((this.lightObjects||[]).map(({f})=>f))].map(normalizeLight).filter(light=>light.on):[]):0;}
  resize(){let w=this.host.clientWidth,h=this.host.clientHeight;this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();let span=6;this.topCamera.left=-span*w/h;this.topCamera.right=span*w/h;this.topCamera.top=span;this.topCamera.bottom=-span;this.topCamera.updateProjectionMatrix();}
  get activeCamera(){return this.mode==='top'?this.topCamera:this.camera;}
  setMode(mode){
