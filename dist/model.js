@@ -116,7 +116,7 @@ export const wetRooms=['衛浴 A','衛浴 B','工作陽台'];
 export function normalizeFloors(input){const out={};if(input&&typeof input==='object'&&!Array.isArray(input))for(const [room,code]of Object.entries(input))if(rooms.some(r=>r.name===room)&&flooringByCode(code))out[room]=code;return out;}
 // Types built from a modular cabinet design (columns, cells, fronts).
 export const cabinetTypes=['wardrobe','console','hangingCabinet'];
-export const minimums={sofa:[1.1,.5,.45],bed:[.65,1.2,.25],chair:[.3,.3,.55],wardrobe:[.2,.2,.3],drawer:[.2,.2,.2],console:[.5,.2,.2],panel:[.1,.01,.1],television:[.3,.04,.2],table:[.3,.25,.2],desk:[.4,.35,.4],kitchen:[1.2,.4,.7],fridge:[.4,.4,.9],washer:[.4,.4,.6],sink:[.3,.3,.5],toilet:[.3,.4,.5],plant:[.2,.2,.3],shower:[.6,.6,1.8],rug:[.2,.2,.005],light:[.1,.1,.02],cove:[.3,.08,.02],beam:[.05,.05,.05],hangingCabinet:[.2,.2,.2]};
+export const minimums={sofa:[1.1,.5,.45],bed:[.65,1.2,.25],chair:[.3,.3,.55],wardrobe:[.2,.2,.3],drawer:[.2,.2,.2],console:[.5,.2,.15],panel:[.1,.01,.1],television:[.3,.04,.2],table:[.3,.25,.2],desk:[.4,.35,.4],kitchen:[1.2,.4,.7],fridge:[.4,.4,.9],washer:[.4,.4,.6],sink:[.3,.3,.5],toilet:[.3,.4,.5],plant:[.2,.2,.3],shower:[.6,.6,1.8],rug:[.2,.2,.005],light:[.1,.1,.02],cove:[.3,.08,.02],beam:[.05,.05,.05],hangingCabinet:[.2,.2,.2]};
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,Number.isFinite(value)?value:min));
 export const lightKinds=['ceiling','pendant','linear'];
 // A recessed linear light is only a few centimetres wide; round and square lights keep the 10 cm floor.
