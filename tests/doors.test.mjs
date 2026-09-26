@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {SpaceScene} from '../dist/scene.js';
 import {doors,WALL_THICKNESS,wallRects,overlaps} from '../dist/model.js';
-import {doorLeaf,JAMB_WIDTH} from '../dist/spatial.js';
+import {doorLeaf,doorRects,JAMB_WIDTH} from '../dist/spatial.js';
+import {corners} from '../dist/geometry.js';
 
 // Leaf corners in the door group's frame after the pivot turns as frame() turns it.
 const leafCorners=(d,degrees)=>{const leaf=doorLeaf(d),th=d.swing*degrees*Math.PI/180,c=Math.cos(th),s=Math.sin(th);
@@ -45,5 +46,13 @@ test('every leaf fills its frame and opens without entering a wall',()=>{
    const rect={x:d.x+px*ca+pz*sa,z:d.z-px*sa+pz*ca,w:leaf.width,d:leaf.thickness,rot:(d.angle+th)*180/Math.PI};
    for(const w of wallRects())assert(!overlaps(rect,w,1e-6),`${d.id} at ${degrees}° enters a wall`);
   }
+ }
+});
+
+test('the collision leaf is the rendered leaf at every opening angle',()=>{
+ const world=(d,[x,z])=>[d.x+x*Math.cos(d.angle)+z*Math.sin(d.angle),d.z-x*Math.sin(d.angle)+z*Math.cos(d.angle)];
+ for(const d of doors)for(const degrees of[0,30,60,d.maxAngle??89]){
+  const drawn=leafCorners(d,degrees).map(p=>world(d,p)),[rect]=doorRects(d,1,degrees),hit=corners(rect);
+  for(const [x,z]of drawn)assert(hit.some(([hx,hz])=>Math.hypot(hx-x,hz-z)<1e-9),`${d.id} at ${degrees}°: corner ${x.toFixed(3)},${z.toFixed(3)}`);
  }
 });

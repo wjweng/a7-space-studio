@@ -2,10 +2,6 @@ import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exte
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference} from './geometry.js';
 import {modularCabinetRects} from './cabinet-design.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
-// Collision leaves retain their surveyed swing clearance. Their rendered
-// faces use a separate close-fitting finish panel below.
-export const leafWidth=d=>d.width-(d.id==='door-0'?.18:.13);
-export const doorInset=d=>d.id==='door-0'?.10:.085;
 // The rendered leaf, in the door group's frame: x runs along the opening from the hinge jamb,
 // z across the wall. It closes inside the frame, flush with the wall face on its swing side,
 // and turns about its hinge-side corner on that face, as butt hinges do. The hinge edge then
@@ -27,15 +23,17 @@ export function doorLeaf(d){
  const{x,width}=leafCache.get(d.id);
  return{x,z:-d.swing*WALL_THICKNESS/2,width,thickness:LEAF_THICKNESS,side:-d.swing};
 }
+// Collision and swing clearance use the rendered leaf (`doorLeaf`): the leaf itself and the
+// handle on each face, turned about the same hinge corner the scene's pivot uses.
 export function doorRects(d,amount=1,maxAngle=d.maxAngle??90){
- const inset=doorInset(d),offset=-d.swing*.055,ca=Math.cos(d.angle),sa=Math.sin(d.angle),hx=d.x+inset*ca+offset*sa,hz=d.z-inset*sa+offset*ca,angle=d.angle+d.swing*amount*maxAngle*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),w=leafWidth(d);
+ const leaf=doorLeaf(d),ca=Math.cos(d.angle),sa=Math.sin(d.angle),hx=d.x+leaf.x*ca+leaf.z*sa,hz=d.z-leaf.x*sa+leaf.z*ca,angle=d.angle+d.swing*amount*maxAngle*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),w=leaf.width,mid=-leaf.side*leaf.thickness/2;
  const rect=(x,z,width,depth)=>({x:hx+x*c+z*s,z:hz-x*s+z*c,w:width,d:depth,rot:angle*180/Math.PI});
- return [rect(w/2,0,w,.045),rect(w-.12,.055,.105,.07),rect(w-.12,-.055,.105,.07)];
+ return [rect(w/2,mid,w,leaf.thickness),rect(w-.12,mid+.055,.105,.07),rect(w-.12,mid-.055,.105,.07)];
 }
 // Every leaf and handle rect at any angle lies within reach of the hinge, so
 // only walls overlapping a square around it can stop the swing; testing just
 // those gives the same limit as testing every wall, far faster.
-export function fixedDoorLimit(d){const [leaf]=doorRects(d,1,0),a=leaf.rot*Math.PI/180,w=leaf.w,hx=leaf.x-w/2*Math.cos(a),hz=leaf.z+w/2*Math.sin(a),reach=Math.hypot(w,.09)+.02,near={x:hx,z:hz,w:2*reach,d:2*reach,rot:0},obstacles=wallRects().filter(r=>signedDistance(r,near)<EPS);let safe=0;for(let degrees=0;degrees<=90;degrees+=.25){if(doorRects(d,1,degrees).some(r=>obstacles.some(w=>signedDistance(r,w)<-EPS)))break;safe=degrees;}return Math.max(0,safe-1);}
+export function fixedDoorLimit(d){const leaf=doorLeaf(d),ca=Math.cos(d.angle),sa=Math.sin(d.angle),hx=d.x+leaf.x*ca+leaf.z*sa,hz=d.z-leaf.x*sa+leaf.z*ca,reach=Math.hypot(leaf.width,.09+leaf.thickness)+.02,near={x:hx,z:hz,w:2*reach,d:2*reach,rot:0},obstacles=wallRects().filter(r=>signedDistance(r,near)<EPS);let safe=0;for(let degrees=0;degrees<=90;degrees+=.25){if(doorRects(d,1,degrees).some(r=>obstacles.some(w=>signedDistance(r,w)<-EPS)))break;safe=degrees;}return Math.max(0,safe-1);}
 export function pointClear(x,z,obstacles,radius=.10){
  if(!inside(x,z))return false;
  for(const r of obstacles){const a=r.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=x-r.x,dz=z-r.z,lx=dx*c-dz*s,lz=dx*s+dz*c,ex=Math.max(Math.abs(lx)-r.w/2,0),ez=Math.max(Math.abs(lz)-r.d/2,0);if(ex*ex+ez*ez<radius*radius)return false;}
