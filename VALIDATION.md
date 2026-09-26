@@ -10,8 +10,10 @@ All 172 automated tests pass. The owner confirmed on the live site: a TV standin
 | `260fb8d` | Plan-ratio lock starts off, then keeps the last choice across items and reloads (localStorage `a7-studio-ratio-lock`) | Tests; browser (ticked, reloaded, still ticked) |
 | `375a851` | Lights clash with floor furniture over their vertical reach (pendant cord and the stack above included), like hanging cabinets; a light below the floor is flagged | New tests; the default layout and the owner's exported layout gain no warnings |
 | `9a21510` | Door collision and swing limits use the rendered leaf and handles (the old collision leaf was 6-9 cm shorter); swing limits move by at most 1.5° | New test matching collision and drawn corners at 0/30/60/max°; wall sweep tests |
+| `ea7922d` | Furniture inside a room door's swing is a clash (`擋住…開啟範圍`) and opening the door warns about it; default bedroom B wardrobe 68 cm with sliding doors | New test; browser (bedroom B wardrobe in an older saved layout turns red when edited, with the door message) |
+| `9fbabe5` | TV-wall object removed: a back panel (`panel`) plus ordinary cabinets and a TV; saved TV walls split into those parts, construction notes dropped | New tests at four rotations; browser (old TV wall in localStorage loads as panel, cabinet and TV without the recovery prompt; panel height field and wall snap work) |
 
-Still not verified in a browser: the paused-autosave path when storage is full, and opening room doors other than the front door.
+The owner confirmed room doors other than the front door open correctly. Still not verified in a browser: the paused-autosave path when storage is full.
 
 ## Modular cabinets and TV walls — 2026-09-24
 
