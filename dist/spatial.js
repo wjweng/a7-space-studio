@@ -34,6 +34,22 @@ export function doorRects(d,amount=1,maxAngle=d.maxAngle??90){
 // only walls overlapping a square around it can stop the swing; testing just
 // those gives the same limit as testing every wall, far faster.
 export function fixedDoorLimit(d){const leaf=doorLeaf(d),ca=Math.cos(d.angle),sa=Math.sin(d.angle),hx=d.x+leaf.x*ca+leaf.z*sa,hz=d.z-leaf.x*sa+leaf.z*ca,reach=Math.hypot(leaf.width,.09+leaf.thickness)+.02,near={x:hx,z:hz,w:2*reach,d:2*reach,rot:0},obstacles=wallRects().filter(r=>signedDistance(r,near)<EPS);let safe=0;for(let degrees=0;degrees<=90;degrees+=.25){if(doorRects(d,1,degrees).some(r=>obstacles.some(w=>signedDistance(r,w)<-EPS)))break;safe=degrees;}return Math.max(0,safe-1);}
+// A room door's whole swing, sampled every 2 degrees up to its limit (the leaf is at most
+// 95 cm wide, so the far end moves about 3 cm between samples, less than the leaf's
+// thickness). Furniture inside it would stop the door, so placement checks treat the swing
+// as solid up to the door's height.
+const sweepCache=new Map;
+function doorSweep(d){
+ if(!sweepCache.has(d.id)){const limit=d.maxAngle??fixedDoorLimit(d),rects=[];for(let a=0;a<limit;a+=2)rects.push(...doorRects(d,1,a));rects.push(...doorRects(d,1,limit));
+  const leaf=doorLeaf(d),hinge=doorRects(d,0)[0],reach=Math.hypot(leaf.width,.09+leaf.thickness)+.02;
+  sweepCache.set(d.id,{rects,x:hinge.x,z:hinge.z,reach:reach+leaf.width/2});}
+ return sweepCache.get(d.id);
+}
+export function blocksDoor(d,f){
+ if(['rug','light','beam'].includes(f.type)||(f.elevation||0)>=d.height-EPS)return false;
+ const sweep=doorSweep(d);if(Math.hypot(f.x-sweep.x,f.z-sweep.z)>sweep.reach+Math.hypot(f.w,f.d)/2)return false;
+ return sweep.rects.some(r=>signedDistance(r,f)<-EPS);
+}
 export function pointClear(x,z,obstacles,radius=.10){
  if(!inside(x,z))return false;
  for(const r of obstacles){const a=r.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=x-r.x,dz=z-r.z,lx=dx*c-dz*s,lz=dx*s+dz*c,ex=Math.max(Math.abs(lx)-r.w/2,0),ez=Math.max(Math.abs(lz)-r.d/2,0);if(ex*ex+ez*ez<radius*radius)return false;}
@@ -121,7 +137,7 @@ export function placeAtTarget(f,target,items){
 }
 
 const resizeClear=f=>corners(f).every(([x,z])=>insideOrOutline(x,z));
-const beamResizeClear=insideShell;
+const beamResizeClear=f=>insideShell(f);
 const resizeDirection=(f,axis,sign)=>{const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);return axis==='w'?{x:sign*c,z:-sign*s}:{x:sign*s,z:sign*c};};
 const shiftedResize=(candidate,direction)=>{if(resizeClear(candidate))return candidate;for(let distance=.01;distance<=12;distance+=.01){const moved={...candidate,x:candidate.x-direction.x*distance,z:candidate.z-direction.z*distance};if(resizeClear(moved))return moved;}return null;};
 // Typed width/depth changes grow from the centre. When that crosses the shell or

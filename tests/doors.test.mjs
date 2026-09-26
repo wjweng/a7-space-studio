@@ -2,8 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {SpaceScene} from '../dist/scene.js';
-import {doors,WALL_THICKNESS,wallRects,overlaps} from '../dist/model.js';
-import {doorLeaf,doorRects,JAMB_WIDTH} from '../dist/spatial.js';
+import {doors,WALL_THICKNESS,wallRects,overlaps,issues,HEIGHT} from '../dist/model.js';
+import {doorLeaf,doorRects,blocksDoor,JAMB_WIDTH} from '../dist/spatial.js';
 import {corners} from '../dist/geometry.js';
 
 // Leaf corners in the door group's frame after the pivot turns as frame() turns it.
@@ -55,4 +55,17 @@ test('the collision leaf is the rendered leaf at every opening angle',()=>{
   const drawn=leafCorners(d,degrees).map(p=>world(d,p)),[rect]=doorRects(d,1,degrees),hit=corners(rect);
   for(const [x,z]of drawn)assert(hit.some(([hx,hz])=>Math.hypot(hx-x,hz-z)<1e-9),`${d.id} at ${degrees}°: corner ${x.toFixed(3)},${z.toFixed(3)}`);
  }
+});
+
+test('furniture in a room door swing is flagged; things above the door or beside the swing are not',()=>{
+ const door=doors.find(d=>d.name==='臥室 B 房門'),[open]=doorRects(door,1,60);
+ const chair={id:'c',type:'chair',name:'椅子',x:open.x,z:open.z,w:.45,d:.45,h:.8,rot:0};
+ assert(blocksDoor(door,chair));
+ assert(issues(chair,[chair]).includes('擋住臥室 B 房門開啟範圍'));
+ const high={id:'h',type:'hangingCabinet',name:'吊櫃',x:open.x,z:open.z,w:.6,d:.35,h:.5,rot:0,elevation:HEIGHT-.5};
+ assert(!blocksDoor(door,high),'a cabinet above the 2.1 m door clears the swing');
+ const rug={...chair,id:'r',type:'rug',h:.01};
+ assert(!blocksDoor(door,rug));
+ const far={...chair,x:open.x+1.2};
+ assert(!issues(far,[far]).some(m=>m.startsWith('擋住')));
 });
