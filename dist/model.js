@@ -1,7 +1,7 @@
 import {corners,overlaps,signedDistance,sameRoom,furnitureInterference,EPS} from './geometry.js';
 import {finishByCode,finishableTypes} from './finishes.js';
 import {flooringByCode} from './floorings.js';
-import {validateCabinetDesign,makeCabinetDesign,cabinetFinishSlots,hostsNicheTv,designLeaves} from './cabinet-design.js';
+import {validateCabinetDesign,makeCabinetDesign,resizeCabinetDesign,cabinetFinishSlots,hostsNicheTv,designLeaves} from './cabinet-design.js';
 // Cyclic with spatial.js; blocksDoor is only called from issues(), after both modules load.
 import {blocksDoor} from './spatial.js';
 export {corners,overlaps} from './geometry.js';
@@ -187,10 +187,25 @@ const round4=n=>Math.round(n*10000)/10000;
 export function splitMediaWall(f){
  const m=f.mediaWall||{},a=(f.rot||0)*Math.PI/180,c=Math.cos(a),s=Math.sin(a),back=-f.d/2,panel=m.panel,t=panel?.thickness||0;
  const at=(lx,lz)=>({x:f.x+lx*c+lz*s,z:f.z-lx*s+lz*c,rot:f.rot||0});
- const out=[],base={type:'console',name:(f.name||'電視牆')+' 電視櫃'};
+ const out=[];
  if(panel)out.push({id:f.id+'-panel',type:'panel',name:(f.name||'電視牆')+' 背板',...at(panel.x,back+t/2),w:panel.w,d:t,h:panel.h,elevation:panel.y,open:0,...(panel.finish?{finish:panel.finish}:{})});
- const module=(v,extra,id)=>v&&out.push({id:f.id+id,...extra,...at(v.x,back+t+v.d/2),w:v.w,d:v.d,h:v.h,open:0,cabinetDesign:v.cabinetDesign,openCells:v.openCells||{},...(f.finish?{finish:f.finish}:{})});
- module(m.base,base,'-base');module(m.upper,{type:'hangingCabinet',name:(f.name||'電視牆')+' 吊櫃'},'-upper');
+ // The old editor allowed smaller modules than ordinary furniture (a 15 cm
+ // plinth), so a part below its type's minimum grows to it rather than making
+ // the whole layout unreadable. An "upper" module that starts under 1 m is a
+ // tall cabinet standing on the floor, not one hung from the ceiling: it
+ // becomes a storage cabinet whose body keeps its height, raised on an empty
+ // bottom to where it stood (at least above the plinth it stood on).
+ const module=(v,type,name,id,bottom=0)=>{
+  if(!v)return null;
+  const [minW,minD,minH]=minimums[type],w=Math.max(v.w,minW),d=Math.max(v.d,minD),body=Math.max(v.h,minH);
+  let design=v.cabinetDesign&&(w!==v.w||body!==v.h)?resizeCabinetDesign(v.cabinetDesign,{w:v.w,h:v.h},{w,h:body}):v.cabinetDesign;
+  if(design&&bottom>0){design=structuredClone(design);for(const column of design.columns)column.bottom=round4((column.bottom||0)+bottom);}
+  const part={id:f.id+id,type,name:(f.name||'電視牆')+' '+name,...at(v.x,back+t+d/2),w,d,h:round4(body+bottom),open:0,cabinetDesign:design,openCells:v.openCells||{},...(f.finish?{finish:f.finish}:{})};
+  out.push(part);return part;
+ };
+ const base=module(m.base,'console','電視櫃','-base');
+ const standing=m.upper&&m.upper.y<1;
+ module(m.upper,standing?'wardrobe':'hangingCabinet',standing?'高櫃':'吊櫃','-upper',standing?Math.max(m.upper.y,base?base.h:0):0);
  const tv=m.tv;if(tv){const standing=tv.mount==='base'&&m.base;out.push({id:f.id+'-tv',type:'television',name:(f.name||'電視牆')+' 電視',...at(tv.x,standing?back+t+m.base.d/2:back+t+.03),w:tv.w,d:.06,h:tv.h,open:0,elevation:tv.y,tvMount:standing?'cabinet':'wall',...(standing?{supportId:f.id+'-base'}:{})});}
  return out;
 }

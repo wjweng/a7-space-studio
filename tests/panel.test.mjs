@@ -38,3 +38,15 @@ test('back panels sit at their elevation for clashes and a wall TV may hang on o
  assert.throws(()=>validateFurniture([{...panel,elevation:HEIGHT-1}]),/背板高度超出空間/);
  assert.equal(validateFurniture([{...panel,elevation:undefined}])[0].elevation,0);
 });
+
+test('a TV wall with a 15 cm plinth and a tall cabinet on it still loads, as a TV cabinet and a storage cabinet',()=>{
+  const wall=oldWall(90),base={...wall.mediaWall.base,w:2.4,h:.15},upper={...wall.mediaWall.upper,x:-1,y:.15,w:.4,h:2.35,d:.4};
+  base.cabinetDesign=makeCabinetDesign(base,'low');upper.cabinetDesign=makeCabinetDesign(upper,'closed');
+  wall.mediaWall={...wall.mediaWall,base,upper};
+  const parts=validateFurniture([wall]),plinth=parts.find(f=>f.type==='console'),tall=parts.find(f=>f.id==='mw-upper');
+  assert.equal(plinth.h,.2,'the plinth grows to the TV cabinet minimum instead of failing the whole layout');
+  assert.equal(tall.type,'wardrobe','a module standing near the floor is not hung from the ceiling');
+  assert.equal(tall.cabinetDesign.columns[0].bottom,.2,'it stands clear of the plinth');
+  assert(Math.abs(tall.h-2.55)<1e-9,'its body keeps its 2.35 m');
+  assert.deepEqual(issues(tall,parts).filter(m=>parts.some(o=>m==='與'+o.name+'重疊')),[]);
+});
