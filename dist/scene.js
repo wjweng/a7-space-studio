@@ -481,13 +481,16 @@ export class SpaceScene{
  if(type==='cornerShelf'){
   // Quarter-round boards centred on the back-right corner: θ from -90° to 0°
   // sweeps from the back edge (along the wall) round to the right edge.
-  const wood=this.woodOverride||this.m.wood,quarter=(y,t,open=false)=>{const m=new T.Mesh(new T.CylinderGeometry(1,1,t,28,1,open,-Math.PI/2,Math.PI/2),wood);m.scale.set(w,1,d);m.position.set(w/2,y,-d/2);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
+  // Finishes follow the cabinet rules: a cell's own shelf or back, then all
+  // shelves or backs, then the unit's finish (sides, base and top board).
+  const wood=this.woodOverride||this.m.wood,finish=code=>code&&this.finishMaterial(code)||wood,quarter=(y,t,mat=wood)=>{const m=new T.Mesh(new T.CylinderGeometry(1,1,t,28,1,false,-Math.PI/2,Math.PI/2),mat);m.scale.set(w,1,d);m.position.set(w/2,y,-d/2);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
   const T0=CORNER_BOARD,cap=f.cap!==false,top=cap?h-T0:h,cells=cabinetStructure(f).cells;
   quarter(.015,.03);
-  box(w,top,.012,0,top/2,-d/2+.006,'wood');
+  // The back board is cut at each shelf so every cell can take its own back finish.
+  for(const cell of cells){const low=cell.bottom,high=Math.min(cell.bottom+cell.h,top);if(high>low+1e-6)box(w,high-low,.012,0,(low+high)/2,-d/2+.006,finish(cellFinish(f,cell,'back')));}
   box(.018,top,d,w/2-.009,top/2,0,'wood');
   // Each cell's shelf is the board at its bottom; the lowest is the base above.
-  for(const cell of cells)if(cell.bottom>1e-6)quarter(cell.bottom+T0/2,T0);
+  for(const cell of cells)if(cell.bottom>1e-6)quarter(cell.bottom+T0/2,T0,finish(cellFinish(f,cell,'shelf')));
   // The top board is as thick as a shelf.
   if(cap)quarter(h-T0/2,T0);
   return;

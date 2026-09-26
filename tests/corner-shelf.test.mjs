@@ -33,3 +33,17 @@ test('a corner shelf draws a quarter-round board per shelf and a top board as th
   const box=new THREE.Box3().setFromObject(g);
   assert(Math.abs(box.min.x+.15)<1e-6&&Math.abs(box.max.x-.15)<1e-6&&Math.abs(box.min.z+.15)<1e-6&&Math.abs(box.max.z-.15)<1e-6,'it fills its 30 × 30 cm footprint');
 });
+
+test('corner shelf finishes follow the cabinet rules: a cell, then all shelves or backs, then the unit',()=>{
+  const s=Object.create(SpaceScene.prototype);
+  s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow'].map(k=>[k,new THREE.MeshStandardMaterial()]));
+  Object.assign(s,{actions:new Map,lightObjects:[],items:[]});
+  const [f]=validateFurniture([shelf({shelves:[.5,1,1.5],finish:'P92'})]);f.partFinishes={shelves:'P64'};
+  const cells=cabinetCells(f),own=cells.find(c=>c.bottom>0).id;
+  for(const cell of designLeaves(f.cabinetDesign))if(cell.id===own)cell.finishes={shelf:'P87',back:'B35'};
+  const [g0]=validateFurniture([f]),g=new THREE.Group;s.makeFurniture(g,g0);
+  const used=new Set;g.traverse(o=>{if(o.isMesh)used.add(o.material);});
+  for(const code of['P92','P64','P87','B35'])assert(used.has(s.finishMaterial(code)),code+' is drawn');
+  let p87=0,p64=0;g.traverse(o=>{if(o.geometry?.type==='CylinderGeometry'){if(o.material===s.finishMaterial('P87'))p87++;if(o.material===s.finishMaterial('P64'))p64++;}});
+  assert.equal(p87,1,'the cell with its own shelf finish');assert.equal(p64,2,'the other shelves follow all shelves');
+});
