@@ -8,7 +8,7 @@ import {requestTexture,texturePixelsNow,texturesAsync} from './texture-cache.js'
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeFabric,lightMountDrop,hangingElevation,mountDrop} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
-import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,FRONT_GAP,FRONT_T,FRONT_Z} from './cabinet-design.js';
+import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,frontPanels,groupFronts,FRONT_GAP,FRONT_T,FRONT_Z} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
 // A flush fitting sends all of its light downward and glows like a panel, so straight below
 // it is several times brighter than under a bare bulb of the same output.
@@ -379,21 +379,8 @@ export class SpaceScene{
    const lowest=cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom;
    box(innerW,t,d-t,cx,bottom+t/2,t/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
    if(last)box(innerW,t,d-t,cx,bottom+h-t/2,t/2);
-   if(front==='open')continue;
-   const addDoor=(hinge,sign,width)=>{
-    const pivot=new T.Group;
-    pivot.position.set(hinge,y,z);
-    g.add(pivot);
-    this.box(pivot,width,frontH,FRONT_T,sign*width/2,0,0,face,.003);
-    this.box(pivot,.013,.09,.022,sign*(width-.045),0,.02,'metal',.003);
-    parts.push({id,kind:'door',pivot,sign});
-   };
-   if(front==='left')addDoor(x-frontW/2,1,frontW);
-   if(front==='right')addDoor(x+frontW/2,-1,frontW);
-   if(front==='double'){
-    addDoor(x-frontW/2,1,(frontW-FRONT_GAP)/2);
-    addDoor(x+frontW/2,-1,(frontW-FRONT_GAP)/2);
-   }
+   // Hinged doors are drawn per front panel below, since one may span cells.
+   if(front==='open'||groupFronts.includes(front))continue;
    // Clear opening between the side panels, above this cell's bottom board
    // and below the top board when the cell reaches the top.
    const openBottom=bottom+t,openTop=bottom+h-(last?t:0),openH=openTop-openBottom;
@@ -402,7 +389,7 @@ export class SpaceScene{
     pivot.position.set(x,y,z);
     g.add(pivot);
     this.box(pivot,frontW,frontH,FRONT_T,0,0,0,face,.003);
-    this.box(pivot,Math.min(.16,frontW*.35),.015,.025,0,0,.02,'metal',.003);
+    if(cell.handle)this.box(pivot,Math.min(.16,frontW*.35),.015,.025,0,0,.02,'metal',.003);
     this.drawerBox(pivot,innerW-.026,Math.min(openH-.03,Math.max(.1,openH*.6)),d-t-.02,openBottom+.01-y,-FRONT_T/2,finish(cellFinish(f,cell,'drawerBox')));
     parts.push({id,kind:'drawer',pivot,base:pivot.position.z,travel:d*.55});
    }
@@ -416,9 +403,29 @@ export class SpaceScene{
      pivot.position.set(cx+sign*(innerW/2-leafW/2),(openBottom+openTop)/2,sign>0?frontZ:backZ);
      g.add(pivot);
      this.box(pivot,leafW,leafH,FRONT_T,0,0,0,face,.003);
-     this.box(pivot,.012,.14,.004,sign*(leafW/2-.03),0,FRONT_T/2+.002,'dark',.002);
+     if(cell.handle)this.box(pivot,.012,.14,.004,sign*(leafW/2-.03),0,FRONT_T/2+.002,'dark',.002);
      parts.push({id,kind:'slide',pivot,base:pivot.position.x,travel:sign>0?0:innerW-leafW});
     }
+   }
+  }
+  // Hinged doors, one per front panel: a door group is a single door over
+  // its cells, finished like its first cell. Handles only when asked for.
+  for(const panel of frontPanels(f)){
+   if(!groupFronts.includes(panel.front))continue;
+   const frontW=panel.w-FRONT_GAP,frontH=panel.h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cellFinish(f,panel.cell,'door'));
+   const addDoor=(hinge,sign,width)=>{
+    const pivot=new T.Group;
+    pivot.position.set(hinge,panel.y,z);
+    g.add(pivot);
+    this.box(pivot,width,frontH,FRONT_T,sign*width/2,0,0,face,.003);
+    if(panel.handle)this.box(pivot,.013,.09,.022,sign*(width-.045),0,.02,'metal',.003);
+    parts.push({id:panel.id,kind:'door',pivot,sign});
+   };
+   if(panel.front==='left')addDoor(panel.x-frontW/2,1,frontW);
+   if(panel.front==='right')addDoor(panel.x+frontW/2,-1,frontW);
+   if(panel.front==='double'){
+    addDoor(panel.x-frontW/2,1,(frontW-FRONT_GAP)/2);
+    addDoor(panel.x+frontW/2,-1,(frontW-FRONT_GAP)/2);
    }
   }
   // Start each part at its current open state, so a rebuild (a new finish,

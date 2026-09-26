@@ -4,7 +4,7 @@ import {minimumsFor,linearLightDefaults,wetRooms,normalizeFloors,fabricTypes,fab
 import {finishes,finishFamilies,finishByCode,finishableTypes,finishPixels} from './finishes.js';
 import {floorings,flooringSeries,flooringByCode,flooringPixels} from './floorings.js';
 import {exteriorWallRects} from './model.js';
-import {makeCabinetDesign,resizeCabinetDesign,cabinetCells,modularCabinetRects,cabinetFinishSlots,findLeaf,cellOpening,nicheTvPlacement,nicheTvWarnings,hostsNicheTv,shelfTvPlacement,bestTvCell,TV_STAND} from './cabinet-design.js';
+import {makeCabinetDesign,resizeCabinetDesign,cabinetCells,modularCabinetRects,cabinetFinishSlots,findLeaf,doorGroupOf,cellOpening,nicheTvPlacement,nicheTvWarnings,hostsNicheTv,shelfTvPlacement,bestTvCell,TV_STAND} from './cabinet-design.js';
 import {createCabinetEditor} from './cabinet-ui.js';
 import {readRecovered,setAside,discardRecovered,requestPersistentStorage} from './recovery.js';
 import {sameRoom,roomAt,signedDistance,distanceLabel,doorRects,EPS,constrainMove,placeAtTarget,cabinetRects,showerDoorRects,fitResize,blocksDoor} from './spatial.js';
@@ -122,7 +122,7 @@ function renderFinishGrid(){const part=finishTarget?.part,cellId=finishTarget?.c
  for(const [family,label]of groups){const list=catalogue.filter(x=>groupOf(x)===family&&(!q||x.code.toLowerCase().includes(q)||x.name.includes(q)));if(!list.length)continue;const h=document.createElement('div');h.className='finishGroup';h.textContent=`${label}（${list.length}）`;const g=document.createElement('div');g.className='finishOptions';for(const x of list)g.append(option(x.code,x.code,x.name));$('finishGrid').append(h,g);}
  if(!$('finishGrid').children.length){const p=document.createElement('p');p.className='muted';p.textContent='沒有符合的材質。';$('finishGrid').append(p);}}
 // A cabinet part or one cell's front, chosen from the cabinet editor.
-function setCabinetFinish(f,target,code){if(!f)return;const next=clone(f);if(target.part){next.partFinishes={...(f.partFinishes||{})};if(code)next.partFinishes[target.part]=code;else delete next.partFinishes[target.part];}else{const cell=findLeaf(next.cabinetDesign,target.cell);if(!cell)return;cell.finishes={...(cell.finishes||{})};if(code)cell.finishes[target.slot]=code;else delete cell.finishes[target.slot];if(!Object.keys(cell.finishes).length)delete cell.finishes;}commitFurniture(f,next);cabinetEditor.refresh();}
+function setCabinetFinish(f,target,code){if(!f)return;const next=clone(f);if(target.part){next.partFinishes={...(f.partFinishes||{})};if(code)next.partFinishes[target.part]=code;else delete next.partFinishes[target.part];}else{const group=target.slot==='door'&&doorGroupOf(next.cabinetDesign,target.cell);for(const id of group?group.cells:[target.cell]){const cell=findLeaf(next.cabinetDesign,id);if(!cell)return;cell.finishes={...(cell.finishes||{})};if(code)cell.finishes[target.slot]=code;else delete cell.finishes[target.slot];if(!Object.keys(cell.finishes).length)delete cell.finishes;}}commitFurniture(f,next);cabinetEditor.refresh();}
 function openFinishDialog(target){finishTarget=target;$('finishDialog').querySelector('h2').textContent=target?.room?target.room+'地板':target?.part||target?.cell?'櫃體材質':'木作材質';$('finishSearch').value='';renderFinishGrid();$('finishDialog').showModal();}
 $('finishButton').onclick=()=>openFinishDialog(null);
 function renderFloors(){const custom=Object.keys(floors).length;$('floorSummary').textContent=custom?`已自訂 ${custom} 間`:'全部預設';$('floorList').replaceChildren();for(const r of rooms){const b=document.createElement('button');b.type='button';b.className='floorRow';const c=document.createElement('canvas');c.width=14;c.height=28;const code=floors[r.name];if(code)drawSwatch(c,code);else{const ctx=c.getContext('2d');ctx.fillStyle=floorDefault(r.name).color;ctx.fillRect(0,0,14,28);}const name=document.createElement('span');name.textContent=r.name;const label=document.createElement('small');label.textContent=code?finishText(code):floorDefault(r.name).label;b.title=r.name+'地板：'+label.textContent;b.append(c,name,label);b.onclick=()=>openFinishDialog({room:r.name});$('floorList').append(b);}}$('finishSearch').oninput=renderFinishGrid;
@@ -164,10 +164,12 @@ const cabinetEditor=createCabinetEditor({
   items.push(validateFurniture([tv])[0]);
   scene.buildFurniture(items);render();persist();
  },
- toggleCell(f,cellId){
+ // A shared door opens and closes all the cells it covers together.
+ toggleCell(f,cellIds){
+  const ids=[].concat(cellIds),opening=!f.openCells?.[ids[0]];
   remember();
   f.openCells={...(f.openCells||{})};
-  if(f.openCells[cellId])delete f.openCells[cellId];else f.openCells[cellId]=1;
+  for(const cellId of ids)if(opening)f.openCells[cellId]=1;else delete f.openCells[cellId];
   f.open=cabinetCells(f).filter(cell=>cell.front!=='open').every(cell=>f.openCells[cell.id])?1:0;
   persist();renderProps();const warnings=operationIssues(f.id);if(warnings.length)notify(warnings[0]+'；請查看配置檢查。');
  }

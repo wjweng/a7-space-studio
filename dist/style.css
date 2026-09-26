@@ -59,3 +59,6 @@
 @media(max-width:600px){.cabinetDialog{padding:14px}.cabinetField{flex:1 1 42%}}
 .tvControls{display:grid;gap:9px;margin:12px 0}.tvControls[hidden]{display:none}
 .tvControls label{display:flex;flex-direction:column;gap:4px}
+.cabinetDoorGroup{fill:none;stroke:#25302e;stroke-width:3px;stroke-dasharray:6 4;vector-effect:non-scaling-stroke;pointer-events:none}
+.cabinetHint{color:#5d625c;font-size:12px}
+.cabinetField.checkline{display:flex;flex-direction:row;align-items:center;gap:6px}

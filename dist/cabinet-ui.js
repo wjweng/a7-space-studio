@@ -1,4 +1,4 @@
-import {cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,designFromDoorStyle,designLeaves,findLeaf,fitDesign,splitCabinetCell,removeCabinetNode,moveCabinetLine,locateCell,leafIdsUnder,cabinetStructure} from './cabinet-design.js';
+import {doorGroupOf,mergeDoorCells,splitDoorGroup,groupFronts,boundsOf,cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,designFromDoorStyle,designLeaves,findLeaf,fitDesign,splitCabinetCell,removeCabinetNode,moveCabinetLine,locateCell,leafIdsUnder,cabinetStructure} from './cabinet-design.js';
 
 const labels={open:'開放',left:'左開門',right:'右開門',double:'對開門',sliding:'滑門',drawers:'抽屜'};
 const cm=n=>Math.round(n*1000)/10;
@@ -41,7 +41,9 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     head.onpointerup=head.onpointercancel=()=>{head.onpointermove=head.onpointerup=head.onpointercancel=null;};
   });
   addEventListener('resize',()=>{if(dialog.open)place(dialog.offsetLeft,dialog.offsetTop);});
-  let currentId=null,columnId=null,leafId=null;
+  // `picked` holds the cells chosen for a merge: Shift, Ctrl or Cmd click, or
+  // any click while the touch-friendly multi-select switch is on.
+  let currentId=null,columnId=null,leafId=null,picked=new Set,multi=false;
   const item=()=>getItem(currentId);
   const save=design=>{
     const f=item();
@@ -114,21 +116,17 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     // The selected cell, and the row and part (if any) it belongs to: the
     // nearest stacked row and side-by-side part above it in the tree.
     if(!cells.some(c=>c.id===leafId))leafId=cells[0].id;
+    picked=new Set([...picked].filter(id=>cells.some(c=>c.id===id)));if(!picked.size)picked.add(leafId);
     const selectedLeaf=cells.find(c=>c.id===leafId);columnId=selectedLeaf.columnId;
     const selectedColumn=design.columns.find(c=>c.id===columnId);
     const path=locateCell(design,leafId),stepOf=kind=>{for(let i=path.length-1;i>0;i--)if(path[i].kind===kind)return{...path[i],depth:i};return null;};
     const rowStep=stepOf('rows'),partStep=stepOf('parts');
     const toolbar=dialog.querySelector('.cabinetToolbar');toolbar.replaceChildren();
-    const template=elt('select');template.setAttribute('aria-label','櫃體範本');
-    template.add(new Option('自訂分格','custom'));
-    for(const [key,spec]of Object.entries(cabinetTemplates)){
-      const option=new Option(spec.label,key);
-      try{validateCabinetDesign(f,makeCabinetDesign(f,key));}catch{option.disabled=true;}
-      template.add(option);
-    }
-    template.value=design.template;
-    template.onchange=()=>{if(blockedByTv(cells.map(c=>c.id),'換範本')){template.value=design.template;return;}save(makeCabinetDesign(f,template.value));};
-    toolbar.append(template);
+    // New cabinets start from a preset layout; after that every cabinet is
+    // edited cell by cell, so there is no template picker here.
+    const multiButton=button(multi?'多選：開':'多選：關',()=>{multi=!multi;if(!multi)picked=new Set([leafId]);render();});
+    multiButton.setAttribute('aria-pressed',String(multi));
+    toolbar.append(multiButton,elt('small','cabinetHint','Shift／Ctrl＋點選可多選，合併成一片門板'));
     if(design.columns.length>1)toolbar.append(button('－目前分區',()=>blockedByTv(cells.filter(c=>c.columnId===columnId).map(c=>c.id),'刪除分區')?null:resizeEdges?commitItem(item(),removeCabinetColumn(item(),columnId)):edit(next=>{
       if(next.columns.length===1)return;
       const index=next.columns.findIndex(c=>c.id===columnId),removed=next.columns.splice(index,1)[0],recipient=next.columns[Math.max(0,index-1)];
@@ -147,8 +145,14 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     for(const cell of cells){
       const r=document.createElementNS(svg.namespaceURI,'rect'),x=(cell.x-cell.w/2+f.w/2)*1000,y=(f.h-cell.bottom-cell.h)*1000;
       for(const [key,value]of Object.entries({x,y,width:cell.w*1000,height:cell.h*1000}))r.setAttribute(key,value);
-      r.setAttribute('class','cabinetCell'+(cell.id===leafId?' selected':'')+(cell.front==='open'?' open':''));
-      r.addEventListener('click',()=>{leafId=cell.id;render();});
+      r.setAttribute('class','cabinetCell'+(picked.has(cell.id)?' selected':'')+(cell.front==='open'?' open':''));
+      r.addEventListener('click',event=>{
+        if(event.shiftKey||event.ctrlKey||event.metaKey||multi){
+          if(picked.has(cell.id)&&picked.size>1){picked.delete(cell.id);if(leafId===cell.id)leafId=[...picked][0];}
+          else{picked.add(cell.id);leafId=cell.id;}
+        }else{picked=new Set([cell.id]);leafId=cell.id;}
+        render();
+      });
       svg.append(r);
       if(cell.finishes){
         // Marks a cell whose own finish overrides the cabinet-wide one.
@@ -159,7 +163,17 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       }
       const text=document.createElementNS(svg.namespaceURI,'text');
       text.setAttribute('x',(cell.x+f.w/2)*1000);text.setAttribute('y',(f.h-cell.y)*1000);
-      text.setAttribute('class','cabinetCellLabel');text.textContent=labels[cell.front];svg.append(text);
+      text.setAttribute('class','cabinetCellLabel');text.textContent=labels[cell.front];
+      if(!doorGroupOf(design,cell.id))svg.append(text);
+    }
+    // A shared door is outlined over all its cells and labelled once.
+    for(const group of design.doorGroups||[]){
+      const box=boundsOf(cells.filter(c=>group.cells.includes(c.id))),outline=document.createElementNS(svg.namespaceURI,'rect');
+      for(const [key,value]of Object.entries({x:(box.x-box.w/2+f.w/2)*1000,y:(f.h-box.bottom-box.h)*1000,width:box.w*1000,height:box.h*1000}))outline.setAttribute(key,value);
+      outline.setAttribute('class','cabinetDoorGroup');svg.append(outline);
+      const text=document.createElementNS(svg.namespaceURI,'text');
+      text.setAttribute('x',(box.x+f.w/2)*1000);text.setAttribute('y',(f.h-box.y)*1000);text.setAttribute('class','cabinetCellLabel');
+      text.textContent=labels[cells.find(c=>c.id===group.cells[0]).front]+'（共用）';svg.append(text);
     }
     // Screen pixels to drawing units (mm) and metres.
     const unitsPerPixel=()=>viewW/svg.getBoundingClientRect().width;
@@ -214,6 +228,15 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     }
     elevation.append(svg);
     const fields=dialog.querySelector('.cabinetFields');fields.replaceChildren();
+    if(picked.size>1){
+      dialog.querySelector('.cabinetFinishes').replaceChildren();
+      const ids=[...picked];
+      fields.append(elt('h3','',`已選 ${ids.length} 格`),elt('p','cabinetHint','選到的格子要剛好拼成一個矩形；合併後共用一片平開門板，門板邊緣對齊這些格子。'));
+      const row=elt('div','cabinetToolbar');
+      row.append(button('合併成一片門板',()=>{if(blockedByTv(ids,'合併門板'))return;try{const next=mergeDoorCells(item(),ids);picked=new Set([leafId]);save(next);}catch(error){dialog.querySelector('.cabinetError').textContent=error.message;}}),button('取消多選',()=>{picked=new Set([leafId]);render();}));
+      fields.append(row);
+      return;
+    }
     const many=design.columns.length>1;
     if(many)fields.append(elt('h3','',`分區 ${design.columns.indexOf(selectedColumn)+1}`),field('分區寬度',selectedColumn.width,value=>edit(next=>{
       const index=next.columns.findIndex(c=>c.id===columnId),other=index===next.columns.length-1?index-1:index+1;
@@ -240,11 +263,24 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     const resizeStep=(step,key,value)=>{const own=step.node[key],delta=value-own,after=step.index<step.list.length-1;const next=moveCabinetLine(item(),after?step.node.id:step.list[step.index-1].id,after?delta:-delta);if(next)save(next);};
     if(rowStep.list.length>1)fields.append(field('層格高度',rowStep.node.height,value=>resizeStep(rowStep,'height',value),15));
     if(partStep)fields.append(field('這格寬度',partStep.node.width,value=>resizeStep(partStep,'width',value),15));
+    // The door this cell belongs to: its own, or one shared with other cells.
+    const group=doorGroupOf(design,leafId),members=group?group.cells:[leafId],setAll=apply=>edit(next=>{for(const cellId of members)apply(findLeaf(next,cellId));next.template='custom';});
+    fields.append(elt('h3','',group?`門板（${members.length} 格共用）`:'門板'));
     const frontLabel=elt('label','cabinetField','門面形式'),front=elt('select');
     for(const kind of cabinetFronts)front.add(new Option(labels[kind],kind));
-    front.value=selectedLeaf.front;front.onchange=()=>{if(front.value!=='open'&&blockedByTv([leafId],'加上門面')){front.value=selectedLeaf.front;return;}edit(next=>{findLeaf(next,leafId).front=front.value;next.template='custom';});};
+    front.value=selectedLeaf.front;front.onchange=()=>{
+      if(front.value!=='open'&&blockedByTv(members,'加上門面')){front.value=selectedLeaf.front;return;}
+      if(group&&front.value!=='open'&&!groupFronts.includes(front.value)){dialog.querySelector('.cabinetError').textContent='抽屜與滑門只能用在單一格，請先拆開門板';front.value=selectedLeaf.front;return;}
+      setAll(leaf=>{leaf.front=front.value;if(front.value==='open')delete leaf.handle;});
+    };
     frontLabel.append(front);fields.append(frontLabel);
-    if(selectedLeaf.front!=='open')fields.append(button(f.openCells?.[leafId]?'關閉這格':'打開這格',()=>{toggleCell(f,leafId);render();}));
+    if(selectedLeaf.front!=='open'){
+      const handleLabel=elt('label','cabinetField checkline'),handle=elt('input');handle.type='checkbox';handle.checked=!!selectedLeaf.handle;
+      handle.onchange=()=>setAll(leaf=>{if(handle.checked)leaf.handle=true;else delete leaf.handle;});
+      handleLabel.append(handle,document.createTextNode('畫出手把'));fields.append(handleLabel);
+      fields.append(button(f.openCells?.[members[0]]?'關閉門板':'打開門板',()=>{toggleCell(f,members);render();}));
+      if(group)fields.append(button('拆開門板',()=>save(splitDoorGroup(design,leafId))));
+    }
     if(selectedLeaf.front==='open'&&placeTv)fields.append(button('在這格掛電視',()=>placeTv(f,leafId)));
     renderFinishes(f,selectedLeaf);
   }

@@ -70,7 +70,7 @@ function leafFields(cell,width){
   checkFront(cell.front,width);
   const finishes=ownFinishes(cell);
   if(!finishes.door&&isFinish(cell.finish))finishes.door=cell.finish; // before 2026-09-25 a cell had one front finish
-  return{front:cell.front,...(Object.keys(finishes).length?{finishes}:{})};
+  return{front:cell.front,...(cell.handle&&cell.front!=='open'?{handle:true}:{}),...(Object.keys(finishes).length?{finishes}:{})};
 }
 export function validateCabinetDesign(f,design){
   if(!design||!Array.isArray(design.columns)||!design.columns.length||design.columns.length>8)throw Error('櫃體分區數量須為 1 至 8');
@@ -85,7 +85,89 @@ export function validateCabinetDesign(f,design){
     return{id:column.id,width:round(width),bottom:round(bottom),...(top>0?{top:round(top)}:{}),cells};
   });
   if(Math.abs(total-f.w)>.002)throw Error('分區寬度總和必須等於櫃體總寬');
-  return{template:typeof design.template==='string'&&cabinetTemplates[design.template]?design.template:'custom',columns};
+  const doorGroups=checkDoorGroups(f,columns,design.doorGroups);
+  return{template:typeof design.template==='string'&&cabinetTemplates[design.template]?design.template:'custom',columns,...(doorGroups.length?{doorGroups}:{})};
+}
+// A door may span several cells: a door group lists cells that share one
+// hinged front over their combined rectangle, so the door's edges line up
+// with the cells'. Members carry the same front, handle and door finish (the
+// first member's wins). A group that no longer makes one rectangle of hinged
+// cells, after a split, delete or new front, is dropped and each cell keeps
+// its own door. Drawers and sliding doors stay single-cell: across a shelf or
+// divider their boxes and leaves would run into the boards.
+export const groupFronts=['left','right','double'];
+export function boundsOf(cells){
+  const l=Math.min(...cells.map(c=>c.x-c.w/2)),r=Math.max(...cells.map(c=>c.x+c.w/2)),b=Math.min(...cells.map(c=>c.bottom)),t=Math.max(...cells.map(c=>c.bottom+c.h));
+  return{x:(l+r)/2,w:r-l,bottom:b,h:t-b,y:(b+t)/2};
+}
+// Cells never overlap, so they fill their bounding box exactly when the areas match.
+const isRectangle=cells=>{const box=boundsOf(cells);return Math.abs(cells.reduce((sum,c)=>sum+c.w*c.h,0)-box.w*box.h)<1e-6;};
+function checkDoorGroups(f,columns,list){
+  if(!Array.isArray(list))return[];
+  const cells=cabinetStructure({w:f.w,h:f.h,cabinetDesign:{columns}}).cells,byId=new Map(cells.map(c=>[c.id,c])),used=new Set,out=[];
+  for(const group of list.slice(0,40)){
+    if(!group||typeof group.id!=='string'||!Array.isArray(group.cells))continue;
+    const ids=[...new Set(group.cells.filter(id=>typeof id==='string'))],members=ids.map(id=>byId.get(id));
+    if(members.length<2||members.some(c=>!c||used.has(c.id)))continue;
+    const front=members[0].front;
+    if(!groupFronts.includes(front)||members.some(c=>c.front!==front)||!isRectangle(members))continue;
+    try{checkFront(front,boundsOf(members).w);}catch{continue;}
+    const lead=findLeaf({columns},ids[0]);
+    for(const id of ids.slice(1)){
+      const leaf=findLeaf({columns},id);
+      if(lead.handle)leaf.handle=true;else delete leaf.handle;
+      const door=lead.finishes?.door;
+      if(door)leaf.finishes={...(leaf.finishes||{}),door};
+      else if(leaf.finishes){delete leaf.finishes.door;if(!Object.keys(leaf.finishes).length)delete leaf.finishes;}
+    }
+    ids.forEach(id=>used.add(id));out.push({id:group.id,cells:ids});
+  }
+  return out;
+}
+export const doorGroupOf=(design,cellId)=>(design?.doorGroups||[]).find(group=>group.cells.includes(cellId))||null;
+// Every front to draw or swing: a door group as one panel over its cells, any
+// other cell with a front on its own. `id` (the first member) keys its open
+// state; `ids` are all the cells it covers.
+export function frontPanels(f){
+  const cells=cabinetCells(f),out=[],seen=new Set;
+  for(const cell of cells){
+    if(cell.front==='open')continue;
+    const group=doorGroupOf(f.cabinetDesign,cell.id);
+    if(!group){out.push({id:cell.id,ids:[cell.id],front:cell.front,handle:!!cell.handle,cell,x:cell.x,y:cell.y,w:cell.w,h:cell.h,bottom:cell.bottom});continue;}
+    if(seen.has(group.id))continue;
+    seen.add(group.id);
+    const members=cells.filter(c=>group.cells.includes(c.id)),lead=members.find(c=>c.id===group.cells[0]);
+    out.push({id:lead.id,ids:[...group.cells],front:lead.front,handle:!!lead.handle,cell:lead,...boundsOf(members)});
+  }
+  return out;
+}
+// Merge the chosen cells (and any groups they already belong to) into one
+// door. The door keeps the first chosen hinged front, else double (left when
+// under 40 cm), a handle if any cell had one, and the first cell's door finish.
+export function mergeDoorCells(f,ids){
+  const design=structuredClone(f.cabinetDesign),groups=design.doorGroups||[],all=new Set(ids);
+  for(const group of groups)if(group.cells.some(id=>all.has(id)))group.cells.forEach(id=>all.add(id));
+  const cells=cabinetCells(f).filter(c=>all.has(c.id));
+  if(cells.length<2)throw Error('請至少選兩格');
+  if(!isRectangle(cells))throw Error('選到的格子要剛好拼成一個矩形，門板才能對齊格子');
+  const width=boundsOf(cells).w,chosen=ids.map(id=>cells.find(c=>c.id===id)).find(c=>c&&groupFronts.includes(c.front));
+  let front=chosen?.front||'double';if(front==='double'&&width<.4)front='left';
+  const lead=chosen||cells.find(c=>c.id===ids[0])||cells[0],handle=cells.some(c=>c.handle),door=lead.finishes?.door;
+  for(const cell of cells){
+    const leaf=findLeaf(design,cell.id);leaf.front=front;
+    if(handle)leaf.handle=true;else delete leaf.handle;
+    if(door)leaf.finishes={...(leaf.finishes||{}),door};
+    else if(leaf.finishes){delete leaf.finishes.door;if(!Object.keys(leaf.finishes).length)delete leaf.finishes;}
+  }
+  design.doorGroups=[...groups.filter(group=>!group.cells.some(id=>all.has(id))),{id:makeId(),cells:[lead.id,...cells.map(c=>c.id).filter(id=>id!==lead.id)]}];
+  design.template='custom';
+  return design;
+}
+export function splitDoorGroup(design,cellId){
+  const next=structuredClone(design);
+  next.doorGroups=(next.doorGroups||[]).filter(group=>!group.cells.includes(cellId));
+  if(!next.doorGroups.length)delete next.doorGroups;
+  return next;
 }
 export function resizeCabinetDesign(design,oldSize,newSize){
   const next=structuredClone(design);
@@ -157,21 +239,21 @@ export function modularCabinetRects(f,amounts={}){
   const angle=f.rot*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle);
   const world=(x,z)=>({x:f.x+x*c+z*s,z:f.z-x*s+z*c}),base=baseHeight(f);
   const result=[];
-  for(const cell of cabinetCells(f)){
-    const amount=Math.max(0,Math.min(1,Number(amounts[cell.id])||0));
+  for(const panel of frontPanels(f)){
+    const amount=Math.max(0,Math.min(1,Number(amounts[panel.id])||0));
     if(amount<=0)continue;
-    const width=cell.w-FRONT_GAP,z=f.d/2+FRONT_Z;
+    const width=panel.w-FRONT_GAP,z=f.d/2+FRONT_Z;
     const door=(hinge,sign,panelWidth)=>{
       const turn=-sign*amount*Math.PI/2,p=world(hinge+sign*Math.cos(turn)*panelWidth/2,z-sign*Math.sin(turn)*panelWidth/2);
-      result.push({...p,w:panelWidth,d:.04,rot:f.rot+turn*180/Math.PI,yMin:base+cell.bottom,yMax:base+cell.bottom+cell.h,cellId:cell.id});
+      result.push({...p,w:panelWidth,d:.04,rot:f.rot+turn*180/Math.PI,yMin:base+panel.bottom,yMax:base+panel.bottom+panel.h,cellId:panel.id});
     };
-    const left=cell.x-width/2,right=cell.x+width/2;
-    if(cell.front==='left')door(left,1,width);
-    if(cell.front==='right')door(right,-1,width);
-    if(cell.front==='double'){door(left,1,(width-FRONT_GAP)/2);door(right,-1,(width-FRONT_GAP)/2);}
-    if(cell.front==='drawers'){
-      const travel=amount*f.d*.55,p=world(cell.x,z+travel/2);
-      result.push({...p,w:width,d:travel,rot:f.rot,yMin:base+cell.bottom,yMax:base+cell.bottom+cell.h,cellId:cell.id});
+    const left=panel.x-width/2,right=panel.x+width/2;
+    if(panel.front==='left')door(left,1,width);
+    if(panel.front==='right')door(right,-1,width);
+    if(panel.front==='double'){door(left,1,(width-FRONT_GAP)/2);door(right,-1,(width-FRONT_GAP)/2);}
+    if(panel.front==='drawers'){
+      const travel=amount*f.d*.55,p=world(panel.x,z+travel/2);
+      result.push({...p,w:width,d:travel,rot:f.rot,yMin:base+panel.bottom,yMax:base+panel.bottom+panel.h,cellId:panel.id});
     }
   }
   return result;
