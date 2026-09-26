@@ -282,3 +282,19 @@ test('a niche TV whose cell no longer exists is not drawn',()=>{
  const orphan=new THREE.Group;s.makeFurniture(orphan,{...tv,supportCell:'gone'});
  assert.equal(orphan.children.length,0);
 });
+test('in walk view a dark room is not lit through its walls by lamps in other rooms',()=>{
+ const s=fixture(),base=initialFurniture.find(item=>item.type==='light');
+ const place=(id,x,z,on=true)=>{const f={...base,id,x,z,on,dimming:100};const g=new THREE.Group;g.position.set(x,0,z);s.makeFurniture(g,f);g.updateMatrixWorld(true);return f;};
+ const living=place('living',1.3,3.15,false),kitchen=place('kitchen',4.9,6.45);
+ // No texture units to spare, so no lamp casts a shadow: only culling keeps the kitchen out.
+ Object.assign(s,{hemi:{intensity:0},sun:{intensity:0},bounce:{intensity:0},scene:{background:{set(){}}},lightsOn:true,night:true,mode:'walk',camera:{position:new THREE.Vector3(1.3,1.6,3.15)},renderer:{capabilities:{maxTextures:8}}});
+ s.updateLight();
+ const kitchenLamp=s.lightObjects.find(o=>o.f===kitchen).point;
+ assert.equal(kitchenLamp.intensity,0,'the kitchen lamp does not reach the dark living room');
+ assert.equal(s.bounce.intensity,0,'nor does its bounce light');
+ s.camera.position.set(4.9,1.6,6.45);s.assignLampShadows();s.updateRoomLight();
+ assert(kitchenLamp.intensity>0&&s.bounce.intensity>0,'walking into the kitchen lights it again');
+ s.mode='orbit';s.assignLampShadows();s.updateRoomLight();
+ assert(kitchenLamp.intensity>0,'the overview shows every lamp');
+ assert.equal(living.on,false);
+});
