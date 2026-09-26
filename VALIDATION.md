@@ -1,5 +1,18 @@
 # Validation and work history
 
+## Cleanup after owner review — 2026-09-26
+
+All 172 automated tests pass. The owner confirmed on the live site: a TV standing on a cabinet shelf rests its foot on the shelf (`d746353`), a dragged ratio-locked resize, the A1 and A8 handles, SPC flooring display, and the herringbone knots as they are.
+
+| Commit | Work completed | How it was checked |
+| --- | --- | --- |
+| `f5c5ebc` | Line endings normalised to LF, enforced by `.gitattributes` | Every changed file identical to its old content with CR removed; tests |
+| `260fb8d` | Plan-ratio lock starts off, then keeps the last choice across items and reloads (localStorage `a7-studio-ratio-lock`) | Tests; browser (ticked, reloaded, still ticked) |
+| `375a851` | Lights clash with floor furniture over their vertical reach (pendant cord and the stack above included), like hanging cabinets; a light below the floor is flagged | New tests; the default layout and the owner's exported layout gain no warnings |
+| `9a21510` | Door collision and swing limits use the rendered leaf and handles (the old collision leaf was 6-9 cm shorter); swing limits move by at most 1.5° | New test matching collision and drawn corners at 0/30/60/max°; wall sweep tests |
+
+Still not verified in a browser: the paused-autosave path when storage is full, and opening room doors other than the front door.
+
 ## Modular cabinets and TV walls — 2026-09-24
 
 The new cabinet editor supports template layouts, independent column widths and bottom clearances, adjustable shelf heights, per-cell open/door/drawer fronts, and a draggable elevation divider. TV cabinets can keep a TV as a separately positioned wall-mounted or cabinet-supported object. A TV wall combines a backboard, lower and upper cabinets, a TV, a wall anchor, editable outlet/conduit records, cable exits, access openings and a site-fact log; it exports an elevation SVG and a text schedule. A missing-data and obstruction-overlap list highlights records for field review.
