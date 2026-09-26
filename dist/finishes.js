@@ -62,7 +62,7 @@ export const finishes=[
 export const finishByCode=code=>finishes.find(f=>f.code===code);
 // Furniture types whose wooden parts can take a board finish. A sofa's only wood is its
 // legs, hidden under the seat, so it takes a fabric colour instead (see fabricTypes).
-export const finishableTypes=['bed','desk','chair','table','wardrobe','drawer','console','hangingCabinet','panel','cove','kitchen','sink'];
+export const finishableTypes=['bed','desk','chair','table','wardrobe','drawer','console','hangingCabinet','panel','cove','cornerShelf','kitchen','sink'];
 
 // Pattern parameters in metres. line: grain spacing; stretch: how much longer than wide a
 // grain fleck runs; band: width of the broad colour streaks and bandMix their share;

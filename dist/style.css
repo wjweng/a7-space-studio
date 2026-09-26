@@ -64,3 +64,4 @@
 /* Text then its checkbox as one control, as tall as the buttons beside it. */
 .cabinetField.checkline{flex-direction:row;align-items:center;gap:6px;min-width:0;flex:0 0 auto;white-space:nowrap;font-size:14px;padding:9px 12px;border:1px solid transparent;cursor:pointer}
 .cabinetField.checkline input{width:auto;margin:0}
+.cornerShelfRow{display:flex;gap:6px;align-items:center}.cornerShelfRow input{flex:1}.cornerShelfRow button{flex:0 0 auto}
