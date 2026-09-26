@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {SpaceScene,floorBoardRects} from '../dist/scene.js';
-import {issues,mountedOn,mountDrop,hangingElevation,lightMountDrop,validateFurniture,initialFurniture,wallRects,HEIGHT} from '../dist/model.js';
+import {issues,mountedOn,mountDrop,hangingElevation,lightMountDrop,lightSpan,validateFurniture,initialFurniture,wallRects,HEIGHT} from '../dist/model.js';
 import {blocksCamera} from '../dist/spatial.js';
 
 const beam={id:'b',type:'beam',name:'樑',x:2,z:3,w:3,d:.2,h:.3,rot:0};
@@ -157,4 +157,25 @@ test('light fixtures get a dark outline in top view only, and pendant lamps stay
   const lampSource=s.lightObjects.filter(o=>o.f===lamp).map(o=>o.point);
   for(const p of lampSource)assert.ok(g.position.y+p.position.y<HEIGHT-wideBeam.h+1e-6,lightKind+' lamp stays under the beam');
  }
+});
+
+test('a pendant that reaches floor furniture clashes with it, like a hanging cabinet does',()=>{
+ const table={id:'t',type:'table',name:'餐桌',x:2,z:3,w:1.2,d:.8,h:.75,rot:0};
+ const pendant={id:'p',type:'light',name:'吊燈',lightKind:'pendant',x:2,z:3,w:.36,d:.36,h:.08,rot:0,pendantLength:.8};
+ assert.deepEqual(issues(pendant,[pendant,table]),[]);assert.deepEqual(issues(table,[pendant,table]),[]);
+ const low={...pendant,pendantLength:HEIGHT-.7};
+ assert(lightSpan(low,[low,table]).yMin<table.h);
+ assert.deepEqual(issues(low,[low,table]),['與餐桌重疊']);
+ assert.deepEqual(issues(table,[low,table]),['與吊燈重疊'],'the table reports the light too');
+ const aside={...low,x:3.5};
+ assert.deepEqual(issues(aside,[aside,table]),[],'a low pendant beside the table is fine');
+});
+
+test('the stack above a pendant counts toward its reach, down to the floor',()=>{
+ const cabinet={id:'c',type:'hangingCabinet',name:'吊櫃',x:2,z:3,w:1,d:.4,h:.6,rot:0};
+ const pendant={id:'p',type:'light',name:'吊燈',lightKind:'pendant',x:2,z:3,w:.3,d:.3,h:.08,rot:0,pendantLength:HEIGHT-.5};
+ const wide={...beam,d:.6},alone=lightSpan(pendant,[pendant]).yMin,under=lightSpan(pendant,[pendant,cabinet,wide]).yMin;
+ assert(Math.abs(alone-under-.9)<1e-9,'beam 0.3 m plus cabinet 0.6 m push it down');
+ assert(issues(pendant,[pendant,cabinet,wide]).includes('燈具垂到地面以下'));
+ assert(!issues(pendant,[pendant]).includes('燈具垂到地面以下'));
 });
