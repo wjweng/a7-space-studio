@@ -24,7 +24,7 @@ test('coves clash with tall furniture, hanging cabinets and deep beams, but not 
   assert(issues(c,[c,deep]).includes('與樑重疊'));assert(issues(deep,[c,deep]).includes('與燈槽重疊'));
 });
 
-test('a cove draws its board, strip and wash, and lights the room only through the ceiling bounce',()=>{
+test('a cove draws its board, strip and wash, and lights the room softly from above, not with a lamp',()=>{
   const s=Object.create(SpaceScene.prototype);
   s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow','lightWhite','lightNatural','lightWarm'].map(k=>[k,new THREE.MeshStandardMaterial()]));
   Object.assign(s,{actions:new Map,lightObjects:[],items:[],lightsOn:true,night:true,hemi:{},sun:{},scene:{background:new THREE.Color()}});
@@ -34,10 +34,15 @@ test('a cove draws its board, strip and wash, and lights the room only through t
   assert(entry&&entry.glows.length===2);
   let lamps=0;g.traverse(o=>{if(o.isLight)lamps++;});
   assert.equal(lamps,0,'no lamp of its own, so no hot spot on the ceiling');
-  s.bounce={intensity:0};s.updateLight();
+  s.bounce={intensity:0};s.coveFill=new THREE.HemisphereLight(0,0,0);s.updateLight();
   assert(entry.glows.every(m=>m.opacity>0));
-  assert(s.bounce.intensity>0,'at night it brightens the room through the ceiling bounce');
+  const night=s.coveFill.intensity;
+  assert(night>0,'at night it lights the room softly from above');
+  assert.equal(s.bounce.intensity,0,'the lamps\' bounce from below is left to the lamps');
+  assert(s.coveFill.color.r>s.coveFill.color.b,'a warm cove gives warm light');
+  s.night=false;s.updateLight();
+  assert(Math.abs(s.coveFill.intensity-night*.32)<1e-9,'by day it is scaled like the lamps');
   s.assignLampShadows();
   s.lightObjects[0].f.on=false;s.updateLight();
-  assert(entry.glows.every(m=>!m.visible));assert.equal(s.bounce.intensity,0);
+  assert(entry.glows.every(m=>!m.visible));assert.equal(s.coveFill.intensity,0);
 });
