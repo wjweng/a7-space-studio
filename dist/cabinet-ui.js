@@ -12,7 +12,10 @@ const field=(label,value,change,min=0,max=500)=>{
   return wrap;
 };
 // placeTv, chooseFinish and resizeEdges are only for standalone cabinets.
-export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv,chooseFinish,finishLabel=code=>code||'預設',resizeEdges=false,maxHeight=Infinity,checkFit,notify,hostedTvs}){
+// shelvesOnly(f) marks open shelving edited as one column of open cells (a
+// corner shelf): no fronts, side-by-side parts, columns or bottom gap, and
+// a top-board switch instead.
+export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv,chooseFinish,finishLabel=code=>code||'預設',resizeEdges=false,maxHeight=Infinity,checkFit,notify,hostedTvs,shelvesOnly}){
   const dialog=elt('dialog','cabinetDialog');
   dialog.innerHTML='<div class="cabinetHead" title="拖曳可移動視窗"><div><span class="eyebrow">CABINET EDITOR</span><h2>編輯櫃體</h2></div><div class="cabinetHeadButtons"><button type="button" class="dialogFold" aria-expanded="true">收合</button><button type="button" class="dialogClose" aria-label="關閉">×</button></div></div><div class="cabinetBody"><p class="muted">點選正面圖中的格子，再修改分區、層高與門面。尺寸單位為 cm。拖曳標題可移動視窗。</p><div class="cabinetFinishes"></div><div class="cabinetToolbar"></div><div class="cabinetElevation"></div><div class="cabinetFields"></div><p class="cabinetError" role="alert"></p></div>';
   document.body.append(dialog);
@@ -89,13 +92,13 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
   // editor; level three (this cell's own) sits with the cell's settings.
   const partText=(f,key)=>f.partFinishes?.[key]?finishLabel(f.partFinishes[key]):'跟隨整體';
   const clearSlot=(slot,only)=>edit(next=>{for(const cell of designLeaves(next))if(cell.finishes&&(!only||cell.id===only)){delete cell.finishes[slot];if(!Object.keys(cell.finishes).length)delete cell.finishes;}});
-  function renderFinishes(f,selectedCell){
+  function renderFinishes(f,selectedCell,simple){
     const host=dialog.querySelector('.cabinetFinishes');host.replaceChildren();
     if(!chooseFinish)return;
     const cells=designLeaves(f.cabinetDesign),hasDrawers=cells.some(c=>c.front==='drawers');
-    host.append(elt('h3','','材質（整座櫃）'));
+    host.append(elt('h3','',simple?'材質（整座層架）':'材質（整座櫃）'));
     for(const [slot,key,label]of cabinetFinishSlots){
-      if(slot==='drawerBox'&&!hasDrawers)continue;
+      if(slot==='drawerBox'&&!hasDrawers||simple&&slot==='door')continue;
       const row=elt('div','cabinetFinishRow'),count=cells.filter(c=>c.finishes?.[slot]).length;
       row.append(elt('span','cabinetFinishName',`所有的${label}`),button(partText(f,key),()=>chooseFinish(f,{part:key})));
       if(count)row.append(elt('small','',`另有 ${count} 格另外指定`),button('全部改回跟隨',()=>clearSlot(slot)));
@@ -112,6 +115,9 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
   }
   function render(){
     const f=item();if(!f?.cabinetDesign){dialog.close();return;}
+    const simple=!!shelvesOnly?.(f);
+    dialog.querySelector('.cabinetHead h2').textContent=simple?'編輯層架':'編輯櫃體';
+    dialog.querySelector('.cabinetBody > .muted').textContent=simple?'點選正面圖中的格子，再修改層高；拖曳格線可調整層板位置，拖曳外框可調整寬度與高度。尺寸單位為 cm。拖曳標題可移動視窗。':'點選正面圖中的格子，再修改分區、層高與門面。尺寸單位為 cm。拖曳標題可移動視窗。';
     const design=f.cabinetDesign,columns=cabinetColumns(f),structure=cabinetStructure(f),cells=structure.cells;
     // The selected cell, and the row and part (if any) it belongs to: the
     // nearest stacked row and side-by-side part above it in the tree.
@@ -124,10 +130,16 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     const toolbar=dialog.querySelector('.cabinetToolbar');toolbar.replaceChildren();
     // New cabinets start from a preset layout; after that every cabinet is
     // edited cell by cell, so there is no template picker here.
-    const multiButton=button(multi?'多選：開':'多選：關',()=>{multi=!multi;if(!multi)picked=new Set([leafId]);render();});
-    multiButton.setAttribute('aria-pressed',String(multi));
-    toolbar.append(multiButton,elt('small','cabinetHint','Shift／Ctrl＋點選可多選，合併成一片門板'));
-    if(design.columns.length>1)toolbar.append(button('－目前分區',()=>blockedByTv(cells.filter(c=>c.columnId===columnId).map(c=>c.id),'刪除分區')?null:resizeEdges?commitItem(item(),removeCabinetColumn(item(),columnId)):edit(next=>{
+    if(simple){
+      const capLabel=elt('label','cabinetField checkline','頂部頂板'),cap=elt('input');cap.type='checkbox';cap.checked=f.cap!==false;
+      cap.onchange=()=>commitItem(item(),{...item(),cap:cap.checked});
+      capLabel.append(cap);toolbar.append(capLabel);
+    }else{
+      const multiButton=button(multi?'多選：開':'多選：關',()=>{multi=!multi;if(!multi)picked=new Set([leafId]);render();});
+      multiButton.setAttribute('aria-pressed',String(multi));
+      toolbar.append(multiButton,elt('small','cabinetHint','Shift／Ctrl＋點選可多選，合併成一片門板'));
+    }
+    if(!simple&&design.columns.length>1)toolbar.append(button('－目前分區',()=>blockedByTv(cells.filter(c=>c.columnId===columnId).map(c=>c.id),'刪除分區')?null:resizeEdges?commitItem(item(),removeCabinetColumn(item(),columnId)):edit(next=>{
       if(next.columns.length===1)return;
       const index=next.columns.findIndex(c=>c.id===columnId),removed=next.columns.splice(index,1)[0],recipient=next.columns[Math.max(0,index-1)];
       recipient.width+=removed.width;columnId=recipient.id;next.template='custom';
@@ -147,7 +159,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       for(const [key,value]of Object.entries({x,y,width:cell.w*1000,height:cell.h*1000}))r.setAttribute(key,value);
       r.setAttribute('class','cabinetCell'+(picked.has(cell.id)?' selected':'')+(cell.front==='open'?' open':''));
       r.addEventListener('click',event=>{
-        if(event.shiftKey||event.ctrlKey||event.metaKey||multi){
+        if(!simple&&(event.shiftKey||event.ctrlKey||event.metaKey||multi)){
           if(picked.has(cell.id)&&picked.size>1){picked.delete(cell.id);if(leafId===cell.id)leafId=[...picked][0];}
           else{picked.add(cell.id);leafId=cell.id;}
         }else{picked=new Set([cell.id]);leafId=cell.id;}
@@ -229,7 +241,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     }
     elevation.append(svg);
     const fields=dialog.querySelector('.cabinetFields');fields.replaceChildren();
-    if(picked.size>1){
+    if(!simple&&picked.size>1){
       dialog.querySelector('.cabinetFinishes').replaceChildren();
       const ids=[...picked];
       fields.append(elt('h3','',`已選 ${ids.length} 格`),elt('p','cabinetHint','選到的格子要剛好拼成一個矩形；合併後共用一片平開門板，門板邊緣對齊這些格子。'));
@@ -238,14 +250,14 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       fields.append(row);
       return;
     }
-    const many=design.columns.length>1;
+    const many=!simple&&design.columns.length>1;
     if(many)fields.append(elt('h3','',`分區 ${design.columns.indexOf(selectedColumn)+1}`),field('分區寬度',selectedColumn.width,value=>edit(next=>{
       const index=next.columns.findIndex(c=>c.id===columnId),other=index===next.columns.length-1?index-1:index+1;
       if(other<0)return;
       const delta=value-next.columns[index].width;
       next.columns[index].width=value;next.columns[other].width-=delta;next.template='custom';
     }),20));
-    fields.append(field(f.type==='hangingCabinet'?'底部留空':'底部離地',selectedColumn.bottom,value=>edit(next=>{
+    if(!simple)fields.append(field(f.type==='hangingCabinet'?'底部留空':'底部離地',selectedColumn.bottom,value=>edit(next=>{
       const c=next.columns.find(c=>c.id===columnId),delta=value-c.bottom;c.bottom=value;c.cells.at(-1).height-=delta;next.template='custom';
     }),0,cm(f.h-.15)));
     // Splitting works on the selected cell; removing works on the row or
@@ -255,15 +267,16 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     const removeRow=()=>{if(blockedByTv(leafIdsUnder(rowStep.node),'刪除層格'))return;if(rowStep.depth===1&&resizeEdges)commitItem(item(),removeCabinetCell(item(),columnId,rowStep.node.id));else{const next=removeCabinetNode(item().cabinetDesign,leafId,'rows');if(next)save(next);}};
     const removePart=()=>{if(blockedByTv(leafIdsUnder(partStep.node),'刪除直向分區'))return;const next=removeCabinetNode(item().cabinetDesign,leafId,'parts');if(next)save(next);};
     const row=elt('div','cabinetToolbar');
-    row.append(button('＋層格',()=>split('stack')),button('＋單層直向分區',()=>split('side')));
+    row.append(button(simple?'＋層板':'＋層格',()=>split('stack')));if(!simple)row.append(button('＋單層直向分區',()=>split('side')));
     if(rowStep.list.length>1)row.append(button('－目前層格',removeRow));
-    if(partStep&&partStep.list.length>1)row.append(button('－目前直向分區',removePart));
+    if(!simple&&partStep&&partStep.list.length>1)row.append(button('－目前直向分區',removePart));
     fields.append(row,elt('h3','','所選的格'));
     // Height of the row the cell is in, and width of its part: the change
     // is traded with the next sibling (the previous one for the last).
     const resizeStep=(step,key,value)=>{const own=step.node[key],delta=value-own,after=step.index<step.list.length-1;const next=moveCabinetLine(item(),after?step.node.id:step.list[step.index-1].id,after?delta:-delta);if(next)save(next);};
     if(rowStep.list.length>1)fields.append(field('層格高度',rowStep.node.height,value=>resizeStep(rowStep,'height',value),15));
     if(partStep)fields.append(field('這格寬度',partStep.node.width,value=>resizeStep(partStep,'width',value),15));
+    if(!simple){
     // The door this cell belongs to: its own, or one shared with other cells.
     const group=doorGroupOf(design,leafId),members=group?group.cells:[leafId],setAll=apply=>edit(next=>{for(const cellId of members)apply(findLeaf(next,cellId));next.template='custom';});
     fields.append(elt('h3','',group?`門板（${members.length} 格共用）`:'門板'));
@@ -283,7 +296,8 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       if(group)fields.append(button('拆開門板',()=>save(splitDoorGroup(design,leafId))));
     }
     if(selectedLeaf.front==='open'&&placeTv)fields.append(button('在這格掛電視',()=>placeTv(f,leafId)));
-    renderFinishes(f,selectedLeaf);
+    }
+    renderFinishes(f,selectedLeaf,simple);
   }
   return{refresh(){if(dialog.open)render();},open(f,{onClose:closed}={}){
     if(dialog.open)dialog.close();

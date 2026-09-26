@@ -6,7 +6,7 @@ import {BOARD,finishByCode} from './finishes.js';
 import {flooringByCode,tileSize} from './floorings.js';
 import {requestTexture,texturePixelsNow,texturesAsync} from './texture-cache.js';
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
-import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeCove,normalizeCornerShelf,CORNER_BOARD,normalizeFabric,lightMountDrop,hangingElevation,mountDrop} from './model.js';
+import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeCove,CORNER_BOARD,normalizeFabric,lightMountDrop,hangingElevation,mountDrop} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
 import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,frontPanels,groupFronts,FRONT_GAP,FRONT_T,FRONT_Z} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
@@ -481,14 +481,15 @@ export class SpaceScene{
  if(type==='cornerShelf'){
   // Quarter-round boards centred on the back-right corner: θ from -90° to 0°
   // sweeps from the back edge (along the wall) round to the right edge.
-  const shape=normalizeCornerShelf(f),wood=this.woodOverride||this.m.wood,quarter=(y,t,open=false)=>{const m=new T.Mesh(new T.CylinderGeometry(1,1,t,28,1,open,-Math.PI/2,Math.PI/2),wood);m.scale.set(w,1,d);m.position.set(w/2,y,-d/2);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
-  const T0=CORNER_BOARD,top=shape.cap?h-T0:h;
+  const wood=this.woodOverride||this.m.wood,quarter=(y,t,open=false)=>{const m=new T.Mesh(new T.CylinderGeometry(1,1,t,28,1,open,-Math.PI/2,Math.PI/2),wood);m.scale.set(w,1,d);m.position.set(w/2,y,-d/2);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
+  const T0=CORNER_BOARD,cap=f.cap!==false,top=cap?h-T0:h,cells=cabinetStructure(f).cells;
   quarter(.015,.03);
   box(w,top,.012,0,top/2,-d/2+.006,'wood');
   box(.018,top,d,w/2-.009,top/2,0,'wood');
-  for(const y of shape.shelves)quarter(y-T0/2,T0);
-  // The arched top: a board over the unit and a curved band under its edge.
-  if(shape.cap){quarter(h-T0/2,T0);quarter(h-T0-.04,.08,true).material=wood;}
+  // Each cell's shelf is the board at its bottom; the lowest is the base above.
+  for(const cell of cells)if(cell.bottom>1e-6)quarter(cell.bottom+T0/2,T0);
+  // The top board is as thick as a shelf.
+  if(cap)quarter(h-T0/2,T0);
   return;
  }
  if(type==='cove'){

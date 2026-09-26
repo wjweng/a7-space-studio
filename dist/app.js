@@ -15,7 +15,7 @@ const icons={sofa:'▱',bed:'▤',wardrobe:'▥',drawer:'▤',console:'▭',pane
 const hangingTemplate={id:'hanging-template',type:'hangingCabinet',name:'吊櫃（新增）',x:0,z:0,w:1.2,d:.35,h:.6,rot:0,open:0,assumed:true};
 const beamTemplate={id:'beam-template',type:'beam',name:'天花板樑（新增）',x:4,z:3.5,w:1.2,d:.18,h:.3,rot:0,open:0,assumed:false};
 const tvTemplate={id:'tv-template',type:'television',name:'電視（新增）',x:0,z:0,w:1.22,d:.06,h:.69,rot:0,open:0,elevation:1.3,tvMount:'wall',assumed:true};
-const cornerShelfTemplate={id:'corner-shelf-template',type:'cornerShelf',name:'轉角層架（新增）',x:0,z:0,w:.3,d:.3,h:2.5,rot:0,open:0,shelves:[.63,1.25,1.88],cap:true,assumed:true};
+const cornerShelfTemplate={id:'corner-shelf-template',type:'cornerShelf',name:'轉角層架（新增）',x:0,z:0,w:.3,d:.3,h:2.5,rot:0,open:0,cap:true,assumed:true};
 const coveTemplate={id:'cove-template',type:'cove',name:'燈槽（新增）',x:0,z:0,w:2,d:.15,h:.04,rot:0,open:0,coveGap:.25,colorTemperature:'warm',lumens:1000,dimming:75,on:true,assumed:true};
 const panelTemplate={id:'panel-template',type:'panel',name:'背板（新增）',x:0,z:0,w:2.2,d:.03,h:2.4,rot:0,open:0,elevation:0,assumed:true};
 const lightTemplate={id:'light-template',type:'light',name:'天花板燈（新增）',x:4,z:3.5,w:.36,d:.36,h:.08,rot:0,open:0,lightKind:'ceiling',shape:'round',colorTemperature:'white',lumens:1200,dimming:75,pendantLength:.45,on:true,assumed:false};
@@ -152,6 +152,7 @@ const cabinetEditor=createCabinetEditor({
  getItem:id=>items.find(f=>f.id===id),
  commit:commitFurniture,
  resizeEdges:true,maxHeight:HEIGHT,notify,
+ shelvesOnly:f=>f.type==='cornerShelf',
  hostedTvs:f=>items.filter(tv=>hostsNicheTv(f,tv)).map(tv=>({name:tv.name,cell:tv.supportCell})),
  // Whether a resized cabinet stays inside the apartment and adds no clash it
  // did not already have; `reason` names the first new problem.
@@ -197,8 +198,8 @@ cabinetButton.onclick=()=>{const f=items.find(item=>item.id===selected);if(f)cab
 const renderWithCabinet=renderProps;
 renderProps=()=>{
  renderWithCabinet();
- const f=items.find(item=>item.id===selected),show=!!f&&cabinetTypes.includes(f.type);
- cabinetButton.hidden=!show;
+ const f=items.find(item=>item.id===selected),show=!!f&&(cabinetTypes.includes(f.type)||f.type==='cornerShelf');
+ cabinetButton.hidden=!show;cabinetButton.textContent=f?.type==='cornerShelf'?'編輯層架':'編輯櫃體分格';
  if(f?.cabinetDesign)$('doorStyleField').hidden=true;
 };
 // Undo, redo and scheme loads replace every item, so the open cabinet
@@ -215,24 +216,12 @@ const coveControls=document.createElement('div');
 coveControls.className='coveControls';
 coveControls.innerHTML='<div class="sectiontitle space">燈槽</div><div class="inputs"><label>離天花板（cm）<input id="coveGap" type="number" min="5" max="100" step="1"></label><label>色溫<select id="coveTemperature"><option value="white">白光</option><option value="natural">自然光</option><option value="warm">黃光</option></select></label><label>光通量（lm）<input id="coveLumens" type="number" min="100" max="10000" step="50"></label><label>調光比例（%）<input id="coveDimming" type="number" min="0" max="100" step="5"></label></div><label class="checkline"><input id="coveOn" type="checkbox">此燈開啟</label><p class="muted">燈條藏在燈槽板上方往上打，照亮天花板與上方牆面；光暈在夜間或關主燈時最明顯。</p>';
 panelControls.after(coveControls);
-// A corner shelf: each shelf's height above the floor, set one by one.
-const cornerControls=document.createElement('div');
-cornerControls.className='cornerControls';
+// A corner shelf's shelves are edited in the cabinet editor (「編輯層架」).
+const cornerControls=document.createElement('p');
+cornerControls.className='muted cornerControls';
+cornerControls.textContent='直角那一角貼進牆與櫃子的交角，弧面朝房間；用旋轉（每次 90°）換到其他角落，按「靠近牆面」貼牆。層板位置與頂板在「編輯層架」裡調整。';
 panelControls.after(cornerControls);
-const commitShelves=(f,shelves,extra={})=>commitFurniture(f,{...f,shelves,...extra});
-{const renderWithCorner=renderProps;renderProps=()=>{renderWithCorner();const f=items.find(item=>item.id===selected);cornerControls.hidden=f?.type!=='cornerShelf';if(f?.type!=='cornerShelf'||cornerControls.contains(document.activeElement))return;
- cornerControls.replaceChildren();
- const title=document.createElement('div');title.className='sectiontitle space';title.textContent='層板（離地高度 cm）';cornerControls.append(title);
- const grid=document.createElement('div');grid.className='inputs';
- [...f.shelves].reverse().forEach(y=>{const label=document.createElement('label');label.className='cornerShelfRow';const input=document.createElement('input');input.type='number';input.min='10';input.step='1';input.value=Math.round(y*100);input.onchange=()=>commitShelves(f,f.shelves.map(v=>v===y?Number(input.value)/100:v));const remove=document.createElement('button');remove.type='button';remove.textContent='刪除';remove.onclick=()=>commitShelves(f,f.shelves.filter(v=>v!==y));label.append(input,remove);grid.append(label);});
- cornerControls.append(grid);
- const add=document.createElement('button');add.type='button';add.className='wide';add.textContent='＋層板';
- // A new shelf goes in the middle of the tallest open gap.
- add.onclick=()=>{const top=f.h-(f.cap?.025:0),edges=[0,...f.shelves,top];let best=0;for(let i=1;i<edges.length-1;i++)if(edges[i+1]-edges[i]>edges[best+1]-edges[best])best=i;const y=Math.round((edges[best]+edges[best+1])/2*100)/100;commitShelves(f,[...f.shelves,y]);};
- const capLabel=document.createElement('label');capLabel.className='checkline';const cap=document.createElement('input');cap.type='checkbox';cap.checked=f.cap;cap.onchange=()=>commitShelves(f,f.shelves,{cap:cap.checked});capLabel.append(cap,document.createTextNode('頂部弧形頂板'));
- const note=document.createElement('p');note.className='muted';note.textContent='直角那一角貼進牆與櫃子的交角，弧面朝房間；用旋轉（每次 90°）換到其他角落，按「靠近牆面」貼牆。';
- cornerControls.append(add,capLabel,note);
-};}
+{const renderWithCorner=renderProps;renderProps=()=>{renderWithCorner();cornerControls.hidden=items.find(item=>item.id===selected)?.type!=='cornerShelf';};}
 {const renderWithCove=renderProps;renderProps=()=>{renderWithCove();const f=items.find(item=>item.id===selected);coveControls.hidden=f?.type!=='cove';if(f?.type!=='cove')return;for(const [id,value]of[['coveGap',Math.round(f.coveGap*100)],['coveLumens',Math.round(f.lumens)],['coveDimming',Math.round(f.dimming)]])if(document.activeElement!==$(id))$(id).value=value;$('coveTemperature').value=f.colorTemperature;$('coveOn').checked=f.on;};}
 for(const id of['coveGap','coveTemperature','coveLumens','coveDimming','coveOn'])$(id).addEventListener('change',()=>{const f=items.find(item=>item.id===selected);if(f?.type==='cove')commitFurniture(f,{...f,coveGap:Number($('coveGap').value)/100,colorTemperature:$('coveTemperature').value,lumens:Number($('coveLumens').value),dimming:Number($('coveDimming').value),on:$('coveOn').checked});});
 $('panelElevation').onchange=()=>{const f=items.find(item=>item.id===selected);if(f)commitFurniture(f,{...f,elevation:Number($('panelElevation').value)/100});};

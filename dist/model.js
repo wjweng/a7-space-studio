@@ -130,12 +130,28 @@ export const lightColorTemperatures=['white','natural','warm'];
 // from the board's top to the ceiling; the board's underside height is kept as
 // `elevation`, like TVs and back panels, so clashes use the usual rules.
 export function normalizeCove(f){const light=normalizeLight({...f,colorTemperature:f.colorTemperature??'warm',lumens:f.lumens??1000});return{coveGap:clamp(f.coveGap??.25,.05,1),colorTemperature:light.colorTemperature,lumens:light.lumens,dimming:light.dimming,on:light.on};}
-// A corner shelf: a quarter-round open shelf unit whose round corner sits in
-// the corner it fills (local back-right; rotate it for the other corners).
-// `shelves` are the heights of each shelf's top above the floor, `cap` the
-// arched top board.
+// A corner shelf: a quarter-round open shelf unit whose square corner sits in
+// the corner it fills (local back-right; rotate it for the other corners). Its
+// shelves are a one-column cabinet design whose cells are all open, so the
+// cabinet editor edits it (shelf heights, adding and removing shelves, edge
+// drags); each cell's shelf is the board at its bottom. `cap` is the top board.
 export const CORNER_BOARD=.025;
-export function normalizeCornerShelf(f){const h=Number.isFinite(f.h)?f.h:2.5,top=h-(f.cap===false?0:CORNER_BOARD)-.05;const given=Array.isArray(f.shelves)?f.shelves:[1,2,3].map(i=>Math.round(h*i/4*100)/100);const shelves=[...new Set(given.filter(y=>Number.isFinite(y)&&y>=.1&&y<=top).map(y=>Math.round(y*1000)/1000))].sort((a,b)=>a-b).slice(0,12);return{shelves,cap:f.cap!==false};}
+const cornerId=()=>globalThis.crypto?.randomUUID?.()||Math.random().toString(36).slice(2);
+// Layouts saved before 2026-09-27 kept shelf-top heights in `shelves`.
+function cornerDesignFromShelves(f){
+  const h=f.h,given=Array.isArray(f.shelves)?f.shelves:[1,2,3].map(i=>h*i/4+CORNER_BOARD);
+  const cuts=[];for(const top of [...given].filter(Number.isFinite).sort((a,b)=>a-b)){const cut=round4(top-CORNER_BOARD);if(cut-(cuts.at(-1)??0)>=.15&&h-cut>=.15)cuts.push(cut);}
+  const edges=[0,...cuts,h];
+  return{template:'custom',columns:[{id:cornerId(),width:f.w,bottom:0,cells:edges.slice(1).map((edge,i)=>({id:cornerId(),height:round4(edge-edges[i]),front:'open'}))}]};
+}
+export function normalizeCornerShelf(f){
+  // Fronts are cleared before validating: a 30 cm unit could not hold one anyway.
+  const given=f.cabinetDesign&&typeof f.cabinetDesign==='object'?structuredClone(f.cabinetDesign):cornerDesignFromShelves(f);
+  if(Array.isArray(given.columns))for(const cell of designLeaves(given)){cell.front='open';delete cell.handle;delete cell.finishes?.door;delete cell.finishes?.drawerBox;}
+  delete given.doorGroups;
+  const design=validateCabinetDesign(f,given);
+  return{cabinetDesign:design,cap:f.cap!==false};
+}
 export function normalizeLight(f){const legacyLumens=Number.isFinite(f.lumens)?f.lumens:Number.isFinite(f.watts)?f.watts*50:1200;return{lightKind:lightKinds.includes(f.lightKind)?f.lightKind:'ceiling',shape:lightShapes.includes(f.shape)?f.shape:'round',colorTemperature:lightColorTemperatures.includes(f.colorTemperature)?f.colorTemperature:'white',lumens:clamp(legacyLumens,100,10000),dimming:clamp(f.dimming??f.brightness??75,0,100),pendantLength:clamp(f.pendantLength??.45,.05,HEIGHT-.12),on:f.on!==false};}
 export function normalizeSinkBasin(f){
  const maxW=Math.max(.08,f.w-.08),maxD=Math.max(.08,f.d-.08),basin=f.basin||{};
