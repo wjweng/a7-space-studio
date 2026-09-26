@@ -245,7 +245,8 @@ export function modularCabinetRects(f,amounts={}){
     const width=panel.w-FRONT_GAP,z=f.d/2+FRONT_Z;
     const door=(hinge,sign,panelWidth)=>{
       const turn=-sign*amount*Math.PI/2,p=world(hinge+sign*Math.cos(turn)*panelWidth/2,z-sign*Math.sin(turn)*panelWidth/2);
-      result.push({...p,w:panelWidth,d:.04,rot:f.rot+turn*180/Math.PI,yMin:base+panel.bottom,yMax:base+panel.bottom+panel.h,cellId:panel.id});
+      // As thick as the drawn leaf (FRONT_T), so the sweep matches what is seen.
+      result.push({...p,w:panelWidth,d:FRONT_T,rot:f.rot+turn*180/Math.PI,yMin:base+panel.bottom,yMax:base+panel.bottom+panel.h,cellId:panel.id});
     };
     const left=panel.x-width/2,right=panel.x+width/2;
     if(panel.front==='left')door(left,1,width);

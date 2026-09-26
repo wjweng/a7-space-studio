@@ -73,3 +73,12 @@ test('the scene draws one leaf per shared door and a handle only when ticked',()
   const handled=count(withDesign(merged,design));
   assert.equal(handled.metal-plain.metal,3,'one handle per door and one on the drawer');
 });
+
+test('an open cabinet door is checked at the thickness it is drawn, beside the side panel',()=>{
+  const f=cabinet();f.cabinetDesign.columns[1].cells[0].front='right';
+  const [leaf]=modularCabinetRects({...f,cabinetDesign:validateCabinetDesign(f,f.cabinetDesign)},{d:1});
+  assert.equal(leaf.d,.018);
+  // Right-hinged door d, open 90°: it pokes past the side by half its thickness less the reveal.
+  const outside=leaf.x+leaf.d/2-(f.x+f.w/2);
+  assert(Math.abs(outside-(.009-FRONT_GAP/2))<1e-9,`pokes out ${outside}`);
+});
