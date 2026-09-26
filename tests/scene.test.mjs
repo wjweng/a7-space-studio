@@ -298,3 +298,18 @@ test('in walk view a dark room is not lit through its walls by lamps in other ro
  assert(kitchenLamp.intensity>0,'the overview shows every lamp');
  assert.equal(living.on,false);
 });
+test('walking into another room eases the lighting over about half a second instead of jumping',()=>{
+ const s=fixture(),base=initialFurniture.find(item=>item.type==='light');
+ const kitchen={...base,id:'kitchen',x:4.9,z:6.45,on:true,dimming:100},g=new THREE.Group;g.position.set(4.9,0,6.45);s.makeFurniture(g,kitchen);g.updateMatrixWorld(true);
+ Object.assign(s,{hemi:{intensity:0},sun:{intensity:0},bounce:new THREE.HemisphereLight(0,0,0),scene:{background:{set(){}}},lightsOn:true,night:true,mode:'walk',camera:{position:new THREE.Vector3(1.3,1.6,3.15)},renderer:{capabilities:{maxTextures:8}}});
+ s.updateLight();
+ const lamp=s.lightObjects[0].point,full=lamp.userData.fullIntensity;
+ assert.equal(lamp.intensity,0);
+ s.camera.position.set(4.9,1.6,6.45);s.fadeLights=true;s.assignLampShadows();s.updateRoomLight();s.fadeLights=false;
+ assert.equal(lamp.intensity,0,'nothing jumps on the frame the room changes');
+ s.stepLightFade(.04);
+ assert(lamp.intensity>0&&lamp.intensity<full*.3,'it starts to come up');
+ for(let t=0;t<1;t+=.04)s.stepLightFade(.04);
+ assert.equal(lamp.intensity,full,'and settles within a second');assert(s.bounce.intensity>0);
+ assert.equal(s.stepLightFade(.04),false,'no more frames are needed');
+});
