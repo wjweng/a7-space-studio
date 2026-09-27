@@ -122,12 +122,18 @@ export function wallMount(f){
 // A back panel on that wall (a TV wall) comes between: the TV then hangs on the panel's face.
 export function wallTvMount(tv,items=[]){
  const [w,tall]=turnedSize(tv.w,tv.h,tv.spin||0),placed=wallMount({...tv,w});if(!Number.isFinite(placed.x))return placed;
- const a=placed.rot*Math.PI/180,nx=Math.sin(a),nz=Math.cos(a);let p={...tv,...placed,w};
+ const p=ontoPanels({...tv,...placed,w},tall,items);
+ return{x:p.x,z:p.z,rot:p.rot};
+}
+// Pushes something flat on a wall (facing its local +z) out onto the face of any back panel
+// on that wall at its height, so it sits on the panel rather than inside it.
+function ontoPanels(p,tall,items){
+ const a=p.rot*Math.PI/180,nx=Math.sin(a),nz=Math.cos(a),bottom=p.elevation||0;
  for(let i=0;i<4;i++){
-  const panel=items.find(o=>o.type==='panel'&&o.id!==tv.id&&(o.elevation||0)<tv.elevation+tall&&tv.elevation<(o.elevation||0)+o.h&&signedDistance(p,o)<-EPS);
+  const panel=items.find(o=>o.type==='panel'&&o.id!==p.id&&(o.elevation||0)<bottom+tall&&bottom<(o.elevation||0)+o.h&&signedDistance(p,o)<-EPS);
   if(!panel)break;const push=-signedDistance(p,panel);p={...p,x:p.x+nx*push,z:p.z+nz*push};
  }
- return{x:p.x,z:p.z,rot:p.rot};
+ return p;
 }
 // Things flat against a wall or back panel, which move along it and turn in its plane.
 export const onWallPlane=f=>f?.type==='outlet'&&f.outletMount!=='top'||f?.type==='television'&&f.tvMount==='wall';
@@ -140,7 +146,7 @@ export const turnAboutCentre=(before,after)=>({...after,elevation:(before.elevat
 // panel) at `offsetX`/`offsetZ` in the host's own axes, so it follows the host. With
 // `fromPoint` its x/z (a drag) set that spot first.
 export function placeOutlet(o,items,{fromPoint=false}={}){
- if(o.outletMount==='wall')return{...o,...wallMount(o)};
+ if(o.outletMount==='wall')return ontoPanels({...o,...wallMount(o)},o.h,items);
  const host=items.find(i=>i.id===o.supportId);if(!host)return o;
  const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v)),base=['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0;
  let u=o.offsetX||0,v=o.offsetZ||0;
@@ -255,6 +261,23 @@ export function guardedMove(f,target,items){
  const first={item:f,reason:''},xz=travel(travel(first,'x',target.x),'z',target.z),zx=travel(travel(first,'z',target.z),'x',target.x);
  const score=({item})=>Math.hypot(item.x-target.x,item.z-target.z);
  return score(xz)<=score(zx)?xz:zx;
+}
+// A wall socket moved, raised or turned: straight there when that buries it in nothing new,
+// otherwise along the straight path from where it was (x, z and height together, 1 cm steps,
+// as it is only 1.5 cm thick) up to contact. A turn or a move from another mount that would
+// bury it is refused (the socket stays as `f`).
+export function guardedSocket(f,next,items){
+ if(next.outletMount!=='wall')return{item:next,reason:''};
+ const check=problemCheck(f,items),hit=check(next);if(!hit)return{item:next,reason:''};
+ if(f.outletMount!=='wall'||(f.spin||0)!==(next.spin||0))return{item:f,reason:hit};
+ const e0=f.elevation||0,e1=next.elevation||0,at=t=>({...next,x:f.x+(next.x-f.x)*t,z:f.z+(next.z-f.z)*t,elevation:e0+(e1-e0)*t});
+ const n=Math.max(1,Math.ceil(Math.hypot(next.x-f.x,next.z-f.z,e1-e0)/.01));
+ for(let i=1;i<=n;i++){
+  const found=check(at(i/n));if(!found)continue;
+  let lo=(i-1)/n,hi=i/n;for(let j=0;j<25;j++){const mid=(lo+hi)/2;if(check(at(mid)))hi=mid;else lo=mid;}
+  return{item:at(lo),reason:found};
+ }
+ return{item:next,reason:''};
 }
 // The largest step toward a bigger size that adds no problem: `make(k)` builds the item k
 // whole centimetres of the way (k = 0 is `f` itself, k = steps the requested size).

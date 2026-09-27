@@ -65,5 +65,5 @@
 .cabinetField.checkline{flex-direction:row;align-items:center;gap:6px;min-width:0;flex:0 0 auto;white-space:nowrap;font-size:14px;padding:9px 12px;border:1px solid transparent;cursor:pointer}
 .cabinetField.checkline input{width:auto;margin:0}
 .cabinetFridgeRow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}.cabinetFridgeRow button{font-size:12px;padding:6px 9px}.cabinetFridgeRow button.active{border-color:var(--ink);background:#f0f5f2}.cabinetFridgeRow input[type=color]{width:34px;height:26px;padding:0;border:1px solid var(--line)}
-.outletDialog{width:min(900px,94vw)}#outletTable{overflow:auto;max-height:60dvh}#outletTable table{width:100%;border-collapse:collapse;font-size:13px}#outletTable th,#outletTable td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;white-space:nowrap}#outletTable th{color:var(--muted);font-weight:600}.outletActions{display:flex;gap:8px;margin-top:14px}
+
 .cabinetSocket{fill:#fff;stroke:#c36b45;stroke-width:2px;vector-effect:non-scaling-stroke;cursor:move}

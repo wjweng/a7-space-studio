@@ -266,3 +266,25 @@ test('a turn in the wall plane keeps the plate centred, not its bottom',async()=
  const low=validateFurniture([turnAboutCentre({...socket,elevation:0},{...socket,elevation:0,spin:90})])[0];
  assert.equal(low.elevation,0,'a socket on the floor line stays above the floor');
 });
+test('wall sockets stop at furniture standing or hanging against that wall',async()=>{
+ const {initialFurniture,validateFurniture}=await import('../dist/model.js');const {placeOutlet,guardedSocket}=await import('../dist/spatial.js');
+ // Bedroom A's wardrobe pushed back against its north wall (face at z 0.06).
+ const items=validateFurniture(initialFurniture).map(f=>f.id==='wardA'?{...f,z:.06+f.d/2}:f),ward=items.find(f=>f.id==='wardA');
+ const socket=(x,elevation=.3)=>placeOutlet(validateFurniture([{id:'s',type:'outlet',name:'插座',outletKind:'duplex',outletMount:'wall',x,z:.05,w:.12,d:.015,h:.075,rot:0,elevation}])[0],items);
+ const behind=socket(ward.x),beside=socket(ward.x+ward.w/2+.3);
+ assert.deepEqual(issues(behind,[...items,behind]),['與臥室 A 衣櫃重疊'],'a socket behind the wardrobe is buried in it');
+ assert.deepEqual(issues(socket(ward.x,2.5),[...items]),[],'above the wardrobe it is clear');
+ const slid=guardedSocket(beside,{...beside,x:ward.x},items);
+ assert.match(slid.reason,/臥室 A 衣櫃/);assert.ok(Math.abs(slid.item.x-(ward.x+ward.w/2+.06))<1e-4,'sliding along the wall stops at the wardrobe side');
+ const lowered=guardedSocket(socket(ward.x,2.5),{...socket(ward.x,2.5),elevation:.3},items);
+ assert.ok(Math.abs(lowered.item.elevation-(ward.elevation||0)-ward.h)<1e-4,'lowering stops on the wardrobe top');
+ assert.equal(guardedSocket(socket(ward.x+ward.w/2+.07),{...socket(ward.x+ward.w/2+.07),spin:90},items).reason,'','a turn clear of the wardrobe is kept');
+ const desk={id:'d',type:'desk',name:'書桌',x:ward.x,z:.06+.3,w:1,d:.6,h:.75,rot:0};
+ const under=socket(ward.x);assert.deepEqual(issues(under,[desk,under]),[],'a socket may sit under a desk top, between its legs');
+});
+test('a wall socket on a back panel sits on the panel face',async()=>{
+ const {validateFurniture}=await import('../dist/model.js');const {placeOutlet}=await import('../dist/spatial.js');
+ const panel={id:'p',type:'panel',name:'背板',x:3.24,z:.06+.009,w:1.2,d:.018,h:2,rot:0,elevation:0};
+ const s=placeOutlet(validateFurniture([{id:'s',type:'outlet',name:'插座',outletKind:'duplex',outletMount:'wall',x:3.24,z:.05,w:.12,d:.015,h:.075,rot:0,elevation:1}])[0],[panel]);
+ assert.ok(Math.abs(s.z-(.06+.018+.0075))<1e-6,'pushed out to the panel face');assert.deepEqual(issues(s,[panel,s]),[]);
+});

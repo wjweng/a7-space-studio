@@ -52,6 +52,16 @@ export function robotVacuumRects(f){
  const box=(z0,z1,top)=>{const v=(z0+z1)/2;return{x:f.x+v*s,z:f.z+v*c,w:f.w,d:z1-z0,rot:f.rot,yMin:0,yMax:top};};
  return[box(-f.d/2,-f.d/2+tower,f.h),box(-f.d/2+tower,f.d/2,Math.min(f.h,DOCK.front*f.h/DOCK.h))];
 }
+// Whether a wall socket is buried in something standing or hanging in front of that wall:
+// a cabinet's boards, a TV, a back panel, a sofa. Tables and desks block only with their top
+// and legs, so a socket may sit under a desk. Only the socket is flagged: a socket stops a
+// socket, never the furniture, which moves as before. Hanging cabinets need their elevation.
+export function socketCovered(s,o){
+ if(s.outletMount!=='wall'||['rug','light','beam','outlet'].includes(o.type))return false;
+ const lift=['television','hangingCabinet','panel','cove'].includes(o.type)?o.elevation||0:0,plate={...s,yMin:s.elevation||0,yMax:(s.elevation||0)+s.h};
+ const parts=o.cabinetDesign?cabinetOccupiedRects(o):o.type==='robotVacuum'?robotVacuumRects(o):isTableLike(o)?[{...o,yMin:o.h-.045,yMax:o.h},...tableLegRects(o).map(leg=>({...leg,yMin:0,yMax:o.h}))]:[{...o,yMin:lift,yMax:lift+o.h}];
+ return parts.some(part=>plate.yMin<part.yMax-EPS&&part.yMin<plate.yMax-EPS&&clashes(plate,part));
+}
 export function furnitureInterference(a,b){
  // TVs, hanging cabinets, back panels and light coves carry their underside height as `elevation`.
  const lifted=f=>['television','hangingCabinet','panel','cove'].includes(f.type)?f.elevation||0:0,ay=lifted(a),by=lifted(b);
