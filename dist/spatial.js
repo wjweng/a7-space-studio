@@ -1,6 +1,6 @@
-import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,WALL_THICKNESS} from './model.js';
+import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,wallsHit,WALL_THICKNESS} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference} from './geometry.js';
-import {modularCabinetRects} from './cabinet-design.js';
+import {modularCabinetRects,resizeCabinetDesign} from './cabinet-design.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
 // The rendered leaf, in the door group's frame: x runs along the opening from the hinge jamb,
 // z across the wall. It closes inside the frame, flush with the wall face on its swing side,
@@ -129,9 +129,14 @@ export function constrainMove(f,target,items){
 // warned about, so they never stop a move; clashes `f` already had never block it either.
 export function addedProblem(f,next,items){return problemCheck(f,items)(next);}
 // The same test as a function of the changed item, with `f`'s own problems worked out once.
+// Walls are compared one by one: an item already touching one wall must still stop at the next.
 function problemCheck(f,items){
- const others=items.filter(o=>o.id!==f.id),before=new Set(issues(f,[f,...others],{doorSweeps:false}));
- return next=>issues(next,[next,...others],{doorSweeps:false}).find(message=>!before.has(message))||'';
+ const others=items.filter(o=>o.id!==f.id),before=new Set(issues(f,[f,...others],{doorSweeps:false})),walls=new Set(wallsHit(f)),wall='與牆體重疊';
+ return next=>{
+  const found=issues(next,[next,...others],{doorSweeps:false}).find(message=>message!==wall&&!before.has(message));
+  if(found)return found;
+  return wallsHit(next).some(i=>!walls.has(i))?wall:'';
+ };
 }
 // Moves `f` toward `target`: straight there when that adds no problem (so a drag can hop
 // over an obstacle once the pointer reaches free space), otherwise as far as it can along
@@ -163,6 +168,23 @@ export function largestFit(f,make,steps,items){
  while(lo<hi){const mid=Math.ceil((lo+hi)/2);if(check(make(mid)))hi=mid-1;else lo=mid;}
  // What the next centimetre runs into, not what the full requested size would.
  return{item:lo?make(lo):null,reason:check(make(lo+1)),k:lo};
+}
+// A size change a fraction t of the way from f to next (position included, so a fixed side
+// stays put); cabinets resize their cells along.
+export function sizedStep(f,next,t){const p={...next};for(const key of['x','z','w','d','h'])p[key]=f[key]+(next[key]-f[key])*t;if(f.cabinetDesign&&(p.w!==f.w||p.h!==f.h))p.cabinetDesign=resizeCabinetDesign(f.cabinetDesign,{w:f.w,h:f.h},{w:p.w,h:p.h});return p;}
+// The largest size toward next that adds no clash. The limit is found to a micrometre, then
+// the dimension that changes most is rounded down to a whole millimetre (0.1 cm, the
+// precision the size fields show) measured from zero, so a drag stops at the same size
+// however it got there, and at the largest size one could type.
+// `k` is how far that dimension got, for comparing anchors.
+export function fitSize(f,next,items){
+ const key=['w','d','h'].reduce((a,b)=>Math.abs(next[b]-f[b])>Math.abs(next[a]-f[a])?b:a),from=f[key],to=next[key],span=to-from;
+ const steps=1<<20,fit=largestFit(f,k=>sizedStep(f,next,k/steps),steps,items);
+ if(!fit.reason||!span)return{...fit,k:Math.abs(span)};
+ const limit=from+span*fit.k/steps,mm=span>0?Math.floor(limit*1000+1e-3)/1000:Math.ceil(limit*1000-1e-3)/1000,t=(mm-from)/span;
+ if(t<=0)return{item:null,reason:fit.reason,k:0};
+ const item=sizedStep(f,next,t);item[key]=mm;
+ return{item,reason:fit.reason,k:Math.abs(mm-from)};
 }
 // Editor drags represent lifting an item. Interior conflicts remain editable drafts;
 // only crossing the apartment's exterior outline blocks the pointer position.

@@ -117,3 +117,36 @@ test('a stopped resize names what the next centimetre runs into',async()=>{
   assert.equal(fit.reason,'與近的櫃重疊');
   assert(Math.abs(fit.item.x+fit.item.w/2-(near.x-near.w/2))<.011);
 });
+
+test('a stopped resize lands on the same whole centimetre from any starting size',async()=>{
+  const {fitSize}=await import('../dist/spatial.js');
+  // Owner's balcony: the washer's left side on the bedroom-B wall face (6.63), the balcony
+  // block 88 cm to the right. Dragging the right edge far out from odd widths.
+  const left=6.63;
+  for(const w of[.8,.853,.871,.873,.876]){
+    const f={id:'wash',type:'washer',name:'洗衣機',x:left+w/2,z:4.77,w,d:.62,h:.87,rot:0,open:0};
+    const next={...f,w:1.3,x:left+1.3/2};
+    const fit=fitSize(f,next,[f]);
+    assert.equal(fit.item.w,.88,`from ${w}: ${fit.item.w}`);
+    assert(Math.abs(fit.item.x-fit.item.w/2-left)<1e-9,'the left side stays put');
+  }
+});
+
+test('a stopped resize keeps millimetres: a gap of 88.35 cm stops at 88.3',async()=>{
+  const {fitSize}=await import('../dist/spatial.js');
+  const left=6.63-.0035;
+  const f={id:'wash',type:'washer',name:'洗衣機',x:left+.4,z:4.77,w:.8,d:.62,h:.87,rot:0,open:0};
+  const fit=fitSize(f,{...f,w:1.3,x:left+.65},[f]);
+  // The wall face is 3.5 mm left of 6.63 here, so the item overlaps it: that clash is old and
+  // does not stop the resize; the balcony block 88.35 cm from `left` does.
+  assert.equal(fit.item.w,.883);
+});
+
+test('an item already touching one wall still stops at the next wall',async()=>{
+  const {guardedMove}=await import('../dist/spatial.js');
+  // Owner's bath-A sink, left over the west wall (face 1.58) after the 2026-09-27 wall move.
+  const sink={id:'bathSink1',type:'sink',name:'衛浴 A 洗手台',x:1.7,z:5.25,w:.82,d:.43,h:.83,rot:90,open:0};
+  const moved=guardedMove(sink,{x:3.1,z:5.25},[sink]);
+  assert.equal(moved.reason,'與牆體重疊');
+  assert(moved.item.x+sink.d/2<=3.08-.06+1e-6,`stops at the east wall face, x=${moved.item.x}`);
+});
