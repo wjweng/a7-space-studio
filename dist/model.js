@@ -14,9 +14,12 @@ export const columns=[
  {id:'entry-column',x:.01,z:7.07,w:.80,d:.84,rot:0},
  {id:'balcony-south-column',x:8.525,z:6.885,w:.85,d:.85,rot:0}
 ];
-// Hatched solid areas in A7: bath-A column and balcony corner blocks.
+// Hatched solid areas in A7: bath-A column and balcony corner blocks. The bath-A column
+// stops at the step where the entry's end wall begins: 215 cm down bath A's west wall,
+// then 160 cm clear to the entry's south wall (8.53 - 0.06 - 1.60 = 6.87).
+export const ENTRY_STEP=6.87;
 export const structuralBlocks=[
- {id:'bath-A-block',x:1.64,z:6.725,w:.48,d:1.05,rot:0},
+ {id:'bath-A-block',x:1.64,z:(6.2+ENTRY_STEP)/2,w:.48,d:ENTRY_STEP-6.2,rot:0},
  {id:'balcony-north-block',x:7.975,z:4.625,w:.65,d:.45,rot:0}
 ];
 export const structuralSolids=[...columns,...structuralBlocks];
@@ -37,7 +40,7 @@ export const walls=[
  {a:[0,0],b:[0,6.71]}, {a:[8.3,0],b:[8.3,2.7]},
  {a:[8.3,2.7],b:[8.85,2.7]},{id:'window-bathB',a:[8.85,2.7],b:[8.85,4.4],opening:[.85,.72,1.5,.7]},
  {a:[8.85,4.4],b:[8.3,4.4]},{id:'balcony-railing',a:[8.3,4.4],b:[8.3,6.46],opening:[.67,1.34,.1,HEIGHT-.1],openingType:'railing'},
- {a:[8.1,7.25],b:[1.85,7.25]}, {a:[1.85,7.25],b:[1.85,8.53]},
+ {a:[8.1,7.25],b:[1.85,7.25]}, {a:[1.85,ENTRY_STEP],b:[1.85,8.53]},
  {a:[1.85,8.53],b:[-.45,8.53]}, {a:[-.45,8.53],b:[-.45,6.71],opening:[0,1.04,0,2.1]},
  {a:[-.45,6.71],b:[0,6.71]},
  {a:[2.82,0],b:[2.82,2.78]}, {a:[5.18,0],b:[5.18,2.78]},
@@ -51,9 +54,9 @@ export const walls=[
  {a:[6.57,4.4],b:[8.3,4.4]},
  {id:'window-B',a:[6.57,4.4],b:[6.57,5.78],opening:[.12,1.06,.9,1.5]},
  {id:'balcony-door-wall',a:[6.57,5.78],b:[6.57,7.25],opening:[.03,.9,0,2.1]},
- {a:[1.4,4.75],b:[3.08,4.75]}, {a:[1.4,4.75],b:[1.4,7.25]},
+ {a:[1.4,4.75],b:[3.08,4.75]}, {a:[1.4,4.75],b:[1.4,ENTRY_STEP]},
  {a:[3.08,4.75],b:[3.08,7.25],opening:[0,.74,0,2.1]},
- {a:[1.4,7.25],b:[3.08,7.25]}
+ {a:[1.85,7.25],b:[3.08,7.25]}
 ];
 export const doors=walls.filter(w=>w.opening&&w.opening[2]===0).map((w,i)=>{let [s,width]=w.opening,dx=w.b[0]-w.a[0],dz=w.b[1]-w.a[1],len=Math.hypot(dx,dz);return{id:'door-'+i,swing:[-1,1,1,1,1,1,-1][i],name:['臥室 A 房門','主臥通道門','臥室 B 房門','衛浴 B 房門','陽台門','衛浴 A 房門'][i-1]||'玄關大門',x:w.a[0]+dx/len*s,z:w.a[1]+dz/len*s,angle:-Math.atan2(dz,dx),width,height:2.1};});
 const curtainNames=['客廳窗簾','臥室 A 窗簾','主臥窗簾'];
