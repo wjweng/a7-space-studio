@@ -324,3 +324,17 @@ test('every socket kind draws on a wall, a top and in a cell at every turn, turn
     if(mount==='wall'){const plate=g.children.find(c=>c.isGroup);assert(Math.abs(plate.rotation.z-turn*Math.PI/180)<1e-9,'the whole plate turns in the wall');}
   }
 });
+
+test('top view: a click inside a socket ring picks it, and a socket has no resize edges',async()=>{
+  const {validateFurniture}=await import('../dist/model.js');
+  const s=fixture();
+  const [f]=validateFurniture([{id:'o',type:'outlet',name:'插座',x:1,z:1,w:.12,d:.015,h:.075,rot:0,open:0,outletKind:'duplex',outletMount:'wall',elevation:.3}]);
+  const g=new THREE.Group;s.makeFurniture(g,f);
+  const pad=g.children.find(c=>c.geometry?.type==='CircleGeometry');
+  assert(pad&&pad.userData.topOnly&&pad.material.colorWrite===false,'an unseen disc fills the ring');
+  const ring=g.children.find(c=>c.geometry?.type==='RingGeometry');assert.equal(pad.userData.baseY,ring.userData.baseY);
+  Object.assign(s,{mode:'top',selected:'o',placing:null,items:[f],ground:()=>({x:f.x+f.w/2,z:f.z})});
+  assert.equal(s.resizeAtPointer({}),null,'its edge cannot be dragged');
+  const table={id:'t',type:'table',name:'桌',x:1,z:1,w:1,d:.6,h:.75,rot:0};
+  Object.assign(s,{selected:'t',items:[table],ground:()=>({x:1.5,z:1})});assert.equal(s.resizeAtPointer({})?.kind,'resize','other items still resize');
+});
