@@ -140,6 +140,28 @@ export function placeOutlet(o,items,{fromPoint=false}={}){
 // cabinet's front, door or inside, the back panel of the cell under the pointer. Anything
 // else (floor, ceiling, a sofa) gives null. `surface` is {point, normal, id} from the scene.
 export const socketHosts=['wardrobe','console','drawer','sink','kitchen','desk','table','hangingCabinet','cornerShelf'];
+// Top view: the host whose top a point lies on (the highest one where several stack), or null.
+export function topHostAt(x,z,items){
+ let best=null;
+ for(const f of items){
+  if(!socketHosts.includes(f.type))continue;
+  const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=x-f.x,dz=z-f.z;
+  if(Math.abs(dx*c-dz*s)>f.w/2||Math.abs(dx*s+dz*c)>f.d/2)continue;
+  const top=(['hangingCabinet'].includes(f.type)?f.elevation||0:0)+f.h;
+  if(!best||top>best.top)best={f,top};
+ }
+ return best?.f||null;
+}
+// A socket clicked or dragged in top view: onto the top under the pointer, else onto the
+// nearest wall. One in a cell stays in its cell (top view cannot reach inside cabinets).
+export function socketFromTopView(o,point,items){
+ if(o.outletMount==='cell')return{...o,x:point.x,z:point.z};
+ const host=topHostAt(point.x,point.z,items.filter(f=>f.id!==o.id)),next={...o,x:point.x,z:point.z};
+ delete next.offsetX;delete next.offsetZ;
+ if(host)return{...next,outletMount:'top',supportId:host.id};
+ delete next.supportId;delete next.supportCell;delete next.offsetRot;
+ return{...next,outletMount:'wall'};
+}
 export function socketOnSurface(o,{point,normal,id},items){
  const base={...o,x:point.x,z:point.z};delete base.supportId;delete base.supportCell;delete base.offsetX;delete base.offsetZ;
  if(!id){if(Math.abs(normal.y)>.3)return null;return{...base,outletMount:'wall',elevation:point.y-o.h/2};}

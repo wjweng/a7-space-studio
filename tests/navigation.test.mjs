@@ -24,3 +24,18 @@ test('automatic walking completes around furniture without entering an obstacle'
  for(const d of doors){d.maxAngle=fixedDoorLimit(d);s.actions.set(d.id,{type:'door',def:d,amount:0,pivot:new T.Group});}
  s.onNavigationNotice=message=>assert.fail(message);for(const room of rooms){assert(s.startTour(room),room.name);let steps=0;while(s.route.length&&steps++<2000){s.frame();assert(s.canWalk(s.camera.position.x,s.camera.position.z),room.name);}assert(steps<2000);assert.equal(roomAt(s.camera.position.x,s.camera.position.z),roomAt(room.x,room.z),room.name+JSON.stringify(s.camera.position.toArray()));}
 });
+
+test('top view: clicking the same spot again selects the next item down, then wraps',()=>{
+  const{s,emit}=setup('top');s.items=[{id:'beam',x:0,z:0},{id:'bed',x:0,z:0}];s.pick=()=>({kind:'furniture',id:'beam'});s.itemsAt=()=>['beam','bed'];const picked=[];s.onSelect=id=>{picked.push(id);s.selected=id;};
+  for(let i=0;i<3;i++){emit('pointerdown');emit('pointerup');}
+  assert.deepEqual(picked,['beam','bed','beam']);
+  emit('pointerdown',{clientX:300});emit('pointerup',{clientX:300});
+  assert.equal(picked.at(-1),'beam','a click elsewhere starts from the top again');
+});
+
+test('ceiling items turn see-through without touching shared materials, and back',()=>{
+  const s=Object.create(SpaceScene.prototype),shared=new T.MeshStandardMaterial,g=new T.Group,mesh=new T.Mesh(new T.BoxGeometry,shared);g.add(mesh);
+  s.seeThrough(g,true);
+  assert.notEqual(mesh.material,shared);assert.equal(mesh.material.transparent,true);assert(mesh.material.opacity<.5);assert.equal(shared.transparent,false);
+  s.seeThrough(g,false);assert.equal(mesh.material,shared);
+});

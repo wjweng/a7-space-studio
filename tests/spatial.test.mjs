@@ -223,3 +223,17 @@ test('dropped socket kinds become duplex, and a wall socket turned upright swaps
   const placed=placeOutlet(inside,[cabinet,inside]);
   assert(Math.abs(placed.elevation+placed.h-(opening.bottom+opening.h))<1e-9,'the taller upright plate still fits in the cell');
 });
+
+test('in top view a socket goes onto the table or cabinet under the pointer, else the nearest wall',async()=>{
+  const {socketFromTopView,placeOutlet}=await import('../dist/spatial.js');
+  const {validateFurniture,initialFurniture}=await import('../dist/model.js');
+  const items=validateFurniture(initialFurniture),dining=items.find(f=>f.id==='dining');
+  const [o]=validateFurniture([{id:'o',type:'outlet',name:'插座',x:0,z:0,w:.12,d:.015,h:.075,rot:0,open:0}]);
+  const onTable=placeOutlet(validateFurniture([socketFromTopView(o,{x:dining.x+.2,z:dining.z},items)])[0],items,{fromPoint:true});
+  assert.deepEqual([onTable.outletMount,onTable.supportId,onTable.elevation],['top','dining',dining.h]);
+  assert(Math.abs(onTable.x-(dining.x+.2))<1e-9,'where it was dropped');
+  const back=socketFromTopView(onTable,{x:.3,z:3},items);
+  assert.equal(back.outletMount,'wall');assert.equal(back.supportId,undefined);
+  const inCell={...o,outletMount:'cell',supportId:'x',supportCell:'y'};
+  assert.equal(socketFromTopView(inCell,{x:1,z:1},items).outletMount,'cell');
+});
