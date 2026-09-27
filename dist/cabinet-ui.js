@@ -1,4 +1,4 @@
-import {doorGroupOf,mergeDoorCells,splitDoorGroup,groupFronts,boundsOf,cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,designFromDoorStyle,designLeaves,findLeaf,fitDesign,splitCabinetCell,removeCabinetNode,moveCabinetLine,locateCell,leafIdsUnder,cabinetStructure} from './cabinet-design.js';
+import {CARCASS_T,doorGroupOf,mergeDoorCells,splitDoorGroup,groupFronts,boundsOf,cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,designFromDoorStyle,designLeaves,findLeaf,fitDesign,splitCabinetCell,removeCabinetNode,moveCabinetLine,locateCell,leafIdsUnder,cabinetStructure} from './cabinet-design.js';
 
 const labels={open:'開放',left:'左開門',right:'右開門',double:'對開門',sliding:'滑門',drawers:'抽屜'};
 const cm=n=>Math.round(n*1000)/10;
@@ -178,6 +178,11 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       text.setAttribute('class','cabinetCellLabel');text.textContent=labels[cell.front];
       if(!doorGroupOf(design,cell.id))svg.append(text);
     }
+    // Sides extended to the floor under a raised column, and a dashed edge
+    // where a cell has no bottom board.
+    const shape=(tag,attrs,className)=>{const node=document.createElementNS(svg.namespaceURI,tag);for(const [key,value]of Object.entries(attrs))node.setAttribute(key,value);node.setAttribute('class',className);svg.append(node);};
+    for(const column of columns)if(column.sidesToFloor)for(const x of[column.x-column.width/2,column.x+column.width/2-CARCASS_T])shape('rect',{x:(x+f.w/2)*1000,y:(f.h-column.bottom)*1000,width:CARCASS_T*1000,height:column.bottom*1000},'cabinetLeg');
+    for(const cell of cells)if(cell.noBase){const y=(f.h-cell.bottom)*1000;shape('line',{x1:(cell.x-cell.w/2+f.w/2)*1000,x2:(cell.x+cell.w/2+f.w/2)*1000,y1:y,y2:y},'cabinetNoBase');}
     // A shared door is outlined over all its cells and labelled once, in its
     // largest cell: the door's own centre often falls on a shelf between cells.
     for(const group of design.doorGroups||[]){
@@ -260,6 +265,12 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     if(!simple)fields.append(field(f.type==='hangingCabinet'?'底部留空':'底部離地',selectedColumn.bottom,value=>edit(next=>{
       const c=next.columns.find(c=>c.id===columnId),delta=value-c.bottom;c.bottom=value;c.cells.at(-1).height-=delta;next.template='custom';
     }),0,cm(f.h-.15)));
+    // A raised floor cabinet can stand on its sides, keeping the space under it open.
+    if(!simple&&f.type!=='hangingCabinet'&&selectedColumn.bottom>0){
+      const label=elt('label','cabinetField checkline'),box=elt('input');box.type='checkbox';box.checked=!!selectedColumn.sidesToFloor;
+      box.onchange=()=>edit(next=>{const c=next.columns.find(c=>c.id===columnId);if(box.checked)c.sidesToFloor=true;else delete c.sidesToFloor;});
+      label.append(document.createTextNode('側板延伸到地面'),box);fields.append(label);
+    }
     // Splitting works on the selected cell; removing works on the row or
     // part it sits in. A floor cabinet's top row (a hanging cabinet's bottom
     // row) leaves a gap when removed standalone, as before.
@@ -277,6 +288,12 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     if(rowStep.list.length>1)fields.append(field('層格高度',rowStep.node.height,value=>resizeStep(rowStep,'height',value),15));
     if(partStep)fields.append(field('這格寬度',partStep.node.width,value=>resizeStep(partStep,'width',value),15));
     if(!simple){
+    // A column's lowest cells may leave out their bottom board, e.g. for a robot vacuum dock.
+    if(Math.abs(selectedLeaf.bottom-selectedColumn.bottom)<1e-6){
+      const label=elt('label','cabinetField checkline'),box=elt('input');box.type='checkbox';box.checked=!!selectedLeaf.noBase;
+      box.onchange=()=>edit(next=>{const leaf=findLeaf(next,leafId);if(box.checked)leaf.noBase=true;else delete leaf.noBase;next.template='custom';});
+      label.append(document.createTextNode('拿掉底板'),box);fields.append(label);
+    }
     // The door this cell belongs to: its own, or one shared with other cells.
     const group=doorGroupOf(design,leafId),members=group?group.cells:[leafId],setAll=apply=>edit(next=>{for(const cellId of members)apply(findLeaf(next,cellId));next.template='custom';});
     fields.append(elt('h3','',group?`門板（${members.length} 格共用）`:'門板'));

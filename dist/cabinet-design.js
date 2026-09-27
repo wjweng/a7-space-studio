@@ -70,7 +70,16 @@ function leafFields(cell,width){
   checkFront(cell.front,width);
   const finishes=ownFinishes(cell);
   if(!finishes.door&&isFinish(cell.finish))finishes.door=cell.finish; // before 2026-09-25 a cell had one front finish
-  return{front:cell.front,...(cell.handle&&cell.front!=='open'?{handle:true}:{}),...(Object.keys(finishes).length?{finishes}:{})};
+  return{front:cell.front,...(cell.handle&&cell.front!=='open'?{handle:true}:{}),...(cell.noBase?{noBase:true}:{}),...(Object.keys(finishes).length?{finishes}:{})};
+}
+// Only a column's lowest cells may leave out their bottom board (`noBase`);
+// a flag left on a cell that a split or line move lifted is dropped.
+function keepBaseOnlyAtBottom(rows,lowest){
+  rows.forEach((row,i)=>{
+    const low=lowest&&i===0;
+    if(row.parts)for(const part of row.parts){if(part.cells)keepBaseOnlyAtBottom(part.cells,low);else if(!low)delete part.noBase;}
+    else if(!low)delete row.noBase;
+  });
 }
 export function validateCabinetDesign(f,design){
   if(!design||!Array.isArray(design.columns)||!design.columns.length||design.columns.length>8)throw Error('櫃體分區數量須為 1 至 8');
@@ -81,8 +90,10 @@ export function validateCabinetDesign(f,design){
     const{width,bottom}=column,top=column.top??0;
     if(!Number.isFinite(width)||width<.2||!Number.isFinite(bottom)||bottom<0||!Number.isFinite(top)||top<0||bottom+top>f.h-.15)throw Error('櫃體分區寬度至少 20 cm，底部須保留 15 cm 以上櫃體');
     const cells=checkRows(column.cells,f.h-bottom-top,width,ids);
+    keepBaseOnlyAtBottom(cells,true);
     total+=width;
-    return{id:column.id,width:round(width),bottom:round(bottom),...(top>0?{top:round(top)}:{}),cells};
+    const legs=column.sidesToFloor&&bottom>0&&f.type!=='hangingCabinet';
+    return{id:column.id,width:round(width),bottom:round(bottom),...(top>0?{top:round(top)}:{}),...(legs?{sidesToFloor:true}:{}),cells};
   });
   if(Math.abs(total-f.w)>.002)throw Error('分區寬度總和必須等於櫃體總寬');
   const doorGroups=checkDoorGroups(f,columns,design.doorGroups);
@@ -228,12 +239,29 @@ export function cabinetColumns(f){
 }
 // A hanging cabinet's heights start at its underside (`elevation`).
 const baseHeight=f=>f.type==='hangingCabinet'?f.elevation||0:0;
+// The solid volumes of a cabinet, one box per column, except that a cell
+// without a bottom board is open from the column's underside up to its top,
+// back panel excepted, so something standing on the floor (a robot vacuum
+// dock) can sit inside it; sides extended to the floor are solid too.
 export function cabinetOccupiedRects(f){
-  const angle=f.rot*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),base=baseHeight(f);
-  return cabinetColumns(f).map(column=>({
-    x:f.x+column.x*c,z:f.z-column.x*s,w:column.width,d:f.d,rot:f.rot,
-    yMin:base+column.bottom,yMax:base+f.h-(column.top||0)
-  }));
+  const angle=f.rot*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),base=baseHeight(f),T=CARCASS_T,EPS=1e-6;
+  const box=(x0,x1,z0,z1,y0,y1)=>{const x=(x0+x1)/2,z=(z0+z1)/2;return{x:f.x+x*c+z*s,z:f.z-x*s+z*c,w:x1-x0,d:z1-z0,rot:f.rot,yMin:base+y0,yMax:base+y1};};
+  const back=-f.d/2,front=f.d/2,open=cabinetStructure(f).cells.filter(cell=>cell.noBase);
+  const out=[];
+  for(const column of cabinetColumns(f)){
+    const left=column.x-column.width/2,right=column.x+column.width/2,bottom=column.bottom,top=f.h-(column.top||0);
+    if(column.sidesToFloor)out.push(box(left,left+T,back,front,0,bottom),box(right-T,right,back,front,0,bottom));
+    const holes=open.filter(cell=>cell.columnId===column.id).map(cell=>({x0:cell.x-cell.w/2+cell.insetL,x1:cell.x+cell.w/2-cell.insetR,top:cell.bottom+cell.h-(cell.last?T:0)}));
+    const cuts=[...new Set([left,right,...holes.flatMap(h=>[h.x0,h.x1])])].sort((a,b)=>a-b);
+    for(let i=0;i<cuts.length-1;i++){
+      const x0=cuts[i],x1=cuts[i+1],hole=holes.find(h=>x0>=h.x0-EPS&&x1<=h.x1+EPS);
+      if(x1-x0<EPS)continue;
+      if(!hole){out.push(box(x0,x1,back,front,bottom,top));continue;}
+      out.push(box(x0,x1,back,back+T,bottom,hole.top));
+      if(hole.top<top-EPS)out.push(box(x0,x1,back,front,hole.top,top));
+    }
+  }
+  return out;
 }
 export function modularCabinetRects(f,amounts={}){
   const angle=f.rot*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle);
@@ -261,11 +289,11 @@ export function modularCabinetRects(f,amounts={}){
 }
 
 // The clear opening of one cell: between the side panels, above the cell's
-// bottom board and below the top board when the cell reaches the top.
+// bottom board (if it has one) and below the top board when the cell reaches the top.
 export function cellOpening(f,cellId){
   const cell=cabinetCells(f).find(c=>c.id===cellId);
   if(!cell)return null;
-  const bottom=cell.bottom+CARCASS_T,top=cell.bottom+cell.h-(cell.last?CARCASS_T:0);
+  const bottom=cell.bottom+(cell.noBase?0:CARCASS_T),top=cell.bottom+cell.h-(cell.last?CARCASS_T:0);
   return{cell,x:cell.x+(cell.insetL-cell.insetR)/2,w:cell.w-cell.insetL-cell.insetR,bottom,h:top-bottom,depth:f.d-CARCASS_T};
 }
 // A TV hung inside an open cell: centred in the opening, its back on a 1 cm
@@ -382,7 +410,7 @@ export function splitCabinetCell(design,leafId,makePartId=makeId,direction='side
   const here=path.at(-1),node=here.node,side=direction==='side';
   const size=side?here.width:here.height,half=round(size/2);
   if(size<(side?.4:.3))return null;
-  const keep={id:node.id,front:node.front,...(node.finishes?{finishes:node.finishes}:{})};
+  const keep={id:node.id,front:node.front,...(node.noBase?{noBase:true}:{}),...(node.finishes?{finishes:node.finishes}:{})};
   const fresh=extra=>({id:makePartId(),front:'open',...extra});
   if(side===(here.kind==='parts')){
     // Same direction as its list: add a sibling after it.
@@ -392,7 +420,7 @@ export function splitCabinetCell(design,leafId,makePartId=makeId,direction='side
   }else{
     // Across its list: the cell becomes a container of two.
     const key=side?'width':'height';
-    node.id=makePartId();delete node.front;delete node.finishes;
+    node.id=makePartId();delete node.front;delete node.finishes;delete node.noBase;
     node[side?'parts':'cells']=[{...keep,[key]:half},fresh({[key]:round(size-half)})];
   }
   next.template='custom';

@@ -346,3 +346,54 @@ test('a TV can stand on an open cell shelf, following the cabinet, with warnings
   assert.equal(validateFurniture([{...tv,x:2,z:1,rot:0,open:0,elevation:1}])[0].supportCell,'tv');
   assert.ok(!hostsNicheTv(f,{...tv,supportCell:undefined}),'a TV on the cabinet top is not in a cell');
 });
+
+// A robot-vacuum cabinet: raised on its sides, with a dock cell that has no bottom board.
+const raised=()=>{
+  const f=item();f.cabinetDesign=makeCabinetDesign(f,'closed');
+  const column=f.cabinetDesign.columns[0];column.bottom=.12;column.cells[0].height-=.12;column.sidesToFloor=true;
+  f.cabinetDesign=splitCabinetCell(f.cabinetDesign,column.cells[0].id,undefined,'stack');
+  return f;
+};
+
+test('a raised floor cabinet keeps sides to the floor, a hanging or unraised one does not',()=>{
+  const f=raised();
+  assert.equal(validateCabinetDesign(f,f.cabinetDesign).columns[0].sidesToFloor,true);
+  const flat=structuredClone(f.cabinetDesign);flat.columns[0].bottom=0;flat.columns[0].cells[0].height+=.12;
+  assert.equal(validateCabinetDesign(f,flat).columns[0].sidesToFloor,undefined);
+  assert.equal(validateCabinetDesign({...f,type:'hangingCabinet'},f.cabinetDesign).columns[0].sidesToFloor,undefined);
+});
+
+test('only a column\'s lowest cells may leave out their bottom board',()=>{
+  const f=raised(),[low,high]=f.cabinetDesign.columns[0].cells;
+  low.noBase=high.noBase=true;
+  f.cabinetDesign=validateCabinetDesign(f,f.cabinetDesign);
+  const [first,second]=f.cabinetDesign.columns[0].cells;
+  assert.equal(first.noBase,true);assert.equal(second.noBase,undefined);
+  assert.equal(cellOpening(f,first.id).bottom,.12);
+  assert.ok(Math.abs(cellOpening(f,second.id).bottom-(.12+first.height+CARCASS_T))<1e-9);
+});
+
+test('splitting a cell without a bottom board keeps that on its lower half',()=>{
+  const f=raised(),low=f.cabinetDesign.columns[0].cells[0];low.noBase=true;
+  for(const direction of['stack','side']){
+    const next=validateCabinetDesign(f,splitCabinetCell(f.cabinetDesign,low.id,undefined,direction));
+    const lowest=cabinetCells({...f,cabinetDesign:next}).filter(c=>Math.abs(c.bottom-.12)<1e-9);
+    assert.equal(lowest.find(c=>c.id===low.id).noBase,true,direction);
+  }
+});
+
+test('a robot vacuum dock fits inside a cell without a bottom board but not a cell with one',()=>{
+  // X60 Ultra dock (39 × 42.5 × 49.8 cm) in a 60 cm deep, 45 cm wide cabinet raised 12 cm on its sides.
+  const f={...item(),w:.45,d:.6,h:.95};
+  f.cabinetDesign={template:'custom',columns:[{id:'c',width:.45,bottom:.12,sidesToFloor:true,cells:[{id:'dock',height:.6,front:'left',noBase:true},{id:'top',height:.23,front:'open'}]}]};
+  f.cabinetDesign=validateCabinetDesign(f,f.cabinetDesign);
+  const dock={id:'dock',type:'robotVacuum',x:f.x,z:f.z-.6/2+CARCASS_T+.005+.425/2,w:.39,d:.425,h:.498,rot:0};
+  assert.equal(furnitureInterference(f,dock),false);
+  assert.equal(furnitureInterference(f,{...dock,z:dock.z-.02}),true,'into the back panel');
+  assert.equal(furnitureInterference(f,{...dock,x:dock.x+.02}),true,'into a side');
+  assert.equal(furnitureInterference(f,{...dock,h:.75}),true,'into the board above');
+  const closed=structuredClone(f);delete closed.cabinetDesign.columns[0].cells[0].noBase;
+  assert.equal(furnitureInterference(closed,dock),true,'the bottom board is in the way');
+  const turned={...f,rot:90},turnedDock={...dock,rot:90,x:f.x+(dock.z-f.z),z:f.z};
+  assert.equal(furnitureInterference(turned,turnedDock),false,'rotated with the cabinet');
+});

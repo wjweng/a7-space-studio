@@ -391,8 +391,9 @@ export class SpaceScene{
   // resolves to the cabinet's finish or the palette; see cabinetFinishSlots.
   const finish=(code,fallback='wood')=>code&&this.finishMaterial(code)||fallback;
   for(const column of cabinetColumns(f)){
-   const{width,bottom,x}=column,bodyHeight=f.h-bottom-(column.top||0);
-   for(const side of[-1,1])box(t,bodyHeight,d,x+side*(width/2-t/2),bottom+bodyHeight/2,0);
+   // Sides extended to the floor stand the raised column on them, leaving the gap open.
+   const{width,bottom,x}=column,foot=column.sidesToFloor?0:bottom,sideHeight=f.h-foot-(column.top||0);
+   for(const side of[-1,1])box(t,sideHeight,d,x+side*(width/2-t/2),foot+sideHeight/2,0);
   }
   const structure=cabinetStructure(f);
   // Dividers between side-by-side parts run the full height of their row;
@@ -404,13 +405,13 @@ export class SpaceScene{
    const innerW=w-insetL-insetR,cx=x+(insetL-insetR)/2;
    box(innerW,h,t,cx,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));
    const lowest=cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom;
-   box(innerW,t,d-t,cx,bottom+t/2,t/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
+   if(!cell.noBase)box(innerW,t,d-t,cx,bottom+t/2,t/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
    if(last)box(innerW,t,d-t,cx,bottom+h-t/2,t/2);
    // Hinged doors are drawn per front panel below, since one may span cells.
    if(front==='open'||groupFronts.includes(front))continue;
    // Clear opening between the side panels, above this cell's bottom board
    // and below the top board when the cell reaches the top.
-   const openBottom=bottom+t,openTop=bottom+h-(last?t:0),openH=openTop-openBottom;
+   const openBottom=bottom+(cell.noBase?0:t),openTop=bottom+h-(last?t:0),openH=openTop-openBottom;
    if(front==='drawers'){
     const pivot=new T.Group;
     pivot.position.set(x,y,z);
@@ -517,6 +518,20 @@ export class SpaceScene{
  if(['wardrobe','drawer','console','kitchen','fridge'].includes(type)){const bodyMat=type==='fridge'?'white':'wood';box(w,h,.025,0,h/2,-d/2,bodyMat);for(let x of[-w/2+.012,w/2-.012])box(.024,h,d,x,h/2,0,bodyMat);for(let y of[.04,h-.015])box(w,.028,d,0,y,0,bodyMat);if(type!=='drawer')for(let y=.45;y<h-.1;y+=.45)box(w-.05,.02,d-.04,0,y,0,'white');const layout=type==='drawer'?{doors:[],drawers:[{x:0,width:w-.03,rows:3}],slides:[]}:cabinetLayout(f),pivots=[],drawers=[],slides=[];for(const leaf of layout.doors){const p=new T.Group;p.position.set(leaf.hinge,h/2,d/2);p.userData.swing=-leaf.sign;g.add(p);this.box(p,leaf.width-.008,h-.065,.025,leaf.sign*leaf.width/2,0,0,bodyMat,.006);this.box(p,.018,.12,.028,leaf.sign*(leaf.width-.055),0,.03,'metal',.006);pivots.push(p);}for(const front of layout.drawers){const rows=front.rows||3;for(let row=0;row<rows;row++){const p=new T.Group;p.position.set(front.x,(row+.5)*h/rows,d/2);g.add(p);this.box(p,front.width-.008,h/rows-.018,.025,0,0,0,bodyMat,.006);this.box(p,Math.min(.18,front.width*.35),.018,.03,0,0,.03,'metal',.006);if(type==='drawer')this.drawerBox(p,front.width-.06,h/rows-.09,d-.045,-h/rows/2+.06,-.0125,bodyMat);drawers.push(p);}}for(const front of layout.slides){const p=new T.Group;p.position.set(front.x,h/2,d/2+(front.sign>0?.012:.027));p.userData.baseX=front.x;p.userData.travelX=front.sign*front.width*.82;g.add(p);this.box(p,front.width,h-.065,.025,0,0,0,bodyMat,.006);this.box(p,.018,.12,.03,-front.sign*(front.width/2-.035),0,.03,'metal',.006);slides.push(p);}this.actions.set(f.id,{type:type==='drawer'?'cabdrawer':'cabinet',pivots,drawers,slides,item:f,travel:d*(type==='drawer'?.75:.55),base:d/2,amount:f.open||0});if(type==='console'){box(w*.78,.72,.04,0,h+.48,-d*.3,'dark',.025);box(w*.74,.66,.01,0,h+.48,-d*.3+.027,'accent');box(.05,.12,.1,0,h+.08,-d*.3,'dark');}
  if(type==='kitchen'){const parts=normalizeKitchenParts(f),sink=parts.sink,cooktop=parts.cooktop,sinkX=w*.23,cooktopX=-w*.30;box(w+.03,.04,d+.03,0,h,0,'stone',.008);box(sink.w,.015,sink.d,sinkX,h+.028,0,'metal',Math.min(.05,sink.w/4,sink.d/4));box(Math.max(.04,sink.w-.1),.018,Math.max(.04,sink.d-.09),sinkX,h+.037,0,'dark',.05);let faucet=this.cyl(g,.016,.016,.25,sinkX,h+.13,-Math.min(d*.29,sink.d*.35),'metal');box(.02,.025,.15,sinkX,h+.25,-Math.min(d*.18,sink.d*.24),'metal',.01);box(cooktop.w,.018,cooktop.d,cooktopX,h+.035,0,'dark',.03);for(let x of[cooktopX-cooktop.w*.27,cooktopX+cooktop.w*.27])this.cyl(g,Math.min(.09,cooktop.w*.14),Math.min(.09,cooktop.w*.14),.015,x,h+.055,0,'metal');}
  return;}
+ if(type==='robotVacuum'){
+  // Robot vacuum in its dock, proportioned on a 390 × 425 × 498 mm dock
+  // (Dreame X60 Ultra, champagne white): a 296 mm deep tower whose lower 140 mm
+  // is the bay the 351 mm, 79.5 mm high robot drives into over a thin ramp.
+  const sx=w/.39,sz=d/.425,sy=h/.498,back=-d/2,tower=.296*sz,bay=.14*sy,plate=.008*sy,r=Math.min(.1755*sx,.1755*sz);
+  box(w,plate,d,0,plate/2,0,'white',.003);
+  box(w,h-bay,tower,0,(h+bay)/2,back+tower/2,'white',.012);
+  box(w,bay-plate,.05*sz,0,(bay+plate)/2,back+.025*sz,'white',.006);
+  box(.006*sx,(h-bay)*.9,.004,w*.38,(h+bay)/2,back+tower+.002,'metal',.001);
+  const cz=d/2-r-.02*sz,robot=this.cyl(g,r,r,.075*sy,0,plate+.0375*sy,cz,'white');robot.castShadow=true;
+  this.cyl(g,.035*sx,.035*sx,.02*sy,0,plate+.085*sy,cz-r*.3,'metal');
+  box(r*.8,.02*sy,.01,0,plate+.035*sy,cz+r*.97,'dark',.004);
+  return;
+ }
  if(type==='washer'){box(w,h,d,0,h/2,0,'white',.035);box(w*.76,h*.7,.045,0,h*.47,d/2+.024,'dark',.06);let drum=this.cyl(g,w*.29,w*.29,.035,0,h*.47,d/2+.052,'dark');drum.rotation.x=Math.PI/2;let door=new T.Group;door.position.set(-w*.33,h*.48,d/2+.08);g.add(door);this.box(door,w*.72,.055,.06,w*.33,0,0,'white',.035);let glass=this.cyl(door,w*.25,w*.25,.035,w*.33,0,.038,'glass');glass.rotation.x=Math.PI/2;let rim=this.cyl(door,w*.31,w*.31,.025,w*.33,0,.03,'metal');rim.rotation.x=Math.PI/2;box(w*.75,.08,.015,0,h*.86,d/2+.01,'metal',.008);this.actions.set(f.id,{type:'washer',pivot:door,item:f,amount:f.open||0});return;}
  if(type==='shower'){
  const cut=f.id==='showerB'?Math.min(.3,w*.25):0;
