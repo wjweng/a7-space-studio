@@ -101,6 +101,9 @@ export function showerDoorLayout(f){
  const cut=Math.min(.3,f.w*.25,f.d*.45),hingeX=-f.w/2+cut,hingeZ=-f.d/2,endX=-f.w/2,endZ=-f.d/2+cut;
  return{hingeX,hingeZ,endX,endZ,width:Math.hypot(endX-hingeX,endZ-hingeZ),swing:1};
 }
+// The desk's drawer, shared by the drawing and the opening check: 13 cm high just under the
+// top (its centre 12 cm below it), 65 % of the desk's width, 30 cm deep, sliding out 30 cm.
+export function deskDrawer(f){return{y:f.h-.12,height:.13,w:f.w*.65,depth:.3,z:f.d/2-.16,travel:.3};}
 // The washer's round door, shared by the drawing and the opening check: hinged 0.33 w left
 // of centre, 8 cm in front of the body, its leaf reaching from -0.03 w to 0.69 w past the
 // hinge, with a porthole rim of radius 0.31 w centred at 0.48 h.
