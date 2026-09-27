@@ -1,4 +1,4 @@
-import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,wallsHit,WALL_THICKNESS} from './model.js';
+import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,wallsHit,turnedSize,WALL_THICKNESS} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference,clashes} from './geometry.js';
 import {modularCabinetRects,resizeCabinetDesign,cellOpening,cabinetCells,CARCASS_T} from './cabinet-design.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
@@ -117,6 +117,20 @@ export function wallMount(f){
  }
  return best?{x:best.x,z:best.z,rot:best.rot}:{};
 }
+// A wall-mounted TV flat on the nearest wall, facing out; turned in the wall by `spin`, it
+// takes up its turned width along the wall.
+// A back panel on that wall (a TV wall) comes between: the TV then hangs on the panel's face.
+export function wallTvMount(tv,items=[]){
+ const [w,tall]=turnedSize(tv.w,tv.h,tv.spin||0),placed=wallMount({...tv,w});if(!Number.isFinite(placed.x))return placed;
+ const a=placed.rot*Math.PI/180,nx=Math.sin(a),nz=Math.cos(a);let p={...tv,...placed,w};
+ for(let i=0;i<4;i++){
+  const panel=items.find(o=>o.type==='panel'&&o.id!==tv.id&&(o.elevation||0)<tv.elevation+tall&&tv.elevation<(o.elevation||0)+o.h&&signedDistance(p,o)<-EPS);
+  if(!panel)break;const push=-signedDistance(p,panel);p={...p,x:p.x+nx*push,z:p.z+nz*push};
+ }
+ return{x:p.x,z:p.z,rot:p.rot};
+}
+// Things flat against a wall or back panel, which move along it and turn in its plane.
+export const onWallPlane=f=>f?.type==='outlet'&&f.outletMount!=='top'||f?.type==='television'&&f.tvMount==='wall';
 // Where a socket sits: on the nearest wall, or on its host (a cabinet's top, or a cell's back
 // panel) at `offsetX`/`offsetZ` in the host's own axes, so it follows the host. With
 // `fromPoint` its x/z (a drag) set that spot first.
@@ -132,7 +146,7 @@ export function placeOutlet(o,items,{fromPoint=false}={}){
   const opening=host.cabinetDesign&&cellOpening(host,o.supportCell);if(!opening)return o;
   return at(clamp(u,opening.x-opening.w/2+o.w/2,opening.x+opening.w/2-o.w/2),-host.d/2+CARCASS_T+o.d/2,clamp(o.elevation,base+opening.bottom,base+opening.bottom+opening.h-o.h));
  }
- const turn=o.offsetRot||0,across=turn%180?[o.d,o.w]:[o.w,o.d];
+ const turn=o.offsetRot||0,t=turn*Math.PI/180,across=[Math.abs(o.w*Math.cos(t))+Math.abs(o.d*Math.sin(t)),Math.abs(o.w*Math.sin(t))+Math.abs(o.d*Math.cos(t))];
  return at(clamp(u,-host.w/2+across[0]/2,host.w/2-across[0]/2),clamp(v,-host.d/2+across[1]/2,host.d/2-across[1]/2),base+host.h,turn);
 }
 // Where a socket dragged or clicked onto a surface in walk view goes: a wall (a building face

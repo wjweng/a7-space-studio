@@ -213,8 +213,10 @@ test('dropped socket kinds become duplex, and a wall socket turned upright swaps
   const base={type:'outlet',name:'插座',x:.3,z:3,w:.1,d:.1,h:.1,rot:0,open:0};
   const [a,b]=validateFurniture([{...base,id:'a',outletKind:'v220'},{...base,id:'b',outletKind:'popup'}]);
   assert.deepEqual([a.outletKind,b.outletKind],['duplex','duplex']);
-  const [upright]=validateFurniture([{...base,id:'u',spin:100}]);
+  const [upright]=validateFurniture([{...base,id:'u',spin:90}]);
   assert.deepEqual([upright.spin,upright.w,upright.h],[90,.075,.12]);
+  const [tilted]=validateFurniture([{...base,id:'v',spin:-315}]);
+  assert.equal(tilted.spin,45,'any angle, kept in 0-360');assert(Math.abs(tilted.w-(.12+.075)*Math.SQRT1_2)<1e-3,'its size is the turned bounding box');
   const [flat]=validateFurniture([{...base,id:'t',outletMount:'top',supportId:'x',spin:90}]);
   assert.equal(flat.spin,undefined,'a plate on a top turns with offsetRot instead');
   const cabinet={id:'c',type:'wardrobe',name:'櫃',x:2,z:3,w:.8,d:.5,h:2,rot:0,open:0};cabinet.cabinetDesign=makeCabinetDesign(cabinet,'shelves');
@@ -236,4 +238,19 @@ test('in top view a socket goes onto the table or cabinet under the pointer, els
   assert.equal(back.outletMount,'wall');assert.equal(back.supportId,undefined);
   const inCell={...o,outletMount:'cell',supportId:'x',supportCell:'y'};
   assert.equal(socketFromTopView(inCell,{x:1,z:1},items).outletMount,'cell');
+});
+
+test('a wall TV sits flat on the nearest wall, on a back panel when one is there, and may turn upright',async()=>{
+  const {wallTvMount}=await import('../dist/spatial.js');
+  const {turnedSize}=await import('../dist/model.js');
+  // Owner's layout 2026-09-27: a 154 cm TV on the living room's west wall, over a 3 cm TV-wall panel.
+  const tv={id:'tv',type:'television',name:'電視',x:.3,z:2.03,w:1.54,d:.06,h:.69,rot:0,tvMount:'wall',elevation:1};
+  const bare=wallTvMount(tv);
+  assert(Math.abs(bare.x-(.06+.03))<1e-9);assert.equal(bare.rot,90);
+  const panel={id:'p',type:'panel',name:'背板',x:.075,z:2.0,w:1.93,d:.03,h:2.4,rot:90,elevation:.3};
+  const onPanel=wallTvMount(tv,[panel]);
+  assert(Math.abs(onPanel.x-(.09+.03))<1e-6,`on the panel face, x=${onPanel.x}`);
+  const lowPanel={...panel,elevation:0,h:.5};
+  assert(Math.abs(wallTvMount(tv,[lowPanel]).x-.09)<1e-9,'a panel below the TV does not push it');
+  assert.deepEqual(turnedSize(1.54,.69,90),[.69,1.54]);
 });

@@ -7,7 +7,7 @@ import {BOARD,finishByCode} from './finishes.js';
 import {flooringByCode,tileSize} from './floorings.js';
 import {requestTexture,texturePixelsNow,texturesAsync} from './texture-cache.js';
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
-import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeCove,CORNER_BOARD,normalizeFabric,lightMountDrop,hangingElevation,mountDrop,cabinetTypes,fridgeColors,normalizeFridgeColor} from './model.js';
+import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeCove,CORNER_BOARD,normalizeFabric,lightMountDrop,hangingElevation,mountDrop,cabinetTypes,fridgeColors,normalizeFridgeColor,turnedSize} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle,washerDoor,deskDrawer} from './spatial.js';
 import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,frontPanels,groupFronts,FRONT_GAP,FRONT_T,FRONT_Z} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
@@ -534,8 +534,12 @@ export class SpaceScene{
   // its warning says so. Drawing it where the cell was would cut through
   // whatever replaced the cell.
   if(f.tvMount==='niche'||f.tvMount==='cabinet'&&f.supportCell){const host=this.items?.find(item=>item.id===f.supportId);if(!host?.cabinetDesign||!cellOpening(host,f.supportCell))return;}
-  box(w,h,Math.max(.035,d*.7),0,f.elevation+h/2,0,'dark',.012);
-  box(w*.96,h*.94,.008,0,f.elevation+h/2,d*.36,'accent',.007);
+  // A wall TV turned in the wall (`spin`) turns about its centre; its elevation is the turned
+  // bounding box's bottom, as for a socket.
+  const spin=f.tvMount==='wall'?f.spin||0:0,screen=spin?new T.Group:g,cy=spin?0:f.elevation+h/2;
+  if(spin){screen.position.set(0,f.elevation+turnedSize(w,h,spin)[1]/2,0);screen.rotation.z=spin*Math.PI/180;g.add(screen);}
+  this.box(screen,w,h,Math.max(.035,d*.7),0,cy,0,'dark',.012);
+  this.box(screen,w*.96,h*.94,.008,0,cy,d*.36,'accent',.007);
   if(f.tvMount==='cabinet'){box(.07,.07,.06,0,f.elevation-.03,0,'dark');box(Math.min(.4,w*.4),.018,.16,0,f.elevation-.065,.02,'dark',.008);}
   return;
  }
