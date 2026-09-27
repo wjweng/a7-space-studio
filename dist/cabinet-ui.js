@@ -16,7 +16,7 @@ const field=(label,value,change,min=0,max=500)=>{
 // shelvesOnly(f) marks open shelving edited as one column of open cells (a
 // corner shelf): no fronts, side-by-side parts, columns or bottom gap, and
 // a top-board switch instead.
-export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv,chooseFinish,finishLabel=code=>code||'預設',resizeEdges=false,maxHeight=Infinity,checkFit,notify,hostedTvs,shelvesOnly}){
+export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv,chooseFinish,finishLabel=code=>code||'預設',resizeEdges=false,maxHeight=Infinity,checkFit,notify,hostedTvs,shelvesOnly,sockets,moveSocket}){
   const dialog=elt('dialog','cabinetDialog');
   dialog.innerHTML='<div class="cabinetHead" title="拖曳可移動視窗"><div><span class="eyebrow">CABINET EDITOR</span><h2>編輯櫃體</h2></div><div class="cabinetHeadButtons"><button type="button" class="dialogFold" aria-expanded="true">收合</button><button type="button" class="dialogClose" aria-label="關閉">×</button></div></div><div class="cabinetBody"><p class="muted">點選正面圖中的格子，再修改分區、層高與門面。尺寸單位為 cm。拖曳標題可移動視窗。</p><div class="cabinetFinishes"></div><div class="cabinetToolbar"></div><div class="cabinetElevation"></div><div class="cabinetFields"></div><p class="cabinetError" role="alert"></p></div>';
   document.body.append(dialog);
@@ -253,6 +253,22 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       handle({x:W,y:0,width:grip,height:H},'ew-resize',delta=>resizeEdge('right',delta),'cabinetEdge',d=>show(0,0,W+d,H));
       if(hanging)handle({x:0,y:H,width:W,height:grip},'ns-resize',delta=>resizeEdge('bottom',-delta),'cabinetEdge',d=>show(0,0,W,H+d));
       else handle({x:0,y:-grip,width:W,height:grip},'ns-resize',delta=>resizeEdge('top',delta),'cabinetEdge',d=>show(0,d,W,H-d));
+    }
+    // Sockets inside this cabinet's cells, for fine-tuning: drag one in the drawing to move it
+    // along its cell and up or down, or into another cell.
+    for(const o of sockets?.(f)||[]){
+      const base=f.type==='hangingCabinet'?f.elevation||0:0,rect=document.createElementNS(svg.namespaceURI,'rect');
+      const place=(u,y)=>{rect.setAttribute('x',(u+f.w/2-o.w/2)*1000);rect.setAttribute('y',(f.h-y-o.h)*1000);};
+      rect.setAttribute('width',o.w*1000);rect.setAttribute('height',o.h*1000);rect.setAttribute('class','cabinetSocket');place(o.offsetX||0,o.elevation-base);
+      rect.appendChild(document.createElementNS(svg.namespaceURI,'title')).textContent=`${o.name}（拖曳可移動）`;
+      rect.addEventListener('pointerdown',event=>{
+        event.stopPropagation();rect.setPointerCapture(event.pointerId);
+        const at=e=>{const m=svg.getScreenCTM().inverse(),p=new DOMPoint(e.clientX,e.clientY).matrixTransform(m);return{u:p.x/1000-f.w/2,y:f.h-p.y/1000-o.h/2};};
+        let last=null;
+        rect.onpointermove=e=>{last=at(e);place(last.u,last.y);};
+        rect.onpointerup=e=>{rect.onpointermove=rect.onpointerup=null;if(last)moveSocket(o.id,{u:last.u,elevation:base+last.y});};
+      });
+      svg.append(rect);
     }
     elevation.append(svg);
     const fields=dialog.querySelector('.cabinetFields');fields.replaceChildren();

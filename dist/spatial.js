@@ -1,6 +1,6 @@
 import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,wallsHit,WALL_THICKNESS} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference,clashes} from './geometry.js';
-import {modularCabinetRects,resizeCabinetDesign,cellOpening,CARCASS_T} from './cabinet-design.js';
+import {modularCabinetRects,resizeCabinetDesign,cellOpening,cabinetCells,CARCASS_T} from './cabinet-design.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
 // The rendered leaf, in the door group's frame: x runs along the opening from the hinge jamb,
 // z across the wall. It closes inside the frame, flush with the wall face on its swing side,
@@ -132,6 +132,25 @@ export function placeOutlet(o,items,{fromPoint=false}={}){
   return at(clamp(u,opening.x-opening.w/2+o.w/2,opening.x+opening.w/2-o.w/2),-host.d/2+CARCASS_T+o.d/2,clamp(o.elevation,base+opening.bottom,base+opening.bottom+opening.h-o.h));
  }
  return at(clamp(u,-host.w/2+o.w/2,host.w/2-o.w/2),clamp(v,-host.d/2+o.d/2,host.d/2-o.d/2),base+host.h);
+}
+// Where a socket dragged or clicked onto a surface in walk view goes: a wall (a building face
+// that stands upright) at the pointer's height; the top of a cabinet, desk or table; or, on a
+// cabinet's front, door or inside, the back panel of the cell under the pointer. Anything
+// else (floor, ceiling, a sofa) gives null. `surface` is {point, normal, id} from the scene.
+export const socketHosts=['wardrobe','console','drawer','sink','kitchen','desk','table','hangingCabinet','cornerShelf'];
+export function socketOnSurface(o,{point,normal,id},items){
+ const base={...o,x:point.x,z:point.z};delete base.supportId;delete base.supportCell;delete base.offsetX;delete base.offsetZ;
+ if(!id){if(Math.abs(normal.y)>.3)return null;return{...base,outletMount:'wall',elevation:point.y-o.h/2};}
+ const host=items.find(item=>item.id===id);if(!host||!socketHosts.includes(host.type))return null;
+ const lift=['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0;
+ if(normal.y>.7)return{...base,outletMount:'top',supportId:host.id};
+ if(!host.cabinetDesign)return null;
+ const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=point.x-host.x,dz=point.z-host.z,u=dx*c-dz*s,y=point.y-lift;
+ // A side panel faces sideways in the cabinet's own axes: that is not a way into a cell.
+ if(Math.abs(normal.x*c-normal.z*s)>.7&&Math.abs(u)>host.w/2-.03)return null;
+ const cell=cabinetCells(host).find(cell=>u>=cell.x-cell.w/2-1e-6&&u<=cell.x+cell.w/2+1e-6&&y>=cell.bottom-1e-6&&y<=cell.bottom+cell.h+1e-6);
+ if(!cell)return null;
+ return{...base,outletMount:'cell',supportId:host.id,supportCell:cell.id,elevation:point.y-o.h/2};
 }
 // The desk's drawer, shared by the drawing and the opening check: 13 cm high just under the
 // top (its centre 12 cm below it), 65 % of the desk's width, 30 cm deep, sliding out 30 cm.

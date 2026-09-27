@@ -173,3 +173,23 @@ test('sockets sit flat on the nearest wall, on a cabinet top, or on a cell back 
   assert(Math.abs(inCell.z-(cabinet.z-cabinet.d/2+CARCASS_T+inside.d/2))<1e-9,'on the back panel');
   assert(Math.abs(inCell.elevation-opening.bottom)<1e-9,'kept inside the cell');
 });
+
+test('a socket put on a surface in walk view mounts on the wall, a top, or the cell under the pointer',async()=>{
+  const {socketOnSurface,placeOutlet}=await import('../dist/spatial.js');
+  const {validateFurniture}=await import('../dist/model.js');
+  const {makeCabinetDesign,cabinetCells}=await import('../dist/cabinet-design.js');
+  const [o]=validateFurniture([{id:'o',type:'outlet',name:'插座',x:1,z:3,w:.12,d:.015,h:.075,rot:0,open:0}]);
+  const cabinet={id:'c',type:'wardrobe',name:'櫃',x:2,z:3,w:.8,d:.5,h:2,rot:0,open:0};cabinet.cabinetDesign=makeCabinetDesign(cabinet,'shelves');
+  const sofa={id:'s',type:'sofa',name:'沙發',x:1,z:1,w:2,d:.9,h:.8,rot:0,open:0},items=[o,cabinet,sofa];
+  const at=(point,normal,id)=>socketOnSurface(o,{point:{y:0,...point},normal:{x:0,y:0,z:0,...normal},id},items);
+  const wall=at({x:.06,y:1.2,z:3},{x:1},null);
+  assert.equal(wall.outletMount,'wall');assert(Math.abs(wall.elevation-(1.2-o.h/2))<1e-9);
+  assert.equal(at({x:1,y:0,z:3},{y:1},null),null,'floor');
+  assert.equal(at({x:1,y:.8,z:1},{y:1},'s'),null,'a sofa is no host');
+  assert.equal(at({x:2.1,y:2,z:3},{y:1},'c').outletMount,'top');
+  const cell=cabinetCells(cabinet)[2],front=at({x:2.1,y:cell.bottom+cell.h/2,z:3.25},{z:1},'c');
+  assert.deepEqual([front.outletMount,front.supportCell],['cell',cell.id]);
+  assert.equal(at({x:2.4,y:cell.bottom+cell.h/2,z:3},{x:1},'c'),null,'a side panel is not a way in');
+  const placed=placeOutlet(validateFurniture([front])[0],items,{fromPoint:true});
+  assert(Math.abs(placed.offsetX-.1)<1e-9,'keeps the pointer\'s spot across the cell');
+});

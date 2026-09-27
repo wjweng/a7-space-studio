@@ -617,7 +617,9 @@ export class SpaceScene{
    else for(const x of[-.028,.028])outlet(x,false);
   }
   // Just above the socket, so the selection box stays around it.
-  const ring=new T.Mesh(new T.RingGeometry(.055,.07,32),this.m.accent);ring.rotation.x=-Math.PI/2;ring.position.y=y+h+.004;g.add(ring);this.topOutline(ring);
+  // A socket inside a cell would hide under the cabinet top, so its ring goes above that.
+  const host=f.outletMount==='cell'&&this.items?.find(item=>item.id===f.supportId),hostTop=host?(host.type==='hangingCabinet'?host.elevation||0:0)+host.h:0;
+  const ring=new T.Mesh(new T.RingGeometry(.055,.07,32),this.m.accent);ring.rotation.x=-Math.PI/2;ring.position.y=Math.max(y+h,hostTop)+.004;g.add(ring);this.topOutline(ring);
   return;
  }
  if(type==='washer'){box(w,h,d,0,h/2,0,'white',.035);box(w*.76,h*.7,.045,0,h*.47,d/2+.024,'dark',.06);let drum=this.cyl(g,w*.29,w*.29,.035,0,h*.47,d/2+.052,'dark');drum.rotation.x=Math.PI/2;const wd=washerDoor(f),mid=(wd.from+wd.to)/2;let door=new T.Group;door.position.set(wd.hinge[0],wd.y,wd.hinge[1]);g.add(door);this.box(door,wd.to-wd.from,.055,.06,mid,0,0,'white',.035);let glass=this.cyl(door,w*.25,w*.25,.035,mid,0,.038,'glass');glass.rotation.x=Math.PI/2;let rim=this.cyl(door,wd.radius,wd.radius,.025,mid,0,.03,'metal');rim.rotation.x=Math.PI/2;box(w*.75,.08,.015,0,h*.86,d/2+.01,'metal',.008);this.actions.set(f.id,{type:'washer',pivot:door,item:f,amount:f.open||0});return;}
@@ -673,6 +675,19 @@ stepLightFade(dt){if(!this.fading?.size)return false;for(const light of this.fad
  startPlacement(){this.placing=true;this.host.classList?.add('placing');}
  cancelPlacement(notify=true){if(!this.placing)return;this.placing=false;this.host.classList?.remove('placing');if(notify)this.onCancelPlacement?.();}
  pick(e){const r=this.host.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);if(document.pointerLockElement===this.renderer.domElement)this.pointer.set(0,0);this.ray.setFromCamera(this.pointer,this.activeCamera);const hits=this.ray.intersectObjects([this.resizeHandles,this.furniture,this.building],true),targets=[];for(const hit of hits){if(!hit.object.visible)continue;let p=hit.object,target=null;while(p){if(p.userData.resize){target={kind:'resize',...p.userData.resize};break}if(p.userData.furniture){target={kind:'furniture',id:p.userData.furniture};break}if(p.userData.action){target={kind:'action',id:p.userData.action};break}p=p.parent;}if(target)targets.push(target);else if(hit.object.material===this.m.wall&&this.mode==='walk')break;}if(this.mode==='top'&&this.foregroundDraft)return targets.find(t=>t.kind==='resize'||t.kind==='furniture'&&t.id===this.foregroundDraft)||targets[0]||null;return targets[0]||null;}
+ // The surface under the pointer (walk view): its point, its world normal, and the item it
+ // belongs to, if any; `skip` leaves out one item (the socket being dragged).
+ surfaceAt(e,skip){
+  const r=this.host.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);if(document.pointerLockElement===this.renderer.domElement)this.pointer.set(0,0);
+  this.ray.setFromCamera(this.pointer,this.activeCamera);
+  for(const hit of this.ray.intersectObjects([this.furniture,this.building],true)){
+   if(!hit.object.visible||!hit.face)continue;let p=hit.object,id=null;while(p){if(p.userData.furniture){id=p.userData.furniture;break;}p=p.parent;}
+   if(skip&&id===skip)continue;
+   const normal=hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+   return{point:hit.point.clone(),normal,id};
+  }
+  return null;
+ }
  ground(e){const r=this.host.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.pointer,this.activeCamera);return this.ray.ray.intersectPlane(this.plane,new T.Vector3);}
  setForegroundDraft(id){this.foregroundDraft=this.items.some(f=>f.id===id&&f.draft)?id:null;this.refreshValidity();}
  makeInvalidMarker(f){const marker=new T.Group,fill=new T.MeshBasicMaterial({color:0xef3434,transparent:true,opacity:.32,depthTest:false,depthWrite:false}),edge=new T.MeshBasicMaterial({color:0xd91515,transparent:true,opacity:.96,depthTest:false,depthWrite:false});this.box(marker,f.w,.014,f.d,0,0,0,fill);for(const z of[-f.d/2,f.d/2])this.box(marker,f.w+.06,.022,.04,0,.006,z,edge);for(const x of[-f.w/2,f.w/2])this.box(marker,.04,.022,f.d+.06,x,.006,0,edge);return marker;}
@@ -695,7 +710,7 @@ stepLightFade(dt){if(!this.fading?.size)return false;for(const light of this.fad
 g.visible=!(f.type==='beam'&&this.mode==='orbit'&&this.cutaway);g.position.y=(this.mode==='top'&&foreground?HEIGHT+.12:0)+this.mountOffset(f);if(f.type==='outlet')g.traverse(o=>{if(o.userData.topOnly)o.visible=this.mode==='top';});if(f.type==='light'){this.keepLampAtRealHeight(f,g);g.traverse(o=>{if(o.userData.topOnly)o.visible=this.mode==='top';});}g.traverse(o=>{if(o.isMesh)o.renderOrder=foreground?200:0;});let h=this.invalidHelpers.get(f.id),marker=this.invalidMarkers.get(f.id);if(f.draft&&!h){h=new T.BoxHelper(g,0xd91515);this.invalidHelpers.set(f.id,h);this.scene.add(h);}if(f.draft&&!marker){marker=this.makeInvalidMarker(f);this.invalidMarkers.set(f.id,marker);this.scene.add(marker);}if(h){h.update();h.visible=f.draft&&this.mode==='top'&&f.id!==this.selected;if(!f.draft){this.scene.remove(h);h.geometry.dispose();h.material.dispose();this.invalidHelpers.delete(f.id);}}if(marker){marker.position.set(f.x,this.mode==='top'?(foreground?HEIGHT*2+.2:HEIGHT+.08):0,f.z);marker.rotation.y=f.rot*Math.PI/180;marker.visible=f.draft&&this.mode==='top';marker.traverse(o=>{if(o.isMesh)o.renderOrder=foreground?301:300;});if(!f.draft){this.scene.remove(marker);marker.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});this.invalidMarkers.delete(f.id);}}}if(this.foregroundDraft&&!this.items.some(f=>f.id===this.foregroundDraft&&f.draft))this.foregroundDraft=null;const selected=this.items.find(f=>f.id===this.selected);if(this.selection&&selected){this.selection.material.color.set(selected.draft?0xd91515:0xc67748);this.selection.visible=!(selected.type==='beam'&&this.mode==='orbit'&&this.cutaway);this.selection.update();}}
  bind(){
  const canvas=this.renderer.domElement;
- this.cancelGesture=()=>{if(this.drag?.moved)this.onDragEnd();if(this.resizeDrag?.moved)this.onResizeEnd?.();this.drag=null;this.resizeDrag=null;this.lookDrag=null;this.panDrag=null;this.down=null;};
+ this.cancelGesture=()=>{if(this.drag?.moved)this.onDragEnd();if(this.socketDrag?.moved)this.onSocketDragEnd?.(this.socketDrag.id);this.socketDrag=null;if(this.resizeDrag?.moved)this.onResizeEnd?.();this.drag=null;this.resizeDrag=null;this.lookDrag=null;this.panDrag=null;this.down=null;};
  canvas.addEventListener('pointerdown',e=>{
   if(e.button!==0&&e.button!==1)return;this.cancelGesture();if(this.mode==='walk')this.stopTour();
   this.down={x:e.clientX,y:e.clientY,id:e.pointerId,moved:false};canvas.setPointerCapture(e.pointerId);
@@ -703,6 +718,7 @@ g.visible=!(f.type==='beam'&&this.mode==='orbit'&&this.cutaway);g.position.y=(th
   if(this.mode==='top'&&hit?.kind==='resize'&&e.button===0){const f=this.items.find(f=>f.id===hit.id);if(f){this.onSelect(f.id);this.resizeDrag={id:f.id,axis:hit.axis,sign:hit.sign,start:{...f},moved:false};}}
   else if(this.mode==='top'&&hit?.kind==='furniture'&&e.button===0){const f=this.items.find(f=>f.id===hit.id),g=this.ground(e);this.drag={id:f.id,dx:f.x-g.x,dz:f.z-g.z,moved:false};}
   else if(this.mode==='top')this.panDrag={x:e.clientX,y:e.clientY};
+  else if(this.mode==='walk'&&hit?.kind==='furniture'&&e.button===0&&this.items.find(f=>f.id===hit.id)?.type==='outlet')this.socketDrag={id:hit.id,moved:false};
   else if(this.mode==='walk')this.lookDrag={x:e.clientX,y:e.clientY};
  });
  canvas.addEventListener('pointermove',e=>{
@@ -713,9 +729,10 @@ g.visible=!(f.type==='beam'&&this.mode==='orbit'&&this.cutaway);g.position.y=(th
   if(this.resizeDrag&&this.down.moved){let p=this.ground(e);if(p){this.resizeDrag.moved=true;this.onResize?.(this.resizeDrag.id,resizeAtHandle(this.resizeDrag.start,this.resizeDrag.axis,this.resizeDrag.sign,p,!!this.keepRatio).item);}}
   else if(this.drag&&this.down.moved){if(!this.drag.moved)this.onSelect(this.drag.id);let p=this.ground(e);if(p){this.drag.moved=true;this.onDrag(this.drag.id,p.x+this.drag.dx,p.z+this.drag.dz);}}
   else if(this.panDrag){const dx=e.clientX-this.panDrag.x,dy=e.clientY-this.panDrag.y,c=this.topCamera;const scale=(c.top-c.bottom)/c.zoom/this.host.clientHeight;c.position.x-=dx*scale;c.position.z-=dy*scale;this.panDrag={x:e.clientX,y:e.clientY};}
+  else if(this.socketDrag&&this.down.moved){if(!this.socketDrag.moved)this.onSelect(this.socketDrag.id);const surface=this.surfaceAt(e,this.socketDrag.id);if(surface){this.socketDrag.moved=true;this.onSocketDrag?.(this.socketDrag.id,surface);}}
   else if(this.lookDrag){this.walkYaw+=(e.clientX-this.lookDrag.x)*.003;this.walkPitch=T.MathUtils.clamp(this.walkPitch+(e.clientY-this.lookDrag.y)*.003,-1.2,1.2);this.lookDrag={x:e.clientX,y:e.clientY};}
  });
- const release=e=>{if(!this.down||e.pointerId!==this.down.id)return;const click=!this.down.moved;if(this.drag?.moved)this.onDragEnd();if(this.resizeDrag?.moved)this.onResizeEnd?.();this.drag=null;this.resizeDrag=null;if(click&&this.placing&&this.mode==='top'){const p=this.ground(e);if(p)this.onPlace?.(p.x,p.z);}else if(click){const hit=this.pick(e);if(hit){this.onSelect(hit.id);if(this.actions.has(hit.id))this.onOperate(hit.id);}}this.cancelGesture();if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);};
+ const release=e=>{if(!this.down||e.pointerId!==this.down.id)return;const click=!this.down.moved;if(this.drag?.moved)this.onDragEnd();if(this.socketDrag?.moved)this.onSocketDragEnd?.(this.socketDrag.id);this.socketDrag=null;if(this.resizeDrag?.moved)this.onResizeEnd?.();this.drag=null;this.resizeDrag=null;if(click&&this.placing&&this.mode==='top'){const p=this.ground(e);if(p)this.onPlace?.(p.x,p.z);}else if(click&&this.placing&&this.mode==='walk'){const surface=this.surfaceAt(e);if(surface)this.onPlaceSurface?.(surface);}else if(click){const hit=this.pick(e);if(hit){this.onSelect(hit.id);if(this.actions.has(hit.id))this.onOperate(hit.id);}}this.cancelGesture();if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);};
  canvas.addEventListener('pointerup',release);
  canvas.addEventListener('pointercancel',this.cancelGesture);
  canvas.addEventListener('lostpointercapture',this.cancelGesture);

@@ -119,8 +119,8 @@ export const normalizeFabric=color=>typeof color==='string'&&/^#[0-9a-f]{6}$/i.t
 export const wetRooms=['衛浴 A','衛浴 B','工作陽台'];
 export function normalizeFloors(input){const out={};if(input&&typeof input==='object'&&!Array.isArray(input))for(const [room,code]of Object.entries(input))if(rooms.some(r=>r.name===room)&&flooringByCode(code))out[room]=code;return out;}
 // Types built from a modular cabinet design (columns, cells, fronts).
-// Modular cabinets, edited in the cabinet editor. Drawer units, vanities and kitchens always
-// carry a design; a layout saved before 2026-09-27 gets one from its door style on load.
+// Modular cabinets, edited in the cabinet editor; a layout saved before 2026-09-27 gets a design
+// from each cabinet's door style on load.
 // Sockets: where they go and what kind, for the designer or carpenter (no wiring). A kind
 // and a mount fix the size: a 12 × 7.5 cm faceplate on a wall or a cell's back panel, a
 // 12 × 7 × 5 cm desk box on a cabinet top, a 7 cm pop-up in a counter.
@@ -128,7 +128,9 @@ export const outletKinds=[['duplex','110V 雙插座'],['usb','110V 雙插座（�
 export const outletMounts=[['wall','牆面'],['top','櫃子上方'],['cell','櫃體內部']];
 export const outletSize=(kind,mount)=>mount==='top'?(kind==='popup'?[.07,.07,.015]:[.12,.07,.05]):[.12,.015,.075];
 export const cabinetTypes=['wardrobe','console','hangingCabinet','drawer','sink','kitchen'];
-const alwaysModular=['hangingCabinet','drawer','sink','kitchen'];
+// Every cabinet carries a design since 2026-09-27 (wardrobes and TV cabinets used to wait for
+// the editor to be opened), so sockets can go into any cabinet's cells.
+const alwaysModular=cabinetTypes;
 // Fridge finishes: [key, label, colour, glass]; any other #rrggbb is a custom colour.
 export const fridgeColors=[['steel','不鏽鋼','#c3c7c9',false],['white','白色玻璃','#f2f1ed',true],['champagne','香檳白玻璃','#e4d8bd',true],['black','黑色玻璃','#24282b',true]];
 export const normalizeFridgeColor=value=>fridgeColors.some(([key])=>key===value)||/^#[0-9a-f]{6}$/i.test(value||'')?value:'steel';
