@@ -254,3 +254,15 @@ test('a wall TV sits flat on the nearest wall, on a back panel when one is there
   assert(Math.abs(wallTvMount(tv,[lowPanel]).x-.09)<1e-9,'a panel below the TV does not push it');
   assert.deepEqual(turnedSize(1.54,.69,90),[.69,1.54]);
 });
+test('a turn in the wall plane keeps the plate centred, not its bottom',async()=>{
+ const {turnAboutCentre}=await import('../dist/spatial.js');const {validateFurniture,outletSize,turnedSize}=await import('../dist/model.js');
+ const socket=validateFurniture([{id:'s',type:'outlet',name:'插座',outletKind:'duplex',outletMount:'wall',x:1,z:1,w:.12,d:.015,h:.075,rot:0,elevation:.3}])[0];
+ const turned=validateFurniture([turnAboutCentre(socket,{...socket,spin:90})])[0];
+ assert.ok(Math.abs(turned.elevation+turned.h/2-(socket.elevation+socket.h/2))<1e-9,'socket centre stays put');
+ assert.equal(turned.h,outletSize('duplex','wall',90)[2]);
+ const tv={id:'t',type:'television',tvMount:'wall',x:1,z:1,w:1.2,d:.05,h:.7,rot:0,elevation:1};
+ const tilted=turnAboutCentre(tv,{...tv,spin:30}),centre=f=>f.elevation+turnedSize(f.w,f.h,f.spin||0)[1]/2;
+ assert.ok(Math.abs(centre(tilted)-centre(tv))<1e-9,'TV centre stays put');
+ const low=validateFurniture([turnAboutCentre({...socket,elevation:0},{...socket,elevation:0,spin:90})])[0];
+ assert.equal(low.elevation,0,'a socket on the floor line stays above the floor');
+});

@@ -1,4 +1,4 @@
-import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,wallsHit,turnedSize,WALL_THICKNESS} from './model.js';
+import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,wallsHit,turnedSize,outletSize,WALL_THICKNESS} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference,clashes} from './geometry.js';
 import {modularCabinetRects,resizeCabinetDesign,cellOpening,cabinetCells,CARCASS_T} from './cabinet-design.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
@@ -131,6 +131,11 @@ export function wallTvMount(tv,items=[]){
 }
 // Things flat against a wall or back panel, which move along it and turn in its plane.
 export const onWallPlane=f=>f?.type==='outlet'&&f.outletMount!=='top'||f?.type==='television'&&f.tvMount==='wall';
+// A turn in the wall plane keeps the plate's centre where it was, like a turn on a top: the
+// stored elevation is the bottom of the turned bounding box, so it moves by half the change in
+// height (validation then keeps it between the floor and the ceiling).
+const planeTall=f=>f.type==='outlet'?outletSize(f.outletKind,f.outletMount,f.spin||0)[2]:turnedSize(f.w,f.h,f.spin||0)[1];
+export const turnAboutCentre=(before,after)=>({...after,elevation:(before.elevation||0)+(planeTall(before)-planeTall(after))/2});
 // Where a socket sits: on the nearest wall, or on its host (a cabinet's top, or a cell's back
 // panel) at `offsetX`/`offsetZ` in the host's own axes, so it follows the host. With
 // `fromPoint` its x/z (a drag) set that spot first.
