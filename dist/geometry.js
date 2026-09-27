@@ -37,6 +37,12 @@ const localRect=(f,x,z,w,d)=>{const a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin
 export function tableLegRects(f){const leg=Math.min(.09,Math.max(.045,Math.min(f.w,f.d)*.12)),ox=Math.max(0,f.w/2-leg*.95),oz=Math.max(0,f.d/2-leg*.95);return[[-ox,-oz],[ox,-oz],[-ox,oz],[ox,oz]].map(([x,z])=>localRect(f,x,z,leg,leg));}
 export function chairBackRect(f){const depth=Math.min(.12,f.d*.28);return localRect(f,0,-f.d/2+depth/2,Math.max(.05,f.w*.9),depth);}
 export function tableChairInterference(chair,table){if(!isTableLike(table))return false;return overlaps(chairBackRect(chair),table,EPS)||tableLegRects(table).some(leg=>overlaps(chair,leg,EPS));}
+// Whether two rectangles overlap by more than EPS. Rectangles whose centres are farther apart
+// than their half-diagonals cannot touch, which skips the full test for most pairs.
+export function clashes(a,b){
+ if(Math.hypot(a.x-b.x,a.z-b.z)>(Math.hypot(a.w,a.d)+Math.hypot(b.w,b.d))/2+1e-6)return false;
+ return signedDistance(a,b)<-EPS;
+}
 export function furnitureInterference(a,b){
  // TVs, hanging cabinets, back panels and light coves carry their underside height as `elevation`.
  const lifted=f=>['television','hangingCabinet','panel','cove'].includes(f.type)?f.elevation||0:0,ay=lifted(a),by=lifted(b);
@@ -46,9 +52,9 @@ export function furnitureInterference(a,b){
  if(a.cabinetDesign||b.cabinetDesign){
   const aa=a.cabinetDesign?cabinetOccupiedRects(a):[{...a,yMin:ay,yMax:ay+a.h}];
   const bb=b.cabinetDesign?cabinetOccupiedRects(b):[{...b,yMin:by,yMax:by+b.h}];
-  return aa.some(left=>bb.some(right=>left.yMin<right.yMax-EPS&&right.yMin<left.yMax-EPS&&signedDistance(left,right)<-EPS));
+  return aa.some(left=>bb.some(right=>left.yMin<right.yMax-EPS&&right.yMin<left.yMax-EPS&&clashes(left,right)));
  }
  if(a.type==='chair'&&isTableLike(b))return tableChairInterference(a,b);
  if(b.type==='chair'&&isTableLike(a))return tableChairInterference(b,a);
- return signedDistance(a,b)<-EPS;
+ return clashes(a,b);
 }

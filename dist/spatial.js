@@ -124,6 +124,46 @@ export function constrainMove(f,target,items){
  return{item:{...f,x:target.x,z:target.z},blocked:false};
 }
 
+// The first physical problem `next` (a moved or resized `f`) has that `f` did not: leaving
+// the apartment or a new clash with a wall, column or other item. Door sweeps are only
+// warned about, so they never stop a move; clashes `f` already had never block it either.
+export function addedProblem(f,next,items){return problemCheck(f,items)(next);}
+// The same test as a function of the changed item, with `f`'s own problems worked out once.
+function problemCheck(f,items){
+ const others=items.filter(o=>o.id!==f.id),before=new Set(issues(f,[f,...others],{doorSweeps:false}));
+ return next=>issues(next,[next,...others],{doorSweeps:false}).find(message=>!before.has(message))||'';
+}
+// Moves `f` toward `target`: straight there when that adds no problem (so a drag can hop
+// over an obstacle once the pointer reaches free space), otherwise as far as it can along
+// each axis in turn, stopping at contact and sliding along what it touches.
+export function guardedMove(f,target,items){
+ const check=problemCheck(f,items),desired={...f,x:target.x,z:target.z};
+ if(!check(desired))return{item:desired,reason:''};
+ // 5 cm steps: an item plus the thinnest wall or beam is thicker, so none is stepped over.
+ // The reason reported is what the item runs into, not what lies under the pointer.
+ const travel=({item:start,reason},axis,value)=>{
+  const delta=value-start[axis],n=Math.max(1,Math.ceil(Math.abs(delta)/.05)),at=t=>({...start,[axis]:start[axis]+delta*t});
+  for(let i=1;i<=n;i++){
+   const hit=check(at(i/n));if(!hit)continue;
+   let lo=(i-1)/n,hi=i/n;for(let j=0;j<25;j++){const mid=(lo+hi)/2;if(check(at(mid)))hi=mid;else lo=mid;}
+   return{item:at(lo),reason:reason||hit};
+  }
+  return{item:at(1),reason};
+ };
+ const first={item:f,reason:''},xz=travel(travel(first,'x',target.x),'z',target.z),zx=travel(travel(first,'z',target.z),'x',target.x);
+ const score=({item})=>Math.hypot(item.x-target.x,item.z-target.z);
+ return score(xz)<=score(zx)?xz:zx;
+}
+// The largest step toward a bigger size that adds no problem: `make(k)` builds the item k
+// whole centimetres of the way (k = 0 is `f` itself, k = steps the requested size).
+export function largestFit(f,make,steps,items){
+ const check=problemCheck(f,items);
+ if(!check(make(steps)))return{item:make(steps),reason:'',k:steps};
+ let lo=0,hi=steps;
+ while(lo<hi){const mid=Math.ceil((lo+hi)/2);if(check(make(mid)))hi=mid-1;else lo=mid;}
+ // What the next centimetre runs into, not what the full requested size would.
+ return{item:lo?make(lo):null,reason:check(make(lo+1)),k:lo};
+}
 // Editor drags represent lifting an item. Interior conflicts remain editable drafts;
 // only crossing the apartment's exterior outline blocks the pointer position.
 export function placeAtTarget(f,target,items){
@@ -150,13 +190,21 @@ const resizeDirection=(f,axis,sign)=>{const a=f.rot*Math.PI/180,c=Math.cos(a),s=
 const shiftedResize=(candidate,direction)=>{if(resizeClear(candidate))return candidate;for(let distance=.01;distance<=12;distance+=.01){const moved={...candidate,x:candidate.x-direction.x*distance,z:candidate.z-direction.z*distance};if(resizeClear(moved))return moved;}return null;};
 // Typed width/depth changes grow from the centre. When that crosses the shell or
 // adds a conflict, keep one edge fixed and grow toward the other side instead.
-export function fitResize(f,next,items){
- const others=items.filter(o=>o.id!==f.id),a=next.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+// Where a grown item can sit: centred, or shifted so it grows from one side or the other
+// (along each plan axis that grew), least moved first.
+export function resizeAnchors(f,next){
+ const a=next.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
  const shifts=axis=>{const grow=next[axis]-f[axis];return grow>1e-9&&next.rot===f.rot?[0,grow/2,-grow/2]:[0];};
+ const out=[];
+ for(const u of shifts('w'))for(const v of shifts('d'))out.push({x:next.x+u*c+v*s,z:next.z-u*s+v*c,moved:Math.abs(u)+Math.abs(v)});
+ return out.sort((p,q)=>p.moved-q.moved);
+}
+export function fitResize(f,next,items){
+ const others=items.filter(o=>o.id!==f.id);
  const score=p=>[insideShell(p)?0:1,issues(p,[p,...others]).length];
  let best=null;
- for(const u of shifts('w'))for(const v of shifts('d')){
-  const p={...next,x:next.x+u*c+v*s,z:next.z-u*s+v*c},[shell,conflicts]=score(p),moved=Math.abs(u)+Math.abs(v);
+ for(const{x,z,moved}of resizeAnchors(f,next)){
+  const p={...next,x,z},[shell,conflicts]=score(p);
   if(!best||shell<best.shell||shell===best.shell&&(conflicts<best.conflicts||conflicts===best.conflicts&&moved<best.moved))best={p,shell,conflicts,moved};
  }
  return best.p;
