@@ -1,4 +1,5 @@
-import {CARCASS_T,doorGroupOf,mergeDoorCells,splitDoorGroup,groupFronts,boundsOf,cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,designFromDoorStyle,designLeaves,findLeaf,fitDesign,splitCabinetCell,removeCabinetNode,moveCabinetLine,locateCell,leafIdsUnder,cabinetStructure} from './cabinet-design.js';
+import {fridgeColors} from './model.js';
+import {fridgeFronts,fridgeLayouts,fridgeDesign,CARCASS_T,doorGroupOf,mergeDoorCells,splitDoorGroup,groupFronts,boundsOf,cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,designFromDoorStyle,designLeaves,findLeaf,fitDesign,splitCabinetCell,removeCabinetNode,moveCabinetLine,locateCell,leafIdsUnder,cabinetStructure} from './cabinet-design.js';
 
 const labels={open:'開放',left:'左開門',right:'右開門',double:'對開門',sliding:'滑門',drawers:'抽屜'};
 const cm=n=>Math.round(n*1000)/10;
@@ -94,6 +95,13 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
   const clearSlot=(slot,only)=>edit(next=>{for(const cell of designLeaves(next))if(cell.finishes&&(!only||cell.id===only)){delete cell.finishes[slot];if(!Object.keys(cell.finishes).length)delete cell.finishes;}});
   function renderFinishes(f,selectedCell,simple){
     const host=dialog.querySelector('.cabinetFinishes');host.replaceChildren();
+    // A fridge has a colour, not board finishes: the four finishes or any colour.
+    if(f.type==='fridge'){
+      host.append(elt('h3','','顏色'));const row=elt('div','cabinetFridgeRow'),current=f.fridgeColor||'steel';
+      for(const [key,label,colour]of fridgeColors){const b=button(label,()=>commitItem(item(),{...item(),fridgeColor:key}));b.style.borderLeft=`14px solid ${colour}`;b.setAttribute('aria-pressed',String(current===key));if(current===key)b.classList.add('active');row.append(b);}
+      const pick=elt('label','cabinetField checkline','自選顏色'),input=elt('input');input.type='color';input.value=/^#/.test(current)?current:'#8a9aa0';input.onchange=()=>commitItem(item(),{...item(),fridgeColor:input.value});pick.append(input);row.append(pick);
+      host.append(row);return;
+    }
     if(!chooseFinish)return;
     const cells=designLeaves(f.cabinetDesign),hasDrawers=cells.some(c=>c.front==='drawers');
     host.append(elt('h3','',simple?'材質（整座層架）':'材質（整座櫃）'));
@@ -115,8 +123,8 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
   }
   function render(){
     const f=item();if(!f?.cabinetDesign){dialog.close();return;}
-    const simple=!!shelvesOnly?.(f);
-    dialog.querySelector('.cabinetHead h2').textContent=simple?'編輯層架':'編輯櫃體';
+    const simple=!!shelvesOnly?.(f),fridge=f.type==='fridge';
+    dialog.querySelector('.cabinetHead h2').textContent=fridge?'編輯冰箱':simple?'編輯層架':'編輯櫃體';
     dialog.querySelector('.cabinetBody > .muted').textContent=simple?'點選正面圖中的格子，再修改層高；拖曳格線可調整層板位置，拖曳外框可調整寬度與高度。尺寸單位為 cm。拖曳標題可移動視窗。':'點選正面圖中的格子，再修改分區、層高與門面。尺寸單位為 cm。拖曳標題可移動視窗。';
     const design=f.cabinetDesign,columns=cabinetColumns(f),structure=cabinetStructure(f),cells=structure.cells;
     // The selected cell, and the row and part (if any) it belongs to: the
@@ -127,7 +135,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     const selectedColumn=design.columns.find(c=>c.id===columnId);
     const path=locateCell(design,leafId),stepOf=kind=>{for(let i=path.length-1;i>0;i--)if(path[i].kind===kind)return{...path[i],depth:i};return null;};
     const rowStep=stepOf('rows'),partStep=stepOf('parts');
-    const toolbar=dialog.querySelector('.cabinetToolbar');toolbar.replaceChildren();
+    const toolbar=dialog.querySelector('.cabinetToolbar');toolbar.replaceChildren();dialog.querySelector('.cabinetFridgePresets')?.remove();
     // New cabinets start from a preset layout; after that every cabinet is
     // edited cell by cell, so there is no template picker here.
     if(simple){
@@ -135,6 +143,8 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       cap.onchange=()=>commitItem(item(),{...item(),cap:cap.checked});
       capLabel.append(cap);toolbar.append(capLabel);
     }else{
+      // Fridges start from one of the common layouts; the cells stay editable after.
+      if(fridge){const presets=elt('div','cabinetFridgeRow cabinetFridgePresets');presets.append(elt('small','cabinetHint','套用常見格局：'));for(const [key,{label}]of Object.entries(fridgeLayouts))presets.append(button(label,()=>save(fridgeDesign(item(),key))));toolbar.parentNode.insertBefore(presets,toolbar);}
       const multiButton=button(multi?'多選：開':'多選：關',()=>{multi=!multi;if(!multi)picked=new Set([leafId]);render();});
       multiButton.setAttribute('aria-pressed',String(multi));
       toolbar.append(multiButton,elt('small','cabinetHint','Shift／Ctrl＋點選可多選，合併成一片門板'));
@@ -262,11 +272,11 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       const delta=value-next.columns[index].width;
       next.columns[index].width=value;next.columns[other].width-=delta;next.template='custom';
     }),20));
-    if(!simple)fields.append(field(f.type==='hangingCabinet'?'底部留空':'底部離地',selectedColumn.bottom,value=>edit(next=>{
+    if(!simple&&!fridge)fields.append(field(f.type==='hangingCabinet'?'底部留空':'底部離地',selectedColumn.bottom,value=>edit(next=>{
       const c=next.columns.find(c=>c.id===columnId),delta=value-c.bottom;c.bottom=value;c.cells.at(-1).height-=delta;next.template='custom';
     }),0,cm(f.h-.15)));
     // A raised floor cabinet can stand on its sides, keeping the space under it open.
-    if(!simple&&f.type!=='hangingCabinet'&&selectedColumn.bottom>0){
+    if(!simple&&!fridge&&f.type!=='hangingCabinet'&&selectedColumn.bottom>0){
       const label=elt('label','cabinetField checkline'),box=elt('input');box.type='checkbox';box.checked=!!selectedColumn.sidesToFloor;
       box.onchange=()=>edit(next=>{const c=next.columns.find(c=>c.id===columnId);if(box.checked)c.sidesToFloor=true;else delete c.sidesToFloor;});
       label.append(document.createTextNode('側板延伸到地面'),box);fields.append(label);
@@ -289,7 +299,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     if(partStep)fields.append(field('這格寬度',partStep.node.width,value=>resizeStep(partStep,'width',value),15));
     if(!simple){
     // A column's lowest cells may leave out their bottom board, e.g. for a robot vacuum dock.
-    if(Math.abs(selectedLeaf.bottom-selectedColumn.bottom)<1e-6){
+    if(!fridge&&Math.abs(selectedLeaf.bottom-selectedColumn.bottom)<1e-6){
       const label=elt('label','cabinetField checkline'),box=elt('input');box.type='checkbox';box.checked=!!selectedLeaf.noBase;
       box.onchange=()=>edit(next=>{const leaf=findLeaf(next,leafId);if(box.checked)leaf.noBase=true;else delete leaf.noBase;next.template='custom';});
       label.append(document.createTextNode('拿掉底板'),box);fields.append(label);
@@ -298,7 +308,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     const group=doorGroupOf(design,leafId),members=group?group.cells:[leafId],setAll=apply=>edit(next=>{for(const cellId of members)apply(findLeaf(next,cellId));next.template='custom';});
     fields.append(elt('h3','',group?`門板（${members.length} 格共用）`:'門板'));
     const frontLabel=elt('label','cabinetField','門面形式'),front=elt('select');
-    for(const kind of cabinetFronts)front.add(new Option(labels[kind],kind));
+    for(const kind of fridge?fridgeFronts:cabinetFronts)front.add(new Option(labels[kind],kind));
     front.value=selectedLeaf.front;front.onchange=()=>{
       if(front.value!=='open'&&blockedByTv(members,'加上門面')){front.value=selectedLeaf.front;return;}
       if(group&&front.value!=='open'&&!groupFronts.includes(front.value)){dialog.querySelector('.cabinetError').textContent='抽屜與滑門只能用在單一格，請先拆開門板';front.value=selectedLeaf.front;return;}
@@ -306,9 +316,9 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     };
     frontLabel.append(front);fields.append(frontLabel);
     if(selectedLeaf.front!=='open'){
-      const handleLabel=elt('label','cabinetField checkline'),handle=elt('input');handle.type='checkbox';handle.checked=!!selectedLeaf.handle;
+      if(!fridge){const handleLabel=elt('label','cabinetField checkline'),handle=elt('input');handle.type='checkbox';handle.checked=!!selectedLeaf.handle;
       handle.onchange=()=>setAll(leaf=>{if(handle.checked)leaf.handle=true;else delete leaf.handle;});
-      handleLabel.append(document.createTextNode('畫出手把'),handle);fields.append(handleLabel);
+      handleLabel.append(document.createTextNode('畫出手把'),handle);fields.append(handleLabel);}
       fields.append(button(f.openCells?.[members[0]]?'關閉門板':'打開門板',()=>{toggleCell(f,members);render();}));
       if(group)fields.append(button('拆開門板',()=>save(splitDoorGroup(design,leafId))));
     }

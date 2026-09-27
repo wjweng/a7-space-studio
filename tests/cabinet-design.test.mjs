@@ -419,3 +419,19 @@ test('drawer units, vanities and kitchens become modular cabinets, keeping their
   assert(cabinetOccupiedRects(sink).every(r=>Math.abs(r.yMax-sink.h)<1e-9));
 });
 function designLeavesOf(f){return cabinetCells(f);}
+
+test('fridges carry compartments from common layouts, with door and drawer fronts only',async()=>{
+  const {fridgeDesign,fridgeLayouts}=await import('../dist/cabinet-design.js');
+  const {normalizeFridgeColor}=await import('../dist/model.js');
+  const [fridge]=validateFurniture([{id:'fridge',type:'fridge',name:'冰箱',x:4.13,z:6.86,w:.55,d:.63,h:1.78,rot:180,open:0,doorStyle:'right'}]);
+  assert.deepEqual(cabinetCells(fridge).map(c=>c.front),['drawers','right'],'fridge above, freezer drawer below by default');
+  assert.equal(fridge.fridgeColor,'steel');
+  for(const size of[{w:.55,h:1.78},{w:.91,h:1.8}])for(const key of Object.keys(fridgeLayouts)){
+    const f={...fridge,...size},design=validateCabinetDesign(f,fridgeDesign(f,key));
+    assert(designLeaves(design).every(c=>['right','left','double','drawers'].includes(c.front)),key);
+  }
+  const odd=structuredClone(fridge.cabinetDesign);odd.columns[0].bottom=.2;odd.columns[0].cells[0].height-=.2;odd.columns[0].cells[1].front='open';odd.columns[0].cells[0].noBase=true;
+  const fixed=validateCabinetDesign(fridge,odd);
+  assert.equal(fixed.columns[0].bottom,0);assert.equal(fixed.columns[0].cells[1].front,'right');assert.equal(fixed.columns[0].cells[0].noBase,undefined);
+  assert.equal(normalizeFridgeColor('black'),'black');assert.equal(normalizeFridgeColor('#12ab34'),'#12ab34');assert.equal(normalizeFridgeColor('red'),'steel');
+});

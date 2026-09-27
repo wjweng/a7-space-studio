@@ -213,7 +213,7 @@ cabinetButton.onclick=()=>{const f=items.find(item=>item.id===selected);if(f)cab
 const renderWithCabinet=renderProps;
 renderProps=()=>{
  renderWithCabinet();
- const f=items.find(item=>item.id===selected),show=!!f&&(cabinetTypes.includes(f.type)||f.type==='cornerShelf');
+ const f=items.find(item=>item.id===selected),show=!!f&&(cabinetTypes.includes(f.type)||['cornerShelf','fridge'].includes(f.type));
  cabinetButton.hidden=!show;cabinetButton.textContent=f?.type==='cornerShelf'?'編輯層架':'編輯櫃體分格';
  if(f?.cabinetDesign)$('doorStyleField').hidden=true;
 };

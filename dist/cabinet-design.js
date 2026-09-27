@@ -90,8 +90,37 @@ function keepCounter(f,design){
   const next=structuredClone(design);for(const column of next.columns)column.top=t;
   return fitDesign(f,next,{hSide:'top'});
 }
+// Fridges keep their compartments in a cabinet design too: fronts are doors or drawers only,
+// with no plinth gap, top gap or missing bottom (the fridge is drawn by makeFridge in scene.js).
+export const fridgeFronts=['right','left','double','drawers'];
+// Common layouts, cells listed bottom up.
+export const fridgeLayouts={
+  'fridge-top':{label:'上冷藏下冷凍'},
+  'freezer-top':{label:'上冷凍下冷藏'},
+  side:{label:'對開門'},
+  french:{label:'法式多門'},
+  three:{label:'三門'}
+};
+export function fridgeDesign(f,layout='fridge-top'){
+  const h=f.h,w=f.w,cell=(height,front)=>({id:makeId(),height:round(height),front}),rest=(...used)=>h-used.reduce((a,b)=>a+b,0);
+  const column=(width,cells)=>({id:makeId(),width:round(width),bottom:0,cells});
+  if(layout==='side'){const left=round(w*.45);return{template:'custom',columns:[column(left,[cell(h,'left')]),column(w-left,[cell(h,'right')])]};}
+  let cells;
+  if(layout==='freezer-top'){const low=round(h*.68);cells=[cell(low,'right'),cell(rest(low),'right')];}
+  else if(layout==='french'){const a=round(h*.2),b=round(h*.2),half=round(w/2);cells=[cell(a,'drawers'),cell(b,'drawers'),{id:makeId(),height:round(rest(a,b)),parts:[{id:makeId(),width:half,front:'left'},{id:makeId(),width:round(w-half),front:'right'}]}];}
+  else if(layout==='three'){const a=round(h*.24),b=round(h*.18);cells=[cell(a,'drawers'),cell(b,'drawers'),cell(rest(a,b),'right')];}
+  else{const low=round(h*.32);cells=[cell(low,'drawers'),cell(rest(low),'right')];}
+  return{template:'custom',columns:[column(w,cells)]};
+}
+function keepFridge(f,design){
+  if(f.type!=='fridge'||!design?.columns)return design;
+  const next=structuredClone(design);
+  for(const column of next.columns){column.bottom=0;delete column.top;delete column.sidesToFloor;}
+  for(const leaf of designLeaves(next)){if(!fridgeFronts.includes(leaf.front))leaf.front='right';delete leaf.noBase;delete leaf.handle;}
+  return fitDesign(f,next,{hSide:'top'});
+}
 export function validateCabinetDesign(f,design){
-  design=keepCounter(f,design);
+  design=keepFridge(f,keepCounter(f,design));
   if(!design||!Array.isArray(design.columns)||!design.columns.length||design.columns.length>8)throw Error('櫃體分區數量須為 1 至 8');
   let total=0,ids=new Set;
   const columns=design.columns.map(column=>{
