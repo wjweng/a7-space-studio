@@ -435,3 +435,16 @@ test('fridges carry compartments from common layouts, with door and drawer front
   assert.equal(fixed.columns[0].bottom,0);assert.equal(fixed.columns[0].cells[1].front,'right');assert.equal(fixed.columns[0].cells[0].noBase,undefined);
   assert.equal(normalizeFridgeColor('black'),'black');assert.equal(normalizeFridgeColor('#12ab34'),'#12ab34');assert.equal(normalizeFridgeColor('red'),'steel');
 });
+
+test('a dock only needs its tower inside the cell; the low robot in front may stick out under a raised cabinet',()=>{
+  // 40 cm deep cabinet raised 12 cm on its sides: shallower than the 42.5 cm dock with its robot.
+  const f={...item(),w:.45,d:.4,h:.95};
+  f.cabinetDesign=validateCabinetDesign(f,{template:'custom',columns:[{id:'c',width:.45,bottom:.12,sidesToFloor:true,cells:[{id:'dock',height:.6,front:'left',noBase:true},{id:'top',height:.23,front:'open'}]}]});
+  const dock={id:'dock',type:'robotVacuum',x:f.x,z:f.z-.4/2+CARCASS_T+.002+.425/2,w:.39,d:.425,h:.498,rot:0};
+  assert(dock.z+dock.d/2>f.z+f.d/2,'the robot reaches past the cabinet front');
+  assert.equal(furnitureInterference(f,dock),false);
+  // Only the tower is tall: a board 12 cm up over the robot clears it, one 5 cm up does not.
+  const front=dock.z+dock.d/2-.05,board={id:'b',type:'panel',x:dock.x,z:front,w:.3,d:.05,h:.3,rot:0,elevation:.12};
+  assert.equal(furnitureInterference(dock,board),false);
+  assert.equal(furnitureInterference(dock,{...board,elevation:.05}),true);
+});

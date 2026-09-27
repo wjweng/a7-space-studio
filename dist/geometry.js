@@ -43,15 +43,25 @@ export function clashes(a,b){
  if(Math.hypot(a.x-b.x,a.z-b.z)>(Math.hypot(a.w,a.d)+Math.hypot(b.w,b.d))/2+1e-6)return false;
  return signedDistance(a,b)<-EPS;
 }
+// A robot vacuum dock (sized after a Dreame X60 Ultra, mm: 390 × 425 × 498): a tower 296 mm
+// deep at the back, full height, and in front only the ramp and the robot, about 10.5 cm high
+// (the robot is 7.95 cm, 10.28 cm with its lidar raised). scene.js draws it from the same numbers.
+export const DOCK={w:.39,d:.425,h:.498,tower:.296,front:.105};
+export function robotVacuumRects(f){
+ const tower=DOCK.tower*f.d/DOCK.d,a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+ const box=(z0,z1,top)=>{const v=(z0+z1)/2;return{x:f.x+v*s,z:f.z+v*c,w:f.w,d:z1-z0,rot:f.rot,yMin:0,yMax:top};};
+ return[box(-f.d/2,-f.d/2+tower,f.h),box(-f.d/2+tower,f.d/2,Math.min(f.h,DOCK.front*f.h/DOCK.h))];
+}
 export function furnitureInterference(a,b){
  // TVs, hanging cabinets, back panels and light coves carry their underside height as `elevation`.
  const lifted=f=>['television','hangingCabinet','panel','cove'].includes(f.type)?f.elevation||0:0,ay=lifted(a),by=lifted(b);
  if(ay+a.h<=by+EPS||by+b.h<=ay+EPS)return false;
  if(['rug','light','beam','outlet'].includes(a.type)||['rug','light','beam','outlet'].includes(b.type))return false;
  if(a.type==='hangingCabinet'&&b.type==='hangingCabinet')return false; // ceiling stacking is checked separately
- if(a.cabinetDesign||b.cabinetDesign){
-  const aa=a.cabinetDesign?cabinetOccupiedRects(a):[{...a,yMin:ay,yMax:ay+a.h}];
-  const bb=b.cabinetDesign?cabinetOccupiedRects(b):[{...b,yMin:by,yMax:by+b.h}];
+ const compound=f=>f.cabinetDesign||f.type==='robotVacuum';
+ if(compound(a)||compound(b)){
+  const parts=(f,lift)=>f.cabinetDesign?cabinetOccupiedRects(f):f.type==='robotVacuum'?robotVacuumRects(f):[{...f,yMin:lift,yMax:lift+f.h}];
+  const aa=parts(a,ay),bb=parts(b,by);
   return aa.some(left=>bb.some(right=>left.yMin<right.yMax-EPS&&right.yMin<left.yMax-EPS&&clashes(left,right)));
  }
  if(a.type==='chair'&&isTableLike(b))return tableChairInterference(a,b);
