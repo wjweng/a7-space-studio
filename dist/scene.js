@@ -596,30 +596,42 @@ export class SpaceScene{
   return;
  }
  if(type==='outlet'){
-  // A socket: a faceplate facing +z at its elevation, a desk box on a cabinet top, or a pop-up
-  // in a counter. Each outlet is a pale module with thin slots, not a dark block, so kinds tell
-  // apart: 110 V two upright slots and a ground hole, 220 V two flat slots and a red tag, USB
-  // ports, an RJ45 jack and a coax pin. Top view adds a hollow ring to find and click it.
-  const y=f.elevation||0,kind=f.outletKind,top=f.outletMount==='top',face=d/2,cy=y+h/2;
+  // A socket as a real faceplate: a white plate with a grey edge and a raised face, and each
+  // outlet a recessed module ringed by a groove with dark slots and a ground hole, so it
+  // reads as a socket from a metre or two. 110 V: two upright slots; 220 V: two flat slots
+  // and a red tag; USB: two ports; data: an RJ45 jack and a coax pin. The plate faces out
+  // from a wall or back panel and lies face up on a top; a pop-up is a steel lid in a counter.
+  const y=f.elevation||0,kind=f.outletKind,top=f.outletMount==='top';
   const mat=colour=>this.outletMaterials?.[colour]||((this.outletMaterials??={})[colour]=new T.MeshStandardMaterial({color:colour,roughness:.45}));
-  const bit=(x,dy,sw,sh,depth,colour)=>box(sw,sh,depth,x,cy+dy,face+depth/2,mat(colour));
-  const outlet=(x,flat)=>{bit(x,0,.026,.032,.003,'#e4e2dc');for(const dx of[-.0035,.0035])flat?bit(x,.004+dx*1.4,.009,.0022,.0012,'#2c2f31'):bit(x+dx,.003,.0022,.009,.0012,'#2c2f31');bit(x,-.009,.004,.003,.0012,'#2c2f31');};
   if(top&&kind==='popup'){
    // Brushed steel as a light grey: a metal material renders dark without an environment map.
    this.cyl(g,w/2,w/2,h,0,y+h/2,0,mat('#c9ccce'));
    this.cyl(g,w/2-.006,w/2-.006,.0012,0,y+h+.0006,0,mat('#8e9396'));
    this.cyl(g,w/2-.008,w/2-.008,.0016,0,y+h+.0008,0,mat('#d3d6d8'));
   }else{
-   box(w,h,d,0,cy,0,'white',top?.006:.003);
-   if(kind==='data'){bit(-.022,0,.018,.018,.003,'#e4e2dc');bit(-.022,-.001,.012,.01,.0012,'#2c2f31');const coax=this.cyl(g,.007,.007,.004,.024,cy,face+.002,mat('#c9ccce'));coax.rotation.x=Math.PI/2;const pin=this.cyl(g,.0015,.0015,.005,.024,cy,face+.003,mat('#2c2f31'));pin.rotation.x=Math.PI/2;}
-   else if(kind==='v220'){outlet(0,true);bit(.022,.022,.012,.006,.001,'#c0392b');}
-   else if(kind==='usb'){outlet(-.026,false);for(const dy of[-.008,.008]){bit(.028,dy,.013,.005,.0012,'#2c2f31');bit(.028,dy+.001,.009,.0015,.0014,'#e4e2dc');}}
-   else for(const x of[-.028,.028])outlet(x,false);
+   const plate=new T.Group,pw=.12,ph=.075,pt=top?h:d,face=pt/2;g.add(plate);
+   if(top){plate.rotation.x=-Math.PI/2;plate.position.set(0,y+pt/2,0);}else plate.position.set(0,y+h/2,0);
+   const part=(sw,sh,depth,x,py,z,colour,r=0)=>this.box(plate,sw,sh,depth,x,py,z,mat(colour),r);
+   const dot=(radius,x,py,z,colour)=>{const c=this.cyl(plate,radius,radius,.0012,x,py,z,mat(colour));c.rotation.x=Math.PI/2;};
+   part(pw,ph,pt,0,0,0,'#e3e1db',.003);
+   part(pw-.008,ph-.008,.0016,0,0,face+.0008,'#f8f7f3',.002);
+   const front=face+.0016,dark='#1d2022';
+   const receptacle=(x,flat)=>{
+    part(.031,.037,.001,x,0,front+.0005,'#b4b1aa',.004);part(.027,.033,.0016,x,0,front+.0008,'#eeede8',.004);
+    const z=front+.0022;
+    if(flat)for(const py of[.007,-.002])part(.013,.0034,.0012,x,py,z,dark);
+    else for(const dx of[-.0055,.0055])part(.0034,.012,.0012,x+dx,.005,z,dark);
+    dot(.0036,x,-.01,z,dark);
+   };
+   if(kind==='data'){part(.024,.022,.0014,-.024,0,front+.0007,'#eeede8',.003);part(.014,.012,.0012,-.024,-.001,front+.0019,dark);dot(.008,.024,0,front+.0006,'#c9ccce');dot(.0018,.024,0,front+.0016,dark);}
+   else if(kind==='v220'){receptacle(-.012,true);part(.02,.01,.0012,.03,0,front+.0006,'#c0392b',.002);}
+   else if(kind==='usb'){receptacle(-.026,false);for(const py of[-.009,.009]){part(.014,.006,.0012,.028,py,front+.0006,dark);part(.01,.0018,.0014,.028,py+.001,front+.0008,'#eeede8');}}
+   else for(const x of[-.028,.028])receptacle(x,false);
   }
-  // Just above the socket, so the selection box stays around it.
-  // A socket inside a cell would hide under the cabinet top, so its ring goes above that.
+  // A socket inside a cell would hide under the cabinet top, so its ring goes above that; the
+  // ring is the selection orange, so it does not read as part of the socket.
   const host=f.outletMount==='cell'&&this.items?.find(item=>item.id===f.supportId),hostTop=host?(host.type==='hangingCabinet'?host.elevation||0:0)+host.h:0;
-  const ring=new T.Mesh(new T.RingGeometry(.055,.07,32),this.m.accent);ring.rotation.x=-Math.PI/2;ring.position.y=Math.max(y+h,hostTop)+.004;g.add(ring);this.topOutline(ring);
+  const ring=new T.Mesh(new T.RingGeometry(.055,.07,32),mat('#c36b45'));ring.rotation.x=-Math.PI/2;ring.position.y=Math.max(y+h,hostTop)+.004;g.add(ring);this.topOutline(ring);
   return;
  }
  if(type==='washer'){box(w,h,d,0,h/2,0,'white',.035);box(w*.76,h*.7,.045,0,h*.47,d/2+.024,'dark',.06);let drum=this.cyl(g,w*.29,w*.29,.035,0,h*.47,d/2+.052,'dark');drum.rotation.x=Math.PI/2;const wd=washerDoor(f),mid=(wd.from+wd.to)/2;let door=new T.Group;door.position.set(wd.hinge[0],wd.y,wd.hinge[1]);g.add(door);this.box(door,wd.to-wd.from,.055,.06,mid,0,0,'white',.035);let glass=this.cyl(door,w*.25,w*.25,.035,mid,0,.038,'glass');glass.rotation.x=Math.PI/2;let rim=this.cyl(door,wd.radius,wd.radius,.025,mid,0,.03,'metal');rim.rotation.x=Math.PI/2;box(w*.75,.08,.015,0,h*.86,d/2+.01,'metal',.008);this.actions.set(f.id,{type:'washer',pivot:door,item:f,amount:f.open||0});return;}

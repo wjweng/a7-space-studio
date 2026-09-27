@@ -193,3 +193,15 @@ test('a socket put on a surface in walk view mounts on the wall, a top, or the c
   const placed=placeOutlet(validateFurniture([front])[0],items,{fromPoint:true});
   assert(Math.abs(placed.offsetX-.1)<1e-9,'keeps the pointer\'s spot across the cell');
 });
+
+test('a socket lying on a top lies flat, turns on it and stays on it',async()=>{
+  const {placeOutlet}=await import('../dist/spatial.js');
+  const {validateFurniture,initialFurniture}=await import('../dist/model.js');
+  const kitchen=validateFurniture([initialFurniture.find(f=>f.id==='kitchen')])[0];
+  const [o]=validateFurniture([{id:'o',type:'outlet',name:'插座',x:kitchen.x,z:kitchen.z,w:.1,d:.1,h:.1,rot:0,open:0,outletMount:'top',supportId:'kitchen',offsetRot:90}]);
+  assert.deepEqual([o.w,o.d,o.h],[.12,.075,.012],'a flat plate');
+  const far=placeOutlet({...o,x:kitchen.x+5,z:kitchen.z},[kitchen,o],{fromPoint:true});
+  assert.equal(far.rot,(kitchen.rot+90)%360);
+  assert(Math.abs(far.offsetX)<=kitchen.w/2-o.d/2+1e-9,'turned, its depth runs along the counter and it stays on it');
+  assert.equal(far.elevation,kitchen.h);
+});

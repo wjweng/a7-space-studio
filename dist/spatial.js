@@ -126,12 +126,14 @@ export function placeOutlet(o,items,{fromPoint=false}={}){
  const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v)),base=['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0;
  let u=o.offsetX||0,v=o.offsetZ||0;
  if(fromPoint){const dx=o.x-host.x,dz=o.z-host.z;u=dx*c-dz*s;v=dx*s+dz*c;}
- const at=(u,v,elevation)=>({...o,offsetX:u,offsetZ:v,x:host.x+u*c+v*s,z:host.z-u*s+v*c,rot:host.rot,elevation});
+ // A plate lying on a top may turn on it (`offsetRot`, relative to the host); one on a back panel faces out.
+ const at=(u,v,elevation,turn=0)=>({...o,offsetX:u,offsetZ:v,x:host.x+u*c+v*s,z:host.z-u*s+v*c,rot:((host.rot+turn)%360+360)%360,elevation});
  if(o.outletMount==='cell'){
   const opening=host.cabinetDesign&&cellOpening(host,o.supportCell);if(!opening)return o;
   return at(clamp(u,opening.x-opening.w/2+o.w/2,opening.x+opening.w/2-o.w/2),-host.d/2+CARCASS_T+o.d/2,clamp(o.elevation,base+opening.bottom,base+opening.bottom+opening.h-o.h));
  }
- return at(clamp(u,-host.w/2+o.w/2,host.w/2-o.w/2),clamp(v,-host.d/2+o.d/2,host.d/2-o.d/2),base+host.h);
+ const turn=o.offsetRot||0,across=turn%180?[o.d,o.w]:[o.w,o.d];
+ return at(clamp(u,-host.w/2+across[0]/2,host.w/2-across[0]/2),clamp(v,-host.d/2+across[1]/2,host.d/2-across[1]/2),base+host.h,turn);
 }
 // Where a socket dragged or clicked onto a surface in walk view goes: a wall (a building face
 // that stands upright) at the pointer's height; the top of a cabinet, desk or table; or, on a
