@@ -150,3 +150,26 @@ test('an item already touching one wall still stops at the next wall',async()=>{
   assert.equal(moved.reason,'與牆體重疊');
   assert(moved.item.x+sink.d/2<=3.08-.06+1e-6,`stops at the east wall face, x=${moved.item.x}`);
 });
+
+test('sockets sit flat on the nearest wall, on a cabinet top, or on a cell back panel, following the host',async()=>{
+  const {placeOutlet}=await import('../dist/spatial.js');
+  const {validateFurniture,WALL_THICKNESS,initialFurniture}=await import('../dist/model.js');
+  const {CARCASS_T,makeCabinetDesign,cabinetCells,cellOpening}=await import('../dist/cabinet-design.js');
+  const [wall]=validateFurniture([{id:'o',type:'outlet',name:'插座',x:.3,z:3,w:.1,d:.1,h:.1,rot:0,open:0}]);
+  assert.deepEqual([wall.w,wall.d,wall.h,wall.elevation,wall.outletKind,wall.outletMount],[.12,.015,.075,.3,'duplex','wall']);
+  const onWall=placeOutlet(wall,[wall]);
+  assert(Math.abs(onWall.x-(WALL_THICKNESS/2+wall.d/2))<1e-9,`against the living room's west wall, x=${onWall.x}`);
+  assert.equal(onWall.rot,90,'facing into the room');
+  const kitchen=validateFurniture([initialFurniture.find(f=>f.id==='kitchen')])[0];
+  const [top]=validateFurniture([{...wall,id:'t',outletMount:'top',outletKind:'popup',supportId:'kitchen'}]);
+  const placed=placeOutlet({...top,x:kitchen.x+.5,z:kitchen.z},[kitchen,top],{fromPoint:true});
+  assert.equal(placed.elevation,kitchen.h);
+  const moved=placeOutlet(placed,[{...kitchen,x:kitchen.x-1},placed]);
+  assert(Math.abs(moved.x-(placed.x-1))<1e-9,'follows the kitchen');
+  const cabinet={id:'c',type:'wardrobe',name:'櫃',x:2,z:3,w:.8,d:.5,h:2,rot:0,open:0};cabinet.cabinetDesign=makeCabinetDesign(cabinet,'shelves');
+  const cell=cabinetCells(cabinet)[1],opening=cellOpening(cabinet,cell.id);
+  const [inside]=validateFurniture([{...wall,id:'i',outletMount:'cell',supportId:'c',supportCell:cell.id,elevation:0}]);
+  const inCell=placeOutlet(inside,[cabinet,inside]);
+  assert(Math.abs(inCell.z-(cabinet.z-cabinet.d/2+CARCASS_T+inside.d/2))<1e-9,'on the back panel');
+  assert(Math.abs(inCell.elevation-opening.bottom)<1e-9,'kept inside the cell');
+});

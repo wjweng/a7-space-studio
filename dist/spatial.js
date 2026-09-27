@@ -1,6 +1,6 @@
 import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,wallsHit,WALL_THICKNESS} from './model.js';
-import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference} from './geometry.js';
-import {modularCabinetRects,resizeCabinetDesign} from './cabinet-design.js';
+import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference,clashes} from './geometry.js';
+import {modularCabinetRects,resizeCabinetDesign,cellOpening,CARCASS_T} from './cabinet-design.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
 // The rendered leaf, in the door group's frame: x runs along the opening from the hinge jamb,
 // z across the wall. It closes inside the frame, flush with the wall face on its swing side,
@@ -74,7 +74,7 @@ export function findRoute(start,goal,clear){
 
 // Low tables/chairs can be viewed from above; tall furniture always protects the camera.
 // Plants are leaves you brush past, so walking goes through them.
-export const blocksCamera=(f,eye=1.6)=>!['rug','light','beam','plant'].includes(f.type)&&(['television','hangingCabinet'].includes(f.type)?f.elevation<eye+.1&&f.elevation+f.h>eye-.2:f.h>.15&&(!['table','chair','desk'].includes(f.type)||f.h>=eye-.2));
+export const blocksCamera=(f,eye=1.6)=>!['rug','light','beam','plant','outlet'].includes(f.type)&&(['television','hangingCabinet'].includes(f.type)?f.elevation<eye+.1&&f.elevation+f.h>eye-.2:f.h>.15&&(!['table','chair','desk'].includes(f.type)||f.h>=eye-.2));
 export function cabinetLayout(f){
  const style=f.doorStyle||'double',edge=.015;
  if(style==='drawers'){const n=f.type==='console'?Math.max(1,Math.ceil(f.w/.6)):Math.max(1,Math.ceil(f.w/.8)),pw=(f.w-edge*2)/n;return{doors:[],drawers:Array.from({length:n},(_,i)=>({x:-f.w/2+edge+pw*(i+.5),width:pw-edge,rows:f.type==='console'?1:3})),slides:[]};}
@@ -100,6 +100,38 @@ export function showerDoorLayout(f){
  if(f.id==='showerA'){const width=Math.min(.68,f.w-.12);return{hingeX:f.w/2,hingeZ:-f.d/2,endX:f.w/2-width,endZ:-f.d/2,width,swing:1};}
  const cut=Math.min(.3,f.w*.25,f.d*.45),hingeX=-f.w/2+cut,hingeZ=-f.d/2,endX=-f.w/2,endZ=-f.d/2+cut;
  return{hingeX,hingeZ,endX,endZ,width:Math.hypot(endX-hingeX,endZ-hingeZ),swing:1};
+}
+// A socket flat against the nearest wall or column face inside the flat, facing out.
+export function wallMount(f){
+ let best=null;const rects=wallRects();
+ // Wall joints only fill corners; a socket goes on a wall run or a column face.
+ for(const w of rects){
+  if(w.id?.startsWith('wall-joint-'))continue;
+  const a=w.rot*Math.PI/180,tx=Math.cos(a),tz=-Math.sin(a),half=w.w/2-f.w/2;if(half<0)continue;
+  const along=Math.max(-half,Math.min(half,(f.x-w.x)*tx+(f.z-w.z)*tz));
+  for(const sign of[-1,1]){
+   const nx=Math.sin(a)*sign,nz=Math.cos(a)*sign,out=w.d/2+f.d/2,x=w.x+tx*along+nx*out,z=w.z+tz*along+nz*out,rot=Math.round(Math.atan2(nx,nz)*180/Math.PI)||0;
+   if(!insideOrOutline(x,z)||rects.some(o=>o!==w&&clashes({...f,x,z,rot},o)))continue;
+   const dist=Math.hypot(x-f.x,z-f.z);if(!best||dist<best.dist)best={x,z,rot,dist};
+  }
+ }
+ return best?{x:best.x,z:best.z,rot:best.rot}:{};
+}
+// Where a socket sits: on the nearest wall, or on its host (a cabinet's top, or a cell's back
+// panel) at `offsetX`/`offsetZ` in the host's own axes, so it follows the host. With
+// `fromPoint` its x/z (a drag) set that spot first.
+export function placeOutlet(o,items,{fromPoint=false}={}){
+ if(o.outletMount==='wall')return{...o,...wallMount(o)};
+ const host=items.find(i=>i.id===o.supportId);if(!host)return o;
+ const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v)),base=['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0;
+ let u=o.offsetX||0,v=o.offsetZ||0;
+ if(fromPoint){const dx=o.x-host.x,dz=o.z-host.z;u=dx*c-dz*s;v=dx*s+dz*c;}
+ const at=(u,v,elevation)=>({...o,offsetX:u,offsetZ:v,x:host.x+u*c+v*s,z:host.z-u*s+v*c,rot:host.rot,elevation});
+ if(o.outletMount==='cell'){
+  const opening=host.cabinetDesign&&cellOpening(host,o.supportCell);if(!opening)return o;
+  return at(clamp(u,opening.x-opening.w/2+o.w/2,opening.x+opening.w/2-o.w/2),-host.d/2+CARCASS_T+o.d/2,clamp(o.elevation,base+opening.bottom,base+opening.bottom+opening.h-o.h));
+ }
+ return at(clamp(u,-host.w/2+o.w/2,host.w/2-o.w/2),clamp(v,-host.d/2+o.d/2,host.d/2-o.d/2),base+host.h);
 }
 // The desk's drawer, shared by the drawing and the opening check: 13 cm high just under the
 // top (its centre 12 cm below it), 65 % of the desk's width, 30 cm deep, sliding out 30 cm.
