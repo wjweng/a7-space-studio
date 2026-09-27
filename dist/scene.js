@@ -603,29 +603,27 @@ export class SpaceScene{
   // A socket as a real faceplate: a white plate with a grey edge and a raised face, and each
   // outlet a recessed module ringed by a groove with two dark upright slots and a ground hole,
   // so it reads as a socket from a metre or two; USB adds two ports, data an RJ45 jack and a
-  // coax pin. The plate faces out from a wall or back panel and lies face up on a top. Turned
-  // upright (`spin` 90 or 270) the plate is tall and its outlets stack, each still upright, as a
-  // real upright socket is; 180 and 270 swap their order.
+  // coax pin. The plate faces out from a wall or back panel and lies face up on a top, and turns
+  // as one piece, slots included, the same way in both: `spin` on a wall, counterclockwise seen
+  // from the front, as a turn on a top is seen from above.
   const y=f.elevation||0,kind=f.outletKind,top=f.outletMount==='top';
   const mat=colour=>this.outletMaterials?.[colour]||((this.outletMaterials??={})[colour]=new T.MeshStandardMaterial({color:colour,roughness:.45}));
-   const spin=top?0:f.spin||0,upright=spin%180===90,order=spin>=180?-1:1,plate=new T.Group,pw=upright?.075:.12,ph=upright?.12:.075,pt=top?h:d,face=pt/2;g.add(plate);
-   if(top){plate.rotation.x=-Math.PI/2;plate.position.set(0,y+pt/2,0);}else plate.position.set(0,y+h/2,0);
-   // A spot along the plate's long side: across a flat plate, down an upright one.
-   const along=l=>upright?[0,-l*order]:[l*order,0];
+   const plate=new T.Group,pw=.12,ph=.075,pt=top?h:d,face=pt/2;g.add(plate);
+   if(top){plate.rotation.x=-Math.PI/2;plate.position.set(0,y+pt/2,0);}else{plate.position.set(0,y+h/2,0);plate.rotation.z=(f.spin||0)*Math.PI/180;}
    const part=(sw,sh,depth,x,py,z,colour,r=0)=>this.box(plate,sw,sh,depth,x,py,z,mat(colour),r);
    const dot=(radius,x,py,z,colour)=>{const c=this.cyl(plate,radius,radius,.0012,x,py,z,mat(colour));c.rotation.x=Math.PI/2;};
    part(pw,ph,pt,0,0,0,'#e3e1db',.003);
    part(pw-.008,ph-.008,.0016,0,0,face+.0008,'#f8f7f3',.002);
    const front=face+.0016,dark='#1d2022';
-   const receptacle=l=>{
-    const [x,py]=along(l);
+   const receptacle=x=>{
+    const py=0;
     part(.031,.037,.001,x,py,front+.0005,'#b4b1aa',.004);part(.027,.033,.0016,x,py,front+.0008,'#eeede8',.004);
     const z=front+.0022;
     for(const dx of[-.0055,.0055])part(.0034,.012,.0012,x+dx,py+.005,z,dark);
     dot(.0036,x,py-.01,z,dark);
    };
-   if(kind==='data'){const [jx,jy]=along(-.024),[cx,cy]=along(.024);part(.024,.022,.0014,jx,jy,front+.0007,'#eeede8',.003);part(.014,.012,.0012,jx,jy-.001,front+.0019,dark);dot(.008,cx,cy,front+.0006,'#c9ccce');dot(.0018,cx,cy,front+.0016,dark);}
-   else if(kind==='usb'){receptacle(-.026);const [ux,uy]=along(.028);for(const o of[-.009,.009]){const [px,py]=upright?[ux+o,uy]:[ux,uy+o];part(.014,.006,.0012,px,py,front+.0006,dark);part(.01,.0018,.0014,px,py+.001,front+.0008,'#eeede8');}}
+   if(kind==='data'){part(.024,.022,.0014,-.024,0,front+.0007,'#eeede8',.003);part(.014,.012,.0012,-.024,-.001,front+.0019,dark);dot(.008,.024,0,front+.0006,'#c9ccce');dot(.0018,.024,0,front+.0016,dark);}
+   else if(kind==='usb'){receptacle(-.026);for(const py of[-.009,.009]){part(.014,.006,.0012,.028,py,front+.0006,dark);part(.01,.0018,.0014,.028,py+.001,front+.0008,'#eeede8');}}
    else for(const x of[-.028,.028])receptacle(x);
   // A socket inside a cell would hide under the cabinet top, so its ring goes above that; the
   // ring is the selection orange, so it does not read as part of the socket.

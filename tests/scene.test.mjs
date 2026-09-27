@@ -313,3 +313,14 @@ test('walking into another room eases the lighting over about half a second inst
  assert.equal(lamp.intensity,full,'and settles within a second');assert(s.bounce.intensity>0);
  assert.equal(s.stepLightFade(.04),false,'no more frames are needed');
 });
+
+test('every socket kind draws on a wall, a top and in a cell at every turn, turning as one piece',async()=>{
+  const {validateFurniture,outletKinds}=await import('../dist/model.js');
+  const s=fixture();
+  for(const [kind]of outletKinds)for(const mount of['wall','top','cell'])for(const turn of[0,90,180,270]){
+    const [f]=validateFurniture([{id:`o-${kind}-${mount}-${turn}`,type:'outlet',name:'插座',x:1,z:1,w:.12,d:.015,h:.075,rot:0,open:0,outletKind:kind,outletMount:mount,supportId:'x',supportCell:'y',spin:turn,offsetRot:turn}]);
+    const g=new THREE.Group;s.makeFurniture(g,f);
+    assert(g.children.length>1,`${kind} ${mount} ${turn}`);
+    if(mount==='wall'){const plate=g.children.find(c=>c.isGroup);assert(Math.abs(plate.rotation.z-turn*Math.PI/180)<1e-9,'the whole plate turns in the wall');}
+  }
+});
