@@ -25,7 +25,7 @@ test('each lamp lens follows its own dimmer and switch, including the global swi
  assert(lenses[0].emissiveIntensity>0&&lenses[0].emissiveIntensity<full);
  assert.equal(lenses[1].emissiveIntensity,full,'another fixture stays at full brightness');
  lamps[1].on=false;s.updateLight();
- assert.equal(lenses[1].emissiveIntensity,0);assert.equal(lenses[1].color.getHexString(),'8d9295');
+ assert.equal(lenses[1].emissiveIntensity,0);assert.equal(lenses[1].color.getHexString(),'e6e6e1','a switched-off lens stays milky white');
  lamps[0].dimming=0;s.updateLight();assert.equal(lenses[0].emissiveIntensity,0);
  s.lightsOn=false;s.updateLight();assert(lenses.every(lens=>lens.emissiveIntensity===0));
  let disposed=false;lenses[0].addEventListener('dispose',()=>{disposed=true});s.clearGroup(groups[0]);assert(disposed,'fixture material is released with its mesh');

@@ -22,7 +22,9 @@ function lampShadow(light,size){light.castShadow=true;light.shadow.mapSize.set(s
 // A linear light gets a downlight about every 60 cm, at most three, sharing its lumens.
 export const linearLightCount=length=>Math.max(1,Math.min(3,Math.round(length/.6)));
 // A fixture owns its lens material so its visible glow can change without relighting other lamps.
-function fixtureLens(base,color){const lens=base.clone();lens.userData.fixtureLens=true;lens.userData.onColor=lens.color.clone();lens.color.set('#8d9295');lens.emissive.set(color);lens.emissiveIntensity=0;return lens;}
+// A switched-off diffuser is milky white like a real one, not a dark grey; the glow alone shows it is on.
+const OFF_LENS='#e6e6e1';
+function fixtureLens(base,color){const lens=base.clone();lens.userData.fixtureLens=true;lens.userData.onColor=lens.color.clone();lens.color.set(OFF_LENS);lens.emissive.set(color);lens.emissiveIntensity=0;return lens;}
 // Light-cove wash: greyscale ramps, tinted by the lamp colour and added on top
 // of the ceiling and wall, so a cove looks lit without a real area light (those
 // more than doubled frame time). u runs along the cove and fades past its ends;
@@ -41,7 +43,7 @@ function coveRamp(kind){
 
  return coveRamps[kind]=texture;
 }
-function setFixtureLens(lens,level){if(!lens)return;lens.color.set('#8d9295').lerp(lens.userData.onColor,Math.min(1,Math.sqrt(level)));lens.emissiveIntensity=Math.min(2.8,1.9*level);}
+function setFixtureLens(lens,level){if(!lens)return;lens.color.set(OFF_LENS).lerp(lens.userData.onColor,Math.min(1,Math.sqrt(level)));lens.emissiveIntensity=Math.min(2.8,1.9*level);}
 // Night-time ceiling bounce, in proportion to the lamps switched on (1200 lm at 100% = 1).
 // Soft light from the ceiling lit by light coves (1000 lm at 100% = 1), strongest at night
 // and scaled like the lamps by day.
