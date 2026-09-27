@@ -397,3 +397,25 @@ test('a robot vacuum dock fits inside a cell without a bottom board but not a ce
   const turned={...f,rot:90},turnedDock={...dock,rot:90,x:f.x+(dock.z-f.z),z:f.z};
   assert.equal(furnitureInterference(turned,turnedDock),false,'rotated with the cabinet');
 });
+
+test('drawer units, vanities and kitchens become modular cabinets, keeping their counters',()=>{
+  const legacy=[
+    {id:'k',type:'kitchen',name:'廚具',x:5,z:6.9,w:2.08,d:.58,h:.9,rot:180,open:0,doorStyle:'mixed'},
+    {id:'s',type:'sink',name:'洗手台',x:1.8,z:5.2,w:.82,d:.43,h:.83,rot:90,open:0},
+    {id:'n',type:'drawer',name:'床頭櫃',x:6.3,z:.5,w:.35,d:.4,h:.53,rot:0,open:0}];
+  const [kitchen,sink,night]=validateFurniture(legacy);
+  for(const f of[kitchen,sink,night])assert(f.cabinetDesign,f.type);
+  assert.deepEqual(designLeavesOf(night).map(c=>c.front),['drawers','drawers','drawers']);
+  assert.deepEqual(kitchen.cabinetDesign.columns.map(c=>c.cells.map(r=>r.front).join()),['left','drawers,drawers,drawers','right']);
+  assert(kitchen.cabinetDesign.columns.every(c=>c.top===.04));
+  assert(sink.cabinetDesign.columns.every(c=>c.top===.1));
+  assert.equal(night.cabinetDesign.columns[0].top,undefined);
+  // An edit that drops the counter gap gets it back, the top row taking the difference.
+  const edited=structuredClone(sink.cabinetDesign);const column=edited.columns[0];column.cells.at(-1).height+=column.top;delete column.top;
+  const again=validateCabinetDesign(sink,edited);
+  assert.equal(again.columns[0].top,.1);
+  assert(Math.abs(again.columns[0].cells.reduce((sum,c)=>sum+c.height,0)+.1-sink.h)<1e-9);
+  // The counter is solid for clashes.
+  assert(cabinetOccupiedRects(sink).every(r=>Math.abs(r.yMax-sink.h)<1e-9));
+});
+function designLeavesOf(f){return cabinetCells(f);}

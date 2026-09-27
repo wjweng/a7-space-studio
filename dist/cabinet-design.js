@@ -81,7 +81,17 @@ function keepBaseOnlyAtBottom(rows,lowest){
     else if(!low)delete row.noBase;
   });
 }
+// Counter-topped cabinets (a vanity's 10 cm top, a kitchen's 4 cm counter) keep that
+// thickness free above the carcass as each column's `top`, whatever an edit did to it; the
+// top is drawn there (sinkTop / kitchenTop in scene.js) and still counts as solid.
+export const COUNTER={sink:.1,kitchen:.04};
+function keepCounter(f,design){
+  const t=COUNTER[f.type];if(!t||!design?.columns)return design;
+  const next=structuredClone(design);for(const column of next.columns)column.top=t;
+  return fitDesign(f,next,{hSide:'top'});
+}
 export function validateCabinetDesign(f,design){
+  design=keepCounter(f,design);
   if(!design||!Array.isArray(design.columns)||!design.columns.length||design.columns.length>8)throw Error('櫃體分區數量須為 1 至 8');
   let total=0,ids=new Set;
   const columns=design.columns.map(column=>{
@@ -249,7 +259,7 @@ export function cabinetOccupiedRects(f){
   const back=-f.d/2,front=f.d/2,open=cabinetStructure(f).cells.filter(cell=>cell.noBase);
   const out=[];
   for(const column of cabinetColumns(f)){
-    const left=column.x-column.width/2,right=column.x+column.width/2,bottom=column.bottom,top=f.h-(column.top||0);
+    const left=column.x-column.width/2,right=column.x+column.width/2,bottom=column.bottom,top=f.h-(COUNTER[f.type]?0:column.top||0);
     if(column.sidesToFloor)out.push(box(left,left+T,back,front,0,bottom),box(right-T,right,back,front,0,bottom));
     const holes=open.filter(cell=>cell.columnId===column.id).map(cell=>({x0:cell.x-cell.w/2+cell.insetL,x1:cell.x+cell.w/2-cell.insetR,top:cell.bottom+cell.h-(cell.last?T:0)}));
     const cuts=[...new Set([left,right,...holes.flatMap(h=>[h.x0,h.x1])])].sort((a,b)=>a-b);
@@ -536,10 +546,11 @@ function trimCabinetGap(f){
 // so opening the editor for the first time keeps the cabinet's fronts
 // instead of swapping in a template. Mirrors `cabinetLayout` in spatial.js.
 export function designFromDoorStyle(f){
-  const style=f.doorStyle||'double',fit=(front,width)=>front==='sliding'&&width<.5?fit('double',width):front==='double'&&width<.4||front==='drawers'&&width<.25?'left':front;
+  // A drawer unit is drawers whatever its door style says.
+  const style=f.type==='drawer'?'drawers':f.doorStyle||'double',fit=(front,width)=>front==='sliding'&&width<.5?fit('double',width):front==='double'&&width<.4||front==='drawers'&&width<.25?'left':front;
   let spec;
   if(style==='drawers'){const count=f.type==='console'?Math.ceil(f.w/.6):Math.ceil(f.w/.8);spec=Array(Math.max(1,count)).fill(['drawers',f.type==='console'?1:3]);}
-  else if(style==='mixed')spec=[['left',1],['drawers',1],['right',1]];
+  else if(style==='mixed')spec=[['left',1],['drawers',f.type==='kitchen'?3:1],['right',1]];
   else if(style==='multi')spec=Array.from({length:Math.max(2,Math.ceil(f.w/.6))},(_,i)=>[i%2?'right':'left',1]);
   else spec=[[['left','right','sliding'].includes(style)?style:'double',1]];
   spec=spec.slice(0,Math.max(1,Math.floor(f.w/.2+1e-9)));
