@@ -7,7 +7,7 @@ import {flooringByCode,tileSize} from './floorings.js';
 import {requestTexture,texturePixelsNow,texturesAsync} from './texture-cache.js';
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeCove,CORNER_BOARD,normalizeFabric,lightMountDrop,hangingElevation,mountDrop} from './model.js';
-import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle} from './spatial.js';
+import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle,washerDoor} from './spatial.js';
 import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,frontPanels,groupFronts,FRONT_GAP,FRONT_T,FRONT_Z} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
 // A flush fitting sends all of its light downward and glows like a panel, so straight below
@@ -540,7 +540,7 @@ export class SpaceScene{
   box(.13*sx,.042*sy,.03,0,bottom+body*.52,cz+r-.009,'dark',.008);
   return;
  }
- if(type==='washer'){box(w,h,d,0,h/2,0,'white',.035);box(w*.76,h*.7,.045,0,h*.47,d/2+.024,'dark',.06);let drum=this.cyl(g,w*.29,w*.29,.035,0,h*.47,d/2+.052,'dark');drum.rotation.x=Math.PI/2;let door=new T.Group;door.position.set(-w*.33,h*.48,d/2+.08);g.add(door);this.box(door,w*.72,.055,.06,w*.33,0,0,'white',.035);let glass=this.cyl(door,w*.25,w*.25,.035,w*.33,0,.038,'glass');glass.rotation.x=Math.PI/2;let rim=this.cyl(door,w*.31,w*.31,.025,w*.33,0,.03,'metal');rim.rotation.x=Math.PI/2;box(w*.75,.08,.015,0,h*.86,d/2+.01,'metal',.008);this.actions.set(f.id,{type:'washer',pivot:door,item:f,amount:f.open||0});return;}
+ if(type==='washer'){box(w,h,d,0,h/2,0,'white',.035);box(w*.76,h*.7,.045,0,h*.47,d/2+.024,'dark',.06);let drum=this.cyl(g,w*.29,w*.29,.035,0,h*.47,d/2+.052,'dark');drum.rotation.x=Math.PI/2;const wd=washerDoor(f),mid=(wd.from+wd.to)/2;let door=new T.Group;door.position.set(wd.hinge[0],wd.y,wd.hinge[1]);g.add(door);this.box(door,wd.to-wd.from,.055,.06,mid,0,0,'white',.035);let glass=this.cyl(door,w*.25,w*.25,.035,mid,0,.038,'glass');glass.rotation.x=Math.PI/2;let rim=this.cyl(door,wd.radius,wd.radius,.025,mid,0,.03,'metal');rim.rotation.x=Math.PI/2;box(w*.75,.08,.015,0,h*.86,d/2+.01,'metal',.008);this.actions.set(f.id,{type:'washer',pivot:door,item:f,amount:f.open||0});return;}
  if(type==='shower'){
  const cut=f.id==='showerB'?Math.min(.3,w*.25):0;
  const points=cut?[[-w/2,-d/2+cut],[-w/2+cut,-d/2],[w/2,-d/2],[w/2,d/2],[-w/2,d/2]]:[[-w/2,-d/2],[w/2,-d/2],[w/2,d/2],[-w/2,d/2]];

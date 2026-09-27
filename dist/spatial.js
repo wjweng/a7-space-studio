@@ -101,6 +101,14 @@ export function showerDoorLayout(f){
  const cut=Math.min(.3,f.w*.25,f.d*.45),hingeX=-f.w/2+cut,hingeZ=-f.d/2,endX=-f.w/2,endZ=-f.d/2+cut;
  return{hingeX,hingeZ,endX,endZ,width:Math.hypot(endX-hingeX,endZ-hingeZ),swing:1};
 }
+// The washer's round door, shared by the drawing and the opening check: hinged 0.33 w left
+// of centre, 8 cm in front of the body, its leaf reaching from -0.03 w to 0.69 w past the
+// hinge, with a porthole rim of radius 0.31 w centred at 0.48 h.
+export function washerDoor(f){return{hinge:[-f.w*.33,f.d/2+.08],y:f.h*.48,from:-f.w*.03,to:f.w*.69,radius:f.w*.31,thickness:.08};}
+export function washerDoorRects(f,amount){
+ const door=washerDoor(f),a=amount*Math.PI/2,r=f.rot*Math.PI/180,mid=(door.from+door.to)/2,lx=door.hinge[0]+Math.cos(a)*mid,lz=door.hinge[1]+Math.sin(a)*mid;
+ return[{x:f.x+lx*Math.cos(r)+lz*Math.sin(r),z:f.z-lx*Math.sin(r)+lz*Math.cos(r),w:door.to-door.from,d:door.thickness,rot:f.rot-amount*90,yMin:Math.max(0,door.y-door.radius),yMax:door.y+door.radius}];
+}
 export function showerDoorRects(f,amount){
  const door=showerDoorLayout(f),base=Math.atan2(-(door.endZ-door.hingeZ),door.endX-door.hingeX),angle=base+door.swing*amount*Math.PI/2,localX=door.hingeX+Math.cos(angle)*door.width/2,localZ=door.hingeZ-Math.sin(angle)*door.width/2,rot=f.rot*Math.PI/180,c=Math.cos(rot),s=Math.sin(rot);
  return[{x:f.x+localX*c+localZ*s,z:f.z-localX*s+localZ*c,w:door.width,d:.035,rot:f.rot+angle*180/Math.PI}];

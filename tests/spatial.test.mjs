@@ -41,3 +41,17 @@ test('column corrections preserve furniture that users already moved',()=>{
  const revised=migrateLayout(old,3);assert.equal(revised.find(f=>f.id==='shoe').z,6.10);assert.equal(revised.find(f=>f.id==='bedM').z,1.31);
  old.find(f=>f.id==='shoe').x=.4;old.find(f=>f.id==='bedM').z=1.5;const custom=migrateLayout(old,3);assert.equal(custom.find(f=>f.id==='shoe').z,6.14);assert.equal(custom.find(f=>f.id==='bedM').z,1.5);
 });
+
+test('the washer door check follows the drawn door: a washer against a wall can still open',async()=>{
+  const {washerDoor,washerDoorRects,signedDistance}=await import('../dist/spatial.js');
+  const {wallRects}=await import('../dist/model.js');
+  // Owner's layout (2026-09-27): an 88 cm washer whose left side touches the bedroom-B / balcony wall face.
+  const f={id:'wash',type:'washer',x:7.07,z:4.77,w:.88,d:.62,h:.87,rot:0};
+  for(let s=1;s<=10;s++)for(const rect of washerDoorRects(f,s/10))assert(wallRects().every(w=>signedDistance(rect,w)>=-1e-9),String(s));
+  const door=washerDoor(f),[open]=washerDoorRects(f,1);
+  assert(Math.abs(open.x-(f.x+door.hinge[0]))<1e-9,'fully open, the leaf lies on the hinge line');
+  assert(Math.abs(open.z-(f.z+door.hinge[1]+(door.from+door.to)/2))<1e-9);
+  assert(open.yMin>0&&open.yMax<f.h,'the round door sits above the floor and below the top');
+  // Turned 90°, the whole thing turns with the washer.
+  const [turned]=washerDoorRects({...f,rot:90},1);assert(Math.abs(turned.rot)<1e-9);
+});
