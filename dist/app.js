@@ -96,23 +96,25 @@ validated={...validated,x:placed.item.x,z:placed.item.z};if(validated.type==='ou
  // plate lying on a top, since a wall or a back panel decides which way the others face.
  const moved=Math.hypot(validated.x-f.x,validated.z-f.z)>1e-9,turned=Math.abs(((validated.rot-f.rot)%360+360)%360)>1e-6,host=items.find(item=>item.id===validated.supportId);
  if(turned&&validated.outletMount==='top'&&host)validated.offsetRot=(((Math.round((validated.rot-host.rot)/90)*90)%360)+360)%360;
- else if(turned)notify(validated.outletMount==='wall'?'牆面插座的方向跟著牆面，無法旋轉。':'櫃內插座貼在背板上，方向跟著櫃子。');
  validated=placeOutlet(validated,items,{fromPoint:moved});
 }validated.draft=issues(validated,items).length>0;if(validated.h<.1&&!['rug','light','cove','outlet'].includes(f.type))throw Error('家具高度至少 10 cm');remember();Object.assign(f,validated);syncSupportedTvs(f);const nicheIssue=nicheWarnings(f)[0];if(!('finish' in validated))delete f.finish;if(!('fabric' in validated))delete f.fabric;if(!('supportId' in validated))delete f.supportId;if(!('supportCell' in validated))delete f.supportCell;if(!('partFinishes' in validated))delete f.partFinishes;for(const item of items)if(item.draft)item.draft=issues(item,items).length>0;rebuildItem(f);setForegroundDraft(f.id);render();persist();if(stopped)notify(stopped);else if(f.draft)notify('調整已保留，但目前有干涉；已在俯視編輯用紅框標示。');else if(placed.blocked)notify('已貼齊 A7 戶型外框。');else if(nicheIssue)notify(nicheIssue);commitFurniture.lastError='';return true;}catch(e){commitFurniture.lastError=e.message;notify(e.message);renderProps();return false;}}
-for(const key of['x','z','w','d','h','rot'])$(key).addEventListener('change',()=>{let f=items.find(f=>f.id===selected);if(!f)return;let value=Number($(key).value)/(key==='rot'?1:100);let n=clone(f);if(['w','d'].includes(key)&&$('proportions').checked){let scale=value/f[key];for(let k of['w','d'])n[k]*=scale;}else n[key]=value;commitFurniture(f,n);$(key).value=key==='rot'?f[key]:Math.round(f[key]*1000)/10;});
+for(const key of['x','z','w','d','h','rot'])$(key).addEventListener('change',()=>{let f=items.find(f=>f.id===selected);if(!f)return;if(key==='rot'&&f.type==='outlet'&&f.outletMount!=='top'){commitFurniture(f,{...f,spin:Number($('rot').value)});return;}let value=Number($(key).value)/(key==='rot'?1:100);let n=clone(f);if(['w','d'].includes(key)&&$('proportions').checked){let scale=value/f[key];for(let k of['w','d'])n[k]*=scale;}else n[key]=value;commitFurniture(f,n);$(key).value=key==='rot'?f[key]:Math.round(f[key]*1000)/10;});
 // The ratio lock starts off and then keeps the owner's last choice, across items and reloads.
 $('proportions').checked=readRatioLock();scene.keepRatio=$('proportions').checked;
 $('proportions').addEventListener('change',()=>{scene.keepRatio=$('proportions').checked;try{localStorage.setItem(ratioLockKey,$('proportions').checked?'1':'0');}catch{}});
 $('furnitureName').addEventListener('change',()=>{const f=items.find(f=>f.id===selected),name=$('furnitureName').value.trim();if(!f)return;if(!name){$('furnitureName').value=f.name;return notify('家具名稱不能留白。');}commitFurniture(f,{...f,name});});
 $('doorStyle').onchange=()=>{const f=items.find(f=>f.id===selected);if(f)commitFurniture(f,{...f,doorStyle:$('doorStyle').value});};
-$('rotate').onclick=()=>{let f=items.find(f=>f.id===selected);if(f)commitFurniture(f,{...f,rot:(f.rot+90)%360});};
+$('rotate').onclick=()=>{let f=items.find(f=>f.id===selected);if(!f)return;if(f.type==='outlet'&&f.outletMount!=='top')commitFurniture(f,{...f,spin:((f.spin||0)+90)%360});else commitFurniture(f,{...f,rot:(f.rot+90)%360});};
 $('align').onclick=()=>{let f=items.find(f=>f.id===selected);if(!f)return;let candidates=[],a=f.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);for(const w of(f.type==='beam'?exteriorWallRects():wallRects())){const wallAngle=w.rot*Math.PI/180,tx=Math.cos(wallAngle),tz=-Math.sin(wallAngle);for(const sign of[-1,1]){const nx=Math.sin(wallAngle)*sign,nz=Math.cos(wallAngle)*sign,normalExtent=Math.abs(nx*c-nz*s)*f.w/2+Math.abs(nx*s+nz*c)*f.d/2,tangentExtent=Math.abs(tx*c-tz*s)*f.w/2+Math.abs(tx*s+tz*c)*f.d/2;let along=(f.x-w.x)*tx+(f.z-w.z)*tz;along=Math.max(-w.w/2+tangentExtent,Math.min(w.w/2-tangentExtent,along));let n={...f,x:w.x+tx*along+nx*(normalExtent+w.d/2),z:w.z+tz*along+nz*(normalExtent+w.d/2)};if((ceilingTypes.includes(f.type)||sameRoom(f,n))&&!issues(n,items).length)candidates.push({n,dist:Math.hypot(n.x-f.x,n.z-f.z)});}}candidates.sort((a,b)=>a.dist-b.dist);if(candidates[0]){commitFurniture(f,candidates[0].n);notify('已平移到最近可用牆面；保留原本旋轉角度。')}else notify('找不到足夠寬的可用牆面。');};
 $('duplicate').onclick=()=>{let f=items.find(f=>f.id===selected);if(!f)return;remember();let n={...clone(f),id:crypto.randomUUID(),name:f.name+' 副本',x:f.x+.4,z:f.z+.4,open:0};n.draft=issues(n,items).length>0;items.push(n);setView('top');scene.buildFurniture(items);setForegroundDraft(n.id);select(n.id);render();persist()};
 $('delete').onclick=()=>{if(!items.some(f=>f.id===selected))return;remember();const deleted=selected;items=items.filter(f=>f.id!==deleted);for(const tv of items)if(tv.type==='television'&&tv.supportId===deleted){tv.tvMount='wall';delete tv.supportId;delete tv.supportCell;}scene.buildFurniture(items);setForegroundDraft(deleted===foregroundDraft?null:foregroundDraft);select(null);render();persist()};
 $('operate').onclick=$('operate2').onclick=()=>operate();$('focus').onclick=()=>{let f=items.find(f=>f.id===selected)||doors.find(d=>d.id===selected);if(f)scene.focus(f);};$('closeInspector').onclick=()=>select(null);$('search').oninput=renderList;for(const r of rooms)$('roomFilter').add(new Option(r.name,r.name));$('roomFilter').onchange=$('kindFilter').onchange=renderList;
 document.querySelectorAll('.zoomImage').forEach(b=>b.onclick=()=>{const img=b.querySelector('img');$('imageLarge').src=img.src;$('imageLarge').alt=img.alt;$('imageCaption').textContent=b.dataset.caption;$('imageOriginal').href=b.dataset.full;$('imageDialog').showModal();});
 function setView(v){if(placementCandidate&&v!=='top')cancelPlacement();scene.setMode(v);renderProps();$('fovValue').textContent=Math.round(scene.camera.fov)+'°';document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v));$('miniMap').toggleAttribute('hidden',v!=='walk');$('crosshair').hidden=v!=='walk';$('walkHud').hidden=v!=='walk';$('touchPad').hidden=v!=='walk';$('cutaway').disabled=v==='walk';$('hint').textContent=v==='top'?'拖拉碰到牆或家具會停在邊緣 · 游標移到空位會直接移過去 · 干涉物件顯示紅框':v==='walk'?'↑↓ 前後 · ←→ 轉彎 · 按住拖曳環視 · 滾輪調整視角':'拖曳旋轉 · 滾輪縮放';}
-document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view));$('cutaway').onchange=()=>scene.setCutaway($('cutaway').checked);$('lights').onchange=()=>{scene.lightsOn=$('lights').checked;scene.updateLight();};$('daynight').onclick=()=>{scene.night=!scene.night;$('daynight').textContent=scene.night?'夜間':'日間';scene.updateLight();};$('eye').oninput=()=>{scene.eye=Number($('eye').value)/100;$('eyeValue').textContent=$('eye').value+' cm'};scene.onNavigationNotice=notify;scene.onRouteChange=active=>{$('stopTour').hidden=!active;};scene.onDoorOpen=()=>{persist();renderProps();};$('stopTour').onclick=()=>scene.stopTour();scene.onNudge=(id,key,large)=>{const f=items.find(f=>f.id===id);if(!f)return;const step=large?.05:.01;const n={...f};if(key==='ArrowLeft')n.x-=step;if(key==='ArrowRight')n.x+=step;if(key==='ArrowUp')n.z-=step;if(key==='ArrowDown')n.z+=step;commitFurniture(f,n,{clamp:true});};scene.onFov=fov=>$('fovValue').textContent=Math.round(fov)+'°';$('snap').onchange=()=>{scene.snapEnabled=$('snap').checked;scene.updateGrid();notify(scene.snapEnabled?'俯視拖拉對齊 5 cm 格線；不會改動既有位置。':'已關閉格線吸附，可自由拖拉。');};
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view));$('cutaway').onchange=()=>scene.setCutaway($('cutaway').checked);$('lights').onchange=()=>{scene.lightsOn=$('lights').checked;scene.updateLight();};$('daynight').onclick=()=>{scene.night=!scene.night;$('daynight').textContent=scene.night?'夜間':'日間';scene.updateLight();};$('eye').oninput=()=>{scene.eye=Number($('eye').value)/100;$('eyeValue').textContent=$('eye').value+' cm'};scene.onNavigationNotice=notify;scene.onRouteChange=active=>{$('stopTour').hidden=!active;};scene.onDoorOpen=()=>{persist();renderProps();};$('stopTour').onclick=()=>scene.stopTour();scene.onNudge=(id,key,large)=>{const f=items.find(f=>f.id===id);if(!f)return;const step=large?.05:.01;
+// On a wall or back panel a socket cannot move across it, so the arrow pair pointing that way
+// (the pair along the wall's normal) raises (↑, →) and lowers (↓, ←) it instead.
+if(f.type==='outlet'&&f.outletMount!=='top'){const a=f.rot*Math.PI/180,across=['ArrowLeft','ArrowRight'].includes(key)?Math.abs(Math.sin(a)):Math.abs(Math.cos(a));if(across>.7){commitFurniture(f,{...f,elevation:f.elevation+(['ArrowUp','ArrowRight'].includes(key)?step:-step)});return;}}const n={...f};if(key==='ArrowLeft')n.x-=step;if(key==='ArrowRight')n.x+=step;if(key==='ArrowUp')n.z-=step;if(key==='ArrowDown')n.z+=step;commitFurniture(f,n,{clamp:true});};scene.onFov=fov=>$('fovValue').textContent=Math.round(fov)+'°';$('snap').onchange=()=>{scene.snapEnabled=$('snap').checked;scene.updateGrid();notify(scene.snapEnabled?'俯視拖拉對齊 5 cm 格線；不會改動既有位置。':'已關閉格線吸附，可自由拖拉。');};
 
 for(const r of rooms)$('roomJump').add(new Option(r.name,r.name));$('roomJump').value='玄關';$('roomJump').onchange=()=>{const r=rooms.find(r=>r.name===$('roomJump').value);select(null);scene.startTour(r);};
 
@@ -262,17 +264,13 @@ const tvControls=document.createElement('div');
 tvControls.className='tvControls';
 tvControls.innerHTML='<div class="sectiontitle space">電視安裝</div><label>方式<select id="tvMount"><option value="wall">壁掛</option><option value="cabinet">放在櫃上</option><option value="niche">掛在櫃格內</option></select></label><label id="tvSupportField">支撐櫃體<select id="tvSupport"></select></label><label id="tvCellField">櫃格<select id="tvCell"></select></label><label>尺寸<select id="tvSize"></select></label><label id="tvElevationField">底部離地（cm）<input id="tvElevation" type="number" min="0" max="280" step="1"></label>';
 coveControls.after(tvControls);
-// Sockets: kind, mount (wall, cabinet top, inside a cell), host and cell, and height; the
-// kind and mount fix the size, so the size fields are hidden.
+// Sockets: kind and height. Where a socket sits (wall, top, cell) comes from dragging it in
+// walk view, so there are no mount, host or cell menus; the kind and mount fix the size.
 const outletControls=document.createElement('div');
 outletControls.className='tvControls';
-outletControls.innerHTML='<div class="sectiontitle space">插座</div><label>型式<select id="outletKind"></select></label><label>安裝位置<select id="outletMount"></select></label><label id="outletHostField">所在家具<select id="outletHost"></select></label><label id="outletCellField">櫃格<select id="outletCell"></select></label><label id="outletElevationField">底部離地（cm）<input id="outletElevation" type="number" min="0" max="295" step="0.1"></label>';
+outletControls.innerHTML='<div class="sectiontitle space">插座</div><label>型式<select id="outletKind"></select></label><label id="outletElevationField">底部離地（cm）<input id="outletElevation" type="number" min="0" max="295" step="0.1"></label><p class="muted">在「室內導覽」把插座拖到牆面、櫃子或桌面上，或拖到櫃子正面放進櫃格。</p>';
 tvControls.after(outletControls);
 for(const [key,label]of outletKinds)$('outletKind').add(new Option(label,key));
-for(const [key,label]of outletMounts)$('outletMount').add(new Option(label,key));
-const outletHosts=mount=>items.filter(item=>mount==='cell'?item.cabinetDesign&&item.type!=='fridge':['wardrobe','console','drawer','sink','kitchen','desk','table','hangingCabinet','cornerShelf'].includes(item.type));
-const cellMiddle=(host,cellId,f)=>{const o=cellOpening(host,cellId),base=host.type==='hangingCabinet'?host.elevation||0:0;return o?Math.round((base+o.bottom+Math.max(0,(o.h-f.h)/2))*1000)/1000:f.elevation;};
-const mountOn=(f,mount,host)=>{const next={...f,outletMount:mount,supportId:host.id,offsetX:0,offsetZ:0};delete next.supportCell;if(mount==='cell'){const first=cabinetCells(host)[0];next.supportCell=first.id;next.elevation=cellMiddle(host,first.id,f);}return next;};
 const renderWithTv=renderProps;
 renderProps=()=>{
  renderWithTv();
@@ -361,30 +359,20 @@ async function openSharedLink(){
 }
 window.addEventListener('hashchange',openSharedLink);openSharedLink();
 const renderWithOutlet=renderProps;
+const rotationLabel=$('rot').closest('label').firstChild,rotationText=rotationLabel.nodeValue;
 renderProps=()=>{
   renderWithOutlet();
   const f=items.find(item=>item.id===selected),outlet=f?.type==='outlet',sizes=$('w').closest('.inputs');
   // Hide the size fields for a socket; show again only what was hidden here, so other types' rules stand.
   outletControls.hidden=!outlet;if(sizes)for(const el of[sizes,sizes.previousElementSibling,$('proportions').closest('label')]){if(outlet){if(!el.hidden){el.hidden=true;el.dataset.outletHidden='1';}}else if(el.dataset.outletHidden){el.hidden=false;delete el.dataset.outletHidden;}}
+  // A socket on a wall or back panel turns in that plane: the rotation field shows that turn.
+  const upright=outlet&&f.outletMount!=='top';rotationLabel.nodeValue=upright?'牆面上的旋轉':rotationText;
   if(!outlet)return;
-  $('outletKind').value=f.outletKind;$('outletMount').value=f.outletMount;
-  const hosted=f.outletMount!=='wall',host=items.find(item=>item.id===f.supportId);
-  $('outletHostField').hidden=!hosted;$('outletCellField').hidden=f.outletMount!=='cell';$('outletElevationField').hidden=f.outletMount==='top';
-  $('outletHost').replaceChildren(...(host?[]:[new Option('選擇家具','')]),...outletHosts(f.outletMount).map(item=>new Option(item.name,item.id)));$('outletHost').value=host?.id||'';
-  const order=host?.cabinetDesign?host.cabinetDesign.columns.map(c=>c.id):[];
-  $('outletCell').replaceChildren(...(host?.cabinetDesign?cabinetCells(host).map(cell=>{const o=cellOpening(host,cell.id);return new Option(`${order.length>1?`分區 ${order.indexOf(cell.columnId)+1} · `:''}離地 ${Math.round(cell.bottom*100)}–${Math.round((cell.bottom+cell.h)*100)} cm 的格（內寬 ${Math.round(o.w*100)} cm）`,cell.id);}):[]));$('outletCell').value=f.supportCell||'';
-  $('outletElevation').value=Math.round(f.elevation*1000)/10;
+  $('outletKind').value=f.outletKind;$('outletElevationField').hidden=f.outletMount==='top';
+  if(document.activeElement!==$('outletElevation'))$('outletElevation').value=Math.round(f.elevation*1000)/10;
+  if(upright&&document.activeElement!==$('rot'))$('rot').value=f.spin||0;
 };
 $('outletKind').onchange=()=>{const f=items.find(item=>item.id===selected);if(f)commitFurniture(f,{...f,outletKind:$('outletKind').value});};
-$('outletMount').onchange=()=>{
-  const f=items.find(item=>item.id===selected);if(!f)return;const mount=$('outletMount').value;
-  if(mount==='wall'){const next={...f,outletMount:'wall'};delete next.supportId;delete next.supportCell;commitFurniture(f,next);return;}
-  const host=outletHosts(mount).sort((a,b)=>Math.hypot(a.x-f.x,a.z-f.z)-Math.hypot(b.x-f.x,b.z-f.z))[0];
-  if(!host){notify(mount==='cell'?'沒有可以安裝插座的櫃體。':'沒有可以放插座的櫃子或桌子。');renderProps();return;}
-  if(commitFurniture(f,mountOn(f,mount,host)))notify(`已安裝在最近的「${host.name}」，可在「所在家具」改選。`);
-};
-$('outletHost').onchange=()=>{const f=items.find(item=>item.id===selected),host=items.find(item=>item.id===$('outletHost').value);if(f&&host)commitFurniture(f,mountOn(f,f.outletMount,host));};
-$('outletCell').onchange=()=>{const f=items.find(item=>item.id===selected),host=items.find(item=>item.id===f?.supportId);if(f&&host)commitFurniture(f,{...f,supportCell:$('outletCell').value,elevation:cellMiddle(host,$('outletCell').value,f)});};
 $('outletElevation').onchange=()=>{const f=items.find(item=>item.id===selected);if(f)commitFurniture(f,{...f,elevation:Number($('outletElevation').value)/100});};
 render();
 // Socket list for the designer or carpenter: room, kind, where it is mounted and its height.

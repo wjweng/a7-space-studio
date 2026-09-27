@@ -161,7 +161,7 @@ test('sockets sit flat on the nearest wall, on a cabinet top, or on a cell back 
   assert(Math.abs(onWall.x-(WALL_THICKNESS/2+wall.d/2))<1e-9,`against the living room's west wall, x=${onWall.x}`);
   assert.equal(onWall.rot,90,'facing into the room');
   const kitchen=validateFurniture([initialFurniture.find(f=>f.id==='kitchen')])[0];
-  const [top]=validateFurniture([{...wall,id:'t',outletMount:'top',outletKind:'popup',supportId:'kitchen'}]);
+  const [top]=validateFurniture([{...wall,id:'t',outletMount:'top',outletKind:'duplex',supportId:'kitchen'}]);
   const placed=placeOutlet({...top,x:kitchen.x+.5,z:kitchen.z},[kitchen,top],{fromPoint:true});
   assert.equal(placed.elevation,kitchen.h);
   const moved=placeOutlet(placed,[{...kitchen,x:kitchen.x-1},placed]);
@@ -204,4 +204,22 @@ test('a socket lying on a top lies flat, turns on it and stays on it',async()=>{
   assert.equal(far.rot,(kitchen.rot+90)%360);
   assert(Math.abs(far.offsetX)<=kitchen.w/2-o.d/2+1e-9,'turned, its depth runs along the counter and it stays on it');
   assert.equal(far.elevation,kitchen.h);
+});
+
+test('dropped socket kinds become duplex, and a wall socket turned upright swaps its width and height',async()=>{
+  const {validateFurniture}=await import('../dist/model.js');
+  const {placeOutlet}=await import('../dist/spatial.js');
+  const {makeCabinetDesign,cabinetCells,cellOpening}=await import('../dist/cabinet-design.js');
+  const base={type:'outlet',name:'插座',x:.3,z:3,w:.1,d:.1,h:.1,rot:0,open:0};
+  const [a,b]=validateFurniture([{...base,id:'a',outletKind:'v220'},{...base,id:'b',outletKind:'popup'}]);
+  assert.deepEqual([a.outletKind,b.outletKind],['duplex','duplex']);
+  const [upright]=validateFurniture([{...base,id:'u',spin:100}]);
+  assert.deepEqual([upright.spin,upright.w,upright.h],[90,.075,.12]);
+  const [flat]=validateFurniture([{...base,id:'t',outletMount:'top',supportId:'x',spin:90}]);
+  assert.equal(flat.spin,undefined,'a plate on a top turns with offsetRot instead');
+  const cabinet={id:'c',type:'wardrobe',name:'櫃',x:2,z:3,w:.8,d:.5,h:2,rot:0,open:0};cabinet.cabinetDesign=makeCabinetDesign(cabinet,'shelves');
+  const cell=cabinetCells(cabinet)[1],opening=cellOpening(cabinet,cell.id);
+  const [inside]=validateFurniture([{...base,id:'i',outletMount:'cell',supportId:'c',supportCell:cell.id,elevation:9,spin:90}]);
+  const placed=placeOutlet(inside,[cabinet,inside]);
+  assert(Math.abs(placed.elevation+placed.h-(opening.bottom+opening.h))<1e-9,'the taller upright plate still fits in the cell');
 });
