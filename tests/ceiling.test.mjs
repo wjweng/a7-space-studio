@@ -33,3 +33,14 @@ test('a ratio-locked handle drag scales the other plan dimension too',()=>{
  const shrunk=resizeAtHandle(f,'w',1,{x:f.x-f.w/2,z:f.z},true).item;
  assert(Math.abs(shrunk.w/shrunk.d-f.w/f.d)<1e-9,'ratio kept at the minimum');
 });
+
+test('a beam clashes with floor furniture that reaches up into it, both ways',async()=>{
+  const {issues,HEIGHT}=await import('../dist/model.js');
+  const beam={id:'b',type:'beam',name:'樑',x:1.1,z:7.4,w:1.3,d:.2,h:.5,rot:0};
+  const tall={id:'c',type:'wardrobe',name:'高櫃',x:1.5,z:7.67,w:1.6,d:.44,h:HEIGHT,rot:270,open:0};
+  assert(issues(tall,[tall,beam]).includes('與樑重疊'));
+  assert(issues(beam,[tall,beam]).includes('與高櫃重疊'));
+  const low={...tall,h:HEIGHT-beam.h};
+  assert.deepEqual(issues(low,[low,beam]).filter(m=>m.includes('樑')),[],'a cabinet ending at the beam underside fits');
+  assert.deepEqual(issues(beam,[low,beam]),[]);
+});
