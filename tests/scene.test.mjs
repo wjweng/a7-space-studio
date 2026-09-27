@@ -55,9 +55,9 @@ test('beams keep their full box when clear of walls and lose the part hidden ins
 });
 
 test('a beam overhanging a wall face by a sub-millimetre remainder is drawn flush, leaving no hairline strip',()=>{
-  // Exported layout from the user: dragged and resized so its face sits 0.2 mm proud of the bedroom A wall.
-  const f={id:'beam-user',type:'beam',x:1.9339639913623,z:2.784,w:3.7479279827245997,d:0.11238817957503189,h:.2,rot:0};
-  const pieces=beamVisiblePieces(f),wallFace=2.78+WALL_THICKNESS/2;
+  // Exported layout from the user (moved with the wall, 2.78 to 2.72): its face sits 0.2 mm proud of the bedroom A wall.
+  const f={id:'beam-user',type:'beam',x:1.9339639913623,z:2.724,w:3.7479279827245997,d:0.11238817957503189,h:.2,rot:0};
+  const pieces=beamVisiblePieces(f),wallFace=2.72+WALL_THICKNESS/2;
   assert(Math.abs(f.z+pieces.bounds[3]-wallFace)<1e-9,'the proud face snaps onto the wall face');
   for(const piece of pieces){const zs=piece.map(v=>v[1]);assert(Math.max(...zs)-Math.min(...zs)>.005,'no sub-5 mm strip survives the cut');}
   const normals=beamGeometry(f,pieces).getAttribute('normal');
@@ -65,7 +65,7 @@ test('a beam overhanging a wall face by a sub-millimetre remainder is drawn flus
 });
 
 test('clipped beams keep a full top face so top view still shows them over walls',()=>{
-  const f={id:'beam-user',type:'beam',x:1.9339639913623,z:2.784,w:3.7479279827245997,d:0.11238817957503189,h:.2,rot:0};
+  const f={id:'beam-user',type:'beam',x:1.9339639913623,z:2.724,w:3.7479279827245997,d:0.11238817957503189,h:.2,rot:0};
   const pieces=beamVisiblePieces(f),[x0,x1,z0,z1]=pieces.bounds,geo=beamGeometry(f,pieces),pos=geo.getAttribute('position'),nor=geo.getAttribute('normal');
   let topArea=0;
   for(let i=0;i<pos.count;i+=3){
@@ -78,7 +78,7 @@ test('clipped beams keep a full top face so top view still shows them over walls
 });
 
 test('beams hang exactly their entered depth below the ceiling',()=>{
-  for(const f of[{id:'beam-free',type:'beam',x:1.4,z:3.3,w:1.6,d:.3,h:.2,rot:0},{id:'beam-user',type:'beam',x:1.9339639913623,z:2.784,w:3.7479279827245997,d:0.11238817957503189,h:.2,rot:0}]){
+  for(const f of[{id:'beam-free',type:'beam',x:1.4,z:3.3,w:1.6,d:.3,h:.2,rot:0},{id:'beam-user',type:'beam',x:1.9339639913623,z:2.724,w:3.7479279827245997,d:0.11238817957503189,h:.2,rot:0}]){
     const s=Object.create(SpaceScene.prototype),g=new THREE.Group;s.m={wall:new THREE.MeshStandardMaterial()};s.actions=new Map();
     s.makeFurniture(g,f);
     const beam=g.children.find(o=>o.isMesh&&o.material===s.m.wall);beam.geometry.computeBoundingBox();

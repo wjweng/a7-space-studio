@@ -6,7 +6,7 @@ import {validateCabinetDesign,makeCabinetDesign,resizeCabinetDesign,cabinetFinis
 import {blocksDoor} from './spatial.js';
 export {corners,overlaps} from './geometry.js';
 export const VERSION=1;
-export const LAYOUT_REVISION=17;
+export const LAYOUT_REVISION=18;
 export const WALL_THICKNESS=.12;
 // Structural columns follow the outside-wall faces and dimensions printed on A7.
 export const columns=[
@@ -19,8 +19,9 @@ export const columns=[
 // then 160 cm clear to the entry's south wall (8.53 - 0.06 - 1.60 = 6.87).
 export const ENTRY_STEP=6.87;
 export const structuralBlocks=[
- {id:'bath-A-block',x:1.64,z:(6.2+ENTRY_STEP)/2,w:.48,d:ENTRY_STEP-6.2,rot:0},
- {id:'balcony-north-block',x:7.975,z:4.625,w:.65,d:.45,rot:0}
+ {id:'bath-A-block',x:1.67,z:(6.2+ENTRY_STEP)/2,w:.42,d:ENTRY_STEP-6.2,rot:0},
+// Balcony: 88 cm from the bedroom-B wall face to this block, then 59 cm to the south column's west edge (8.10).
+ {id:'balcony-north-block',x:7.955,z:4.625,w:.89,d:.45,rot:0}
 ];
 export const structuralSolids=[...columns,...structuralBlocks];
 // Clear floor-to-ceiling height. Doors and windows keep their own absolute heights; the
@@ -28,7 +29,7 @@ export const structuralSolids=[...columns,...structuralBlocks];
 export const HEIGHT=3;
 // Metres. A7 raster tracing calibrated against 2.24 / 2.62 / 2.61 m room dimensions.
 // Unclosed drawing chains are approximations, not survey coordinates.
-export const outline=[[0,0],[8.3,0],[8.3,2.7],[8.85,2.7],[8.85,4.4],[8.3,4.4],[8.3,6.46],[8.95,6.46],[8.95,7.31],[8.1,7.31],[8.1,7.25],[1.85,7.25],[1.85,8.53],[-.45,8.53],[-.45,6.65],[0,6.65]];
+export const outline=[[0,0],[8.4,0],[8.4,2.7],[8.85,2.7],[8.85,4.4],[8.4,4.4],[8.4,6.46],[8.95,6.46],[8.95,7.31],[8.1,7.31],[8.1,7.25],[1.85,7.25],[1.85,8.53],[-.45,8.53],[-.45,6.65],[0,6.65]];
 export const rooms=[{name:'客餐廳',x:1.3,z:3.15},{name:'臥室 A',x:3.98,z:1.35},{name:'主臥室',x:6.8,z:1.3},{name:'臥室 B',x:5.25,z:4.75},{name:'廚房',x:4.9,z:6.45},{name:'衛浴 A',x:2.25,z:5.8},{name:'衛浴 B',x:7.75,z:3.55},{name:'工作陽台',x:7.45,z:5.85},{name:'玄關',x:.75,z:7.7}];
 // Wall endpoints, optional opening: distance from first endpoint, width, sill, height.
 // A door hinges at the opening's first-endpoint side; the entrance wall runs south to north
@@ -36,25 +37,25 @@ export const rooms=[{name:'客餐廳',x:1.3,z:3.15},{name:'臥室 A',x:3.98,z:1.
 export const walls=[
  {id:'window-living',a:[0,0],b:[2.82,0],opening:[.42,1.88,.9,1.5]},
  {id:'window-A',a:[2.82,0],b:[5.18,0],opening:[.55,1.64,.9,1.5]},
- {id:'window-master',a:[5.18,0],b:[8.3,0],opening:[1.27,1.63,.9,1.5]},
- {a:[0,0],b:[0,6.71]}, {a:[8.3,0],b:[8.3,2.7]},
- {a:[8.3,2.7],b:[8.85,2.7]},{id:'window-bathB',a:[8.85,2.7],b:[8.85,4.4],opening:[.85,.72,1.5,.7]},
- {a:[8.85,4.4],b:[8.3,4.4]},{id:'balcony-railing',a:[8.3,4.4],b:[8.3,6.46],opening:[.67,1.34,.1,HEIGHT-.1],openingType:'railing'},
+ {id:'window-master',a:[5.18,0],b:[8.4,0],opening:[1.27,1.63,.9,1.5]},
+ {a:[0,0],b:[0,6.71]}, {a:[8.4,0],b:[8.4,2.7]},
+ {a:[8.4,2.7],b:[8.85,2.7]},{id:'window-bathB',a:[8.85,2.7],b:[8.85,4.4],opening:[.85,.72,1.5,.7]},
+ {a:[8.85,4.4],b:[8.4,4.4]},{id:'balcony-railing',a:[8.4,4.4],b:[8.4,6.46],opening:[.67,1.34,.1,HEIGHT-.1],openingType:'railing'},
  {a:[8.1,7.25],b:[1.85,7.25]}, {a:[1.85,ENTRY_STEP],b:[1.85,8.53]},
  {a:[1.85,8.53],b:[-.45,8.53]}, {a:[-.45,8.53],b:[-.45,6.71],opening:[0,1.04,0,2.1]},
  {a:[-.45,6.71],b:[0,6.71]},
- {a:[2.82,0],b:[2.82,2.78]}, {a:[5.18,0],b:[5.18,2.78]},
- {a:[2.82,2.78],b:[5.18,2.78],opening:[.09,.9,0,2.1]},
- {a:[3.83,2.78],b:[3.83,3.72],opening:[.02,.9,0,2.1]},
+ {a:[2.82,0],b:[2.82,2.72]}, {a:[5.18,0],b:[5.18,2.72]},
+ {a:[2.82,2.72],b:[5.18,2.72],opening:[.09,.9,0,2.1]},
+ {a:[3.83,2.72],b:[3.83,3.72],opening:[.02,.9,0,2.1]},
  {a:[3.83,3.72],b:[6.57,3.72]},
  {a:[3.83,3.72],b:[3.83,5.78],opening:[.1,.9,0,2.1]},
  {a:[3.83,5.78],b:[6.57,5.78]},
- {a:[6.57,2.7],b:[8.3,2.7]},
- {a:[6.57,2.7],b:[6.57,4.4],opening:[.1,.8,0,2.1]},
- {a:[6.57,4.4],b:[8.3,4.4]},
- {id:'window-B',a:[6.57,4.4],b:[6.57,5.78],opening:[.12,1.06,.9,1.5]},
+ {a:[6.57,2.7],b:[8.4,2.7]},
+ {a:[6.57,2.7],b:[6.57,4.4],opening:[.18,.74,0,2.1]},
+ {a:[6.57,4.4],b:[8.4,4.4]},
+ {id:'window-B',a:[6.57,4.4],b:[6.57,5.78],opening:[.18,1.06,.9,1.5]},
  {id:'balcony-door-wall',a:[6.57,5.78],b:[6.57,7.25],opening:[.03,.9,0,2.1]},
- {a:[1.4,4.75],b:[3.08,4.75]}, {a:[1.4,4.75],b:[1.4,ENTRY_STEP]},
+ {a:[1.52,4.75],b:[3.08,4.75]}, {a:[1.52,4.75],b:[1.52,ENTRY_STEP]},
  {a:[3.08,4.75],b:[3.08,7.25],opening:[0,.74,0,2.1]},
  {a:[1.85,7.25],b:[3.08,7.25]}
 ];
@@ -78,7 +79,7 @@ export const initialFurniture=[
  f('chair4','chair','餐椅 04',2.20,3.81,.44,.48,.8,180),
  f('bedA','bed','臥室 A 單人床',4.56,1.35,.98,1.98,.6),
  f('wardA','wardrobe','臥室 A 衣櫃',3.24,.53,.67,.6,2.35,0,'sliding'),
- f('deskA','desk','臥室 A 書桌',3.28,1.53,.72,.48,.75,90),
+ f('deskA','desk','臥室 A 書桌',3.28,1.47,.72,.48,.75,90),
  f('bedM','bed','主臥雙人床',7.35,1.31,1.52,2,.62),
  f('wardM','wardrobe','主臥衣櫃',5.58,1.27,1.85,.6,2.35,90,'sliding'),
  f('night','drawer','床頭櫃',6.32,.47,.35,.4,.53),
@@ -89,8 +90,8 @@ export const initialFurniture=[
  f('kitchen','kitchen','廚具：左水槽・右爐台',5.47,6.90,2.08,.58,.9,180,'mixed',{kitchenParts:{sink:{w:.57,d:.41},cooktop:{w:.56,d:.45}}}),
  f('fridge','fridge','冰箱（原圖左側設備位）',4.13,6.86,.55,.63,1.78,180,'right'),
  f('wash','washer','洗衣機',7.03,4.83,.61,.62,.87),
- f('bathSink1','sink','衛浴 A 洗手台',1.675,5.22,.82,.43,.83,90,undefined,{basin:{w:.533,d:.236}}),
- f('toilet1','toilet','衛浴 A 馬桶',1.795,5.92,.4,.67,.75,90),
+ f('bathSink1','sink','衛浴 A 洗手台',1.795,5.22,.82,.43,.83,90,undefined,{basin:{w:.533,d:.236}}),
+ f('toilet1','toilet','衛浴 A 馬桶',1.915,5.92,.4,.67,.75,90),
  f('showerA','shower','衛浴 A 乾濕分離淋浴區',2.46,6.70,1.08,.96,2.1),
  f('bathSink2','sink','衛浴 B 洗手台',8.58,3.17,.82,.42,.83,-90,undefined,{basin:{w:.533,d:.231}}),
  f('toilet2','toilet','衛浴 B 馬桶',7.02,4.005,.4,.67,.75,180),
@@ -254,6 +255,9 @@ export function migrateLayout(items,revision){
  if(revision<14){for(const light of initialFurniture.filter(f=>f.type==='light'))if(!result.some(item=>item.id===light.id))result.push(clone(light));for(const item of result)if(item.type==='light')Object.assign(item,normalizeLight(item));}
  if(revision<14)for(const item of result)if(item.type==='light')item.colorTemperature='white';
  if(revision<15){for(const light of initialFurniture.filter(f=>f.type==='light'))if(!result.some(item=>item.id===light.id))result.push(clone(light));for(const item of result)if(item.type==='light')Object.assign(item,normalizeLight(item));}
+ // 2026-09-27: bath A's west wall moved 12 cm east (168 cm is outside to outside) and bedroom A's
+ // south wall 6 cm north (261 cm clear, 90 cm corridor); untouched fixtures follow them.
+ if(revision<18)for(const [id,x,z]of[['bathSink1',1.675,5.22],['toilet1',1.795,5.92],['deskA',3.28,1.53]]){const item=result.find(f=>f.id===id),fresh=initialFurniture.find(f=>f.id===id);if(item&&fresh&&Math.abs(item.x-x)<1e-6&&Math.abs(item.z-z)<1e-6&&Math.abs(item.w-fresh.w)<1e-6&&Math.abs(item.d-fresh.d)<1e-6&&item.rot===fresh.rot){item.x=fresh.x;item.z=fresh.z;}}
  // Beams left at the catalogue template's untouched (0,0) spot by the pre-2026-09-12 placement flow.
  if(revision<16)return result.filter(item=>!(item.type==='beam'&&item.x===0&&item.z===0&&item.w===1.2&&item.d===.18&&item.h===.3&&item.rot===0));
  return result;

@@ -1,16 +1,16 @@
 import {cabinetOccupiedRects} from './cabinet-design.js';
 export const EPS=1e-7;
 export function roomAt(x,z){
- if(x>=2.82&&x<=5.18&&z<=2.78)return '臥室 A';
+ if(x>=2.82&&x<=5.18&&z<=2.72)return '臥室 A';
  if(x>=3.83&&x<=6.57&&z>=3.72&&z<=5.78)return '臥室 B';
  if(x>=6.57&&z>=2.7&&z<=4.4)return '衛浴 B';
  if(x>=6.57&&z>=4.4)return '工作陽台';
  // Below the bath-A column (z 6.87) the entry reaches east to its end wall at x 1.85.
- if(x>=1.4&&x<=3.08&&z>=4.75&&z<=(x<1.85?6.87:7.25))return '衛浴 A';
+ if(x>=1.52&&x<=3.08&&z>=4.75&&z<=(x<1.85?6.87:7.25))return '衛浴 A';
  if(x>=3.08&&z>=5.78)return '廚房';
- // The master bedroom and its corridor meet in an open passage at z 2.70-2.78,
+ // The master bedroom and its corridor meet in an open passage at z 2.70-2.72,
  // which must belong to them too, or it falls through to the living room.
- if((x>=5.18&&z<=2.78)||(x>=3.83&&x<=6.57&&z>=2.78&&z<=3.72))return '主臥室';
+ if((x>=5.18&&z<=2.72)||(x>=3.83&&x<=6.57&&z>=2.72&&z<=3.72))return '主臥室';
  if(x<=1.85&&z>=6.65)return '玄關';
  return '客餐廳';
 }
