@@ -26,7 +26,7 @@ The collision and clearance labels are planning aids: they use oriented-rectangl
 
 ## Cloudflare
 
-Deploy the `dist` directory as a Cloudflare Pages static site, with no build command; pushes to `main` publish https://a7-space-studio.pages.dev/ after a successful deployment (the delay varies). The app has no server bindings or secrets. The A7 plan is public marketing material, not the owner's residence (confirmed 2026-09-11), so no access restriction is needed. Browser storage is per origin / device. Export and import JSON to transfer arrangements between deployments or devices.
+Deploy the `dist` directory as a Cloudflare Pages static site, with no build command; pushes to `main` publish https://a7-space-studio.pages.dev/ after a successful deployment (the delay varies). The app has no server bindings or secrets. The A7 plan is public marketing material, not the owner's residence (confirmed 2026-09-11), so no access restriction is needed. Browser storage is per origin / device. Export and import JSON to transfer arrangements between deployments or devices. To hand a layout to someone else, use 分享: it copies a link that carries the current layout in the URL fragment (deflated, base64url, about 2 KB for the initial layout), so it never reaches the server; opening it adds the layout to the recipient's scheme list and loads it, first saving an unsaved working layout as a scheme. A link is a snapshot: later edits need a new link.
 
 ## Scope and assumptions
 

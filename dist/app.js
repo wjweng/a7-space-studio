@@ -7,6 +7,7 @@ import {exteriorWallRects} from './model.js';
 import {makeCabinetDesign,resizeCabinetDesign,cabinetCells,modularCabinetRects,cabinetFinishSlots,findLeaf,doorGroupOf,cellOpening,nicheTvPlacement,nicheTvWarnings,hostsNicheTv,shelfTvPlacement,bestTvCell,TV_STAND} from './cabinet-design.js';
 import {createCabinetEditor} from './cabinet-ui.js';
 import {readRecovered,setAside,discardRecovered,requestPersistentStorage} from './recovery.js';
+import {shareUrl,sharedData,decodeShare} from './share.js';
 import {sameRoom,roomAt,signedDistance,distanceLabel,doorRects,EPS,constrainMove,placeAtTarget,cabinetRects,showerDoorRects,fitResize,blocksDoor} from './spatial.js';
 function ensureComponentControls(){if($('componentControls'))return;const anchor=$('proportions').parentElement,panel=document.createElement('div');panel.id='componentControls';panel.hidden=true;panel.style.cssText='margin-top:12px';const make=(id,label)=>{const wrap=document.createElement('div');wrap.className='component';wrap.style.cssText='border:1px solid var(--line);border-radius:7px;padding:9px;margin-top:8px';const title=document.createElement('strong');title.textContent=label;title.style.fontSize='12px';const row=document.createElement('div');row.className='inputs';row.style.marginTop='7px';for(const [suffix,text]of[['W','寬'],['D','深']]){const l=document.createElement('label');l.textContent=text;const i=document.createElement('input');i.id=id+suffix;i.type='number';i.min='8';i.max='500';i.step='1';l.append(i);row.append(l)}wrap.append(title,row);return wrap};const sink=document.createElement('div');sink.id='sinkControls';sink.hidden=true;const sinkTitle=document.createElement('div');sinkTitle.className='sectiontitle space';sinkTitle.textContent='洗手台凹槽';sink.append(sinkTitle,make('sinkBasin','尺寸（cm）'));const kitchen=document.createElement('div');kitchen.id='kitchenControls';kitchen.hidden=true;const kitchenTitle=document.createElement('div');kitchenTitle.className='sectiontitle space';kitchenTitle.textContent='檯面設備尺寸';kitchen.append(kitchenTitle,make('kitchenSink','水槽（cm）'),make('kitchenCooktop','瓦斯爐（cm）'));const light=document.createElement('div');light.id='lightControls';light.hidden=true;const lightTitle=document.createElement('div');lightTitle.className='sectiontitle space';lightTitle.textContent='燈具設定';const lightGrid=document.createElement('div');lightGrid.className='inputs';const kindLabel=document.createElement('label');kindLabel.textContent='種類';const kind=document.createElement('select');kind.id='lightKind';const lightLabels={ceiling:'吸頂燈',pendant:'吊燈',linear:'線燈'};for(const value of lightKinds)kind.add(new Option(lightLabels[value],value));kindLabel.append(kind);lightGrid.append(kindLabel);const shapeLabel=document.createElement('label');shapeLabel.id='lightShapeField';shapeLabel.textContent='燈罩形狀';const shape=document.createElement('select');shape.id='lightShape';const shapeLabels={round:'圓形',square:'方形'};for(const value of lightShapes)shape.add(new Option(shapeLabels[value],value));shapeLabel.append(shape);lightGrid.append(shapeLabel);for(const [id,label,min,max,step]of[['lightLumens','光通量（lm）',100,10000,50],['lightDimming','調光比例（%）',0,100,1]]){const l=document.createElement('label');l.textContent=label;const i=document.createElement('input');i.id=id;i.type='number';i.min=min;i.max=max;i.step=step;l.append(i);lightGrid.append(l)}const dropLabel=document.createElement('label');dropLabel.id='lightDropField';dropLabel.textContent='垂吊長度（cm）';const drop=document.createElement('input');drop.id='lightDrop';drop.type='number';drop.min='5';drop.max='267';drop.step='1';dropLabel.append(drop);lightGrid.append(dropLabel);const onLabel=document.createElement('label');onLabel.className='checkline';const on=document.createElement('input');on.id='lightOn';on.type='checkbox';onLabel.append(on,document.createTextNode('此燈開啟'));light.append(lightTitle,lightGrid,onLabel);for(const p of[sink,kitchen,light]){const note=document.createElement('p');note.className='muted';note.textContent=p===light?'吸頂燈固定貼在天花板；吊燈可調整垂吊長度。':'尺寸會自動限制在檯面內。';p.append(note);panel.append(p)}anchor.before(panel)}
 const $=id=>document.getElementById(id),storageKey='a7-studio-v1';let items=clone(initialFurniture),palette='oak',floors={},selected=null,history=[],future=[],beforeDrag=null,dragBlocked=false,dragDraft=false,placementCandidate=null,foregroundDraft=null,schemes=[],scene,noticeTimer;ensureComponentControls();const lightNote=document.querySelector('#lightControls .muted');if(lightNote)lightNote.textContent='光通量 × 調光比例是相對照明估算，非實際 lux；吸頂燈固定貼在天花板，線燈嵌入天花板，吊燈可調整垂吊長度。';const temperatureLabel=document.createElement('label'),temperatureSelect=document.createElement('select'),temperatureLabels={white:'白光',natural:'自然光',warm:'黃光'};temperatureLabel.textContent='色溫';temperatureSelect.id='lightTemperature';for(const value of lightColorTemperatures)temperatureSelect.add(new Option(temperatureLabels[value],value));temperatureLabel.append(temperatureSelect);$('lightLumens').parentElement.before(temperatureLabel);
@@ -289,3 +290,30 @@ $('tvElevation').onchange=()=>{
  const f=items.find(item=>item.id===selected);if(f)commitFurniture(f,{...f,elevation:Number($('tvElevation').value)/100});
 };
 render();updateUndo();persist();
+// Share links: the current layout travels in the URL fragment (share.js). Opening one adds it
+// to the scheme list and loads it; a working layout that exists nowhere else is kept as a scheme first.
+const stateKey=state=>{const data=parseState(state);return JSON.stringify([data.furniture,data.palette,data.floors]);};
+const pristineKey=loaded?'':stateKey(snapshot());
+$('share').onclick=()=>{$('shareName').value=schemes.find(s=>s.id===$('scheme').value)?.name||'';$('shareResult').hidden=true;$('shareDialog').showModal();};
+$('shareForm').onsubmit=async e=>{
+  e.preventDefault();const name=$('shareName').value.trim();if(!name)return;
+  const url=await shareUrl(location.href,name,snapshot());
+  $('shareLink').value=url;$('shareResult').hidden=false;
+  try{await navigator.clipboard.writeText(url);$('shareStatus').textContent='已複製，可以貼到 LINE 或 Email。';}
+  catch{$('shareLink').select();$('shareStatus').textContent='無法自動複製，請手動複製上面的連結。';}
+};
+$('shareLink').onfocus=()=>$('shareLink').select();
+async function openSharedLink(){
+  const data=sharedData(location.hash);if(!data)return;
+  window.history.replaceState(null,'',location.pathname+location.search);
+  let shared,key;
+  try{shared=await decodeShare(data);key=stateKey(shared.state);}catch(e){notify('無法開啟分享的配置：'+e.message);return;}
+  const saved=k=>schemes.find(s=>{try{return stateKey(s.state)===k;}catch{return false;}}),current=stateKey(snapshot());
+  if(current!==key&&current!==pristineKey&&!saved(current))schemes.push({id:crypto.randomUUID(),name:'開啟分享前的配置 '+new Date().toLocaleString('zh-TW',{hour12:false,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}),state:snapshot()});
+  let scheme=saved(key);
+  if(!scheme){scheme={id:crypto.randomUUID(),name:shared.name,state:shared.state};schemes.push(scheme);}
+  schemes=schemes.slice(-30);
+  remember();applyState(scheme.state);$('scheme').value=scheme.id;renderSchemes();
+  notify('已載入分享的方案「'+scheme.name+'」，已加入設計方案清單。');
+}
+window.addEventListener('hashchange',openSharedLink);openSharedLink();
