@@ -712,6 +712,8 @@ stepLightFade(dt){if(!this.fading?.size)return false;for(const light of this.fad
   }
   return null;
  }
+ // Where the pointer ray (set by the last surfaceAt) meets the plane of a wall item's face.
+ wallPlanePoint(f){const a=f.rot*Math.PI/180,normal=new T.Vector3(Math.sin(a),0,Math.cos(a));return this.ray.ray.intersectPlane(new T.Plane().setFromNormalAndCoplanarPoint(normal,new T.Vector3(f.x,0,f.z)),new T.Vector3);}
  ground(e){const r=this.host.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.pointer,this.activeCamera);return this.ray.ray.intersectPlane(this.plane,new T.Vector3);}
  setForegroundDraft(id){this.foregroundDraft=this.items.some(f=>f.id===id&&f.draft)?id:null;this.refreshValidity();}
  makeInvalidMarker(f){const marker=new T.Group,fill=new T.MeshBasicMaterial({color:0xef3434,transparent:true,opacity:.32,depthTest:false,depthWrite:false}),edge=new T.MeshBasicMaterial({color:0xd91515,transparent:true,opacity:.96,depthTest:false,depthWrite:false});this.box(marker,f.w,.014,f.d,0,0,0,fill);for(const z of[-f.d/2,f.d/2])this.box(marker,f.w+.06,.022,.04,0,.006,z,edge);for(const x of[-f.w/2,f.w/2])this.box(marker,.04,.022,f.d+.06,x,.006,0,edge);return marker;}
@@ -765,7 +767,7 @@ if(ceilingKinds.includes(f.type)){if(this.mode==='top'&&this.showCeiling===false
   if(this.resizeDrag&&this.down.moved){let p=this.ground(e);if(p){this.resizeDrag.moved=true;this.onResize?.(this.resizeDrag.id,resizeAtHandle(this.resizeDrag.start,this.resizeDrag.axis,this.resizeDrag.sign,p,!!this.keepRatio).item);}}
   else if(this.drag&&this.down.moved){if(!this.drag.moved)this.onSelect(this.drag.id);let p=this.ground(e);if(p){this.drag.moved=true;this.onDrag(this.drag.id,p.x+this.drag.dx,p.z+this.drag.dz);}}
   else if(this.panDrag){const dx=e.clientX-this.panDrag.x,dy=e.clientY-this.panDrag.y,c=this.topCamera;const scale=(c.top-c.bottom)/c.zoom/this.host.clientHeight;c.position.x-=dx*scale;c.position.z-=dy*scale;this.panDrag={x:e.clientX,y:e.clientY};}
-  else if(this.socketDrag&&this.down.moved){if(!this.socketDrag.moved)this.onSelect(this.socketDrag.id);const surface=this.surfaceAt(e,this.socketDrag.id);if(surface){this.socketDrag.moved=true;this.onSocketDrag?.(this.socketDrag.id,surface);}}
+  else if(this.socketDrag&&this.down.moved){if(!this.socketDrag.moved)this.onSelect(this.socketDrag.id);const surface=this.surfaceAt(e,this.socketDrag.id);this.socketDrag.moved=true;this.onSocketDrag?.(this.socketDrag.id,surface,f=>this.wallPlanePoint(f));}
   else if(this.lookDrag){this.walkYaw+=(e.clientX-this.lookDrag.x)*.003;this.walkPitch=T.MathUtils.clamp(this.walkPitch+(e.clientY-this.lookDrag.y)*.003,-1.2,1.2);this.lookDrag={x:e.clientX,y:e.clientY};}
  });
  const release=e=>{if(!this.down||e.pointerId!==this.down.id)return;const click=!this.down.moved;if(this.drag?.moved)this.onDragEnd();if(this.socketDrag?.moved)this.onSocketDragEnd?.(this.socketDrag.id);this.socketDrag=null;if(this.resizeDrag?.moved)this.onResizeEnd?.();this.drag=null;this.resizeDrag=null;if(click&&this.placing&&this.mode==='top'){const p=this.ground(e);if(p)this.onPlace?.(p.x,p.z);}else if(click&&this.placing&&this.mode==='walk'){const surface=this.surfaceAt(e);if(surface)this.onPlaceSurface?.(surface);}else if(click){let hit=this.pick(e);

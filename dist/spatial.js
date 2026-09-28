@@ -262,14 +262,28 @@ export function guardedMove(f,target,items){
  const score=({item})=>Math.hypot(item.x-target.x,item.z-target.z);
  return score(xz)<=score(zx)?xz:zx;
 }
+// Where a wall socket may slide: a wall, column or back panel behind the whole width of its
+// plate (checked 5 mm behind it at both ends), so it stops at a doorway instead of sliding off
+// into the air; and no wall entering the plate. Sockets are exempt from wall clashes
+// (`wallsHit`) because they sit on one, so the plate is shrunk by a millimetre to tell the
+// wall it lies on from a corner or partition it runs into.
+function wallSlideProblem(items){
+ const backs=[...wallRects(),...items.filter(o=>o.type==='panel')],solid=[...wallRects(),...exteriorWallRects()];
+ const within=(r,x,z)=>{const a=r.rot*Math.PI/180,dx=x-r.x,dz=z-r.z;return Math.abs(dx*Math.cos(a)-dz*Math.sin(a))<=r.w/2+1e-6&&Math.abs(dx*Math.sin(a)+dz*Math.cos(a))<=r.d/2+1e-6;};
+ return p=>{const a=p.rot*Math.PI/180,nx=Math.sin(a),nz=Math.cos(a),tx=Math.cos(a),tz=-Math.sin(a),back=p.d/2+.005,half=Math.max(0,p.w/2-.005);
+  if(! [-half,half].every(u=>{const x=p.x-nx*back+tx*u,z=p.z-nz*back+tz*u;return backs.some(r=>within(r,x,z));}))return'超出牆面';
+  const plate={...p,w:p.w-.002,d:p.d-.002};return solid.some(w=>clashes(plate,w))?'與牆體重疊':'';};
+}
 // A wall socket moved, raised or turned: straight there when that buries it in nothing new.
 // Otherwise, like `guardedMove`, it travels along the wall and up or down in turn (1 cm steps,
 // as it is only 1.5 cm thick), stopping at contact and sliding along what it touches, and
 // keeps whichever order ends nearer the pointer. A turn or a move from another mount that
-// would bury it is refused (the socket stays as `f`).
-export function guardedSocket(f,next,items){
+// would bury it is refused (the socket stays as `f`). With `hop` false it never jumps straight to
+// a clear target, so a point on the wall's plane past a partition does not carry it into the next room.
+export function guardedSocket(f,next,items,{hop=true}={}){
  if(next.outletMount!=='wall')return{item:next,reason:''};
- const check=problemCheck(f,items),hit=check(next);if(!hit)return{item:next,reason:''};
+ const clash=problemCheck(f,items),wall=wallSlideProblem(items),guard=wall(f)?()=>'':wall;
+ const check=p=>clash(p)||guard(p),hit=check(next);if(!hit&&hop)return{item:next,reason:''};
  if(f.outletMount!=='wall'||(f.spin||0)!==(next.spin||0))return{item:f,reason:hit};
  const travel=({item:start,reason},goal)=>{
   const at=t=>{const p={...next};for(const key of['x','z','elevation'])p[key]=(start[key]||0)+((goal[key]||0)-(start[key]||0))*t;return p;};

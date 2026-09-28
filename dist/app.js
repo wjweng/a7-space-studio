@@ -397,9 +397,14 @@ $('outletElevation').onchange=()=>{const f=items.find(item=>item.id===selected);
 render();
 // Walk view: sockets go where the pointer points (socketOnSurface), by dragging an existing
 // one or clicking to place a new one; one dropped into a cell opens that cell's door.
+function socketAlongWall(f,point){if(!point)return null;try{return validateFurniture([{...f,x:point.x,z:point.z,elevation:point.y-f.h/2}])[0];}catch{return null;}}
 function socketAt(f,surface){const candidate=socketOnSurface(f,surface,items);if(!candidate)return null;let n;try{n=validateFurniture([candidate])[0];}catch{return null;}return placeOutlet(n,items,{fromPoint:true});}
 function openSocketCell(f){const host=items.find(item=>item.id===f.supportId);if(f.outletMount!=='cell'||!host?.cabinetDesign||host.openCells?.[f.supportCell])return;const cell=cabinetCells(host).find(c=>c.id===f.supportCell);if(!cell||cell.front==='open')return;host.openCells={...host.openCells,[f.supportCell]:1};rebuildItem(host);}
-scene.onSocketDrag=(id,surface)=>{if(!beforeDrag)beforeDrag=snapshot();const f=items.find(item=>item.id===id),candidate=f&&socketAt(f,surface),n=candidate&&guardedSocket(f,candidate,items).item;if(!n||n===f)return;for(const key of Object.keys(f))if(!(key in n))delete f[key];Object.assign(f,n);scene.resizeItem(f);renderProps();};
+// A wall socket that the surface under the pointer cannot take (another wall past a corner, a TV,
+// a cabinet side) keeps following the pointer along its own wall, sliding along what it touches.
+scene.onSocketDrag=(id,surface,wallPoint)=>{if(!beforeDrag)beforeDrag=snapshot();const f=items.find(item=>item.id===id);if(!f)return;const candidate=surface&&socketAt(f,surface);let result=candidate&&guardedSocket(f,candidate,items);
+ if(f.outletMount==='wall'&&(!result||result.reason)){const along=socketAlongWall(f,wallPoint(f));if(along)result=guardedSocket(f,along,items,{hop:false});}
+ const n=result?.item;if(!n||n===f)return;for(const key of Object.keys(f))if(!(key in n))delete f[key];Object.assign(f,n);scene.resizeItem(f);renderProps();};
 scene.onSocketDragEnd=id=>{const f=items.find(item=>item.id===id);if(f)openSocketCell(f);if(beforeDrag){history.push(beforeDrag);future=[];beforeDrag=null;persist();renderList();updateUndo();}};
 scene.onPlaceSurface=surface=>{if(placementCandidate?.type!=='outlet')return;const n=socketAt(placementCandidate,surface);if(!n)return notify('請點牆面、櫃子或桌面的表面。');remember();items.push(n);placementCandidate=null;scene.cancelPlacement(false);$('placementHint').hidden=true;scene.buildFurniture(items);openSocketCell(n);select(n.id);render();persist();notify('插座已加入；可以直接拖到牆面、櫃子上或櫃格內。');};
 // Top view: a socket goes onto the top under the pointer (a table, desk or cabinet), else the nearest wall.

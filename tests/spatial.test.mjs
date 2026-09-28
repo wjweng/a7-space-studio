@@ -286,6 +286,18 @@ test('wall sockets stop at furniture standing or hanging against that wall',asyn
  const desk={id:'d',type:'desk',name:'書桌',x:ward.x,z:.06+.3,w:1,d:.6,h:.75,rot:0};
  const under=socket(ward.x);assert.deepEqual(issues(under,[desk,under]),[],'a socket may sit under a desk top, between its legs');
 });
+test('a wall socket slides along its wall, stops at a partition or column and at the end of the wall, and never passes through',async()=>{
+ const {initialFurniture,validateFurniture}=await import('../dist/model.js');const {placeOutlet,guardedSocket}=await import('../dist/spatial.js');
+ const items=validateFurniture(initialFurniture).filter(f=>f.id!=='wardA');
+ const socket=(x,elevation=1)=>placeOutlet(validateFurniture([{id:'s',type:'outlet',name:'插座',outletKind:'duplex',outletMount:'wall',x,z:.05,w:.12,d:.015,h:.075,rot:0,elevation}])[0],items);
+ // Bedroom A's north wall: a partition to the east (plate edge stops at x 2.761), a column to the west.
+ const s=socket(1.5),east=guardedSocket(s,{...s,x:3.2,elevation:2},items,{hop:false});
+ assert.equal(east.reason,'與牆體重疊');assert.ok(Math.abs(east.item.x-2.701)<1e-3,'stops at the partition');assert.equal(east.item.elevation,2,'and still rises along it');
+ assert.ok(Math.abs(guardedSocket(s,{...s,x:-1},items,{hop:false}).item.x-.519)<1e-3,'stops at the column');
+ // A short wall stub beside the column ends where a plate would overhang it.
+ const stub=socket(.5),off=guardedSocket(stub,{...stub,x:1.2},items,{hop:false});
+ assert.equal(off.reason,'超出牆面');assert.ok(off.item.x<stub.x+.01);
+});
 test('a wall socket on a back panel sits on the panel face',async()=>{
  const {validateFurniture}=await import('../dist/model.js');const {placeOutlet}=await import('../dist/spatial.js');
  const panel={id:'p',type:'panel',name:'背板',x:3.24,z:.06+.009,w:1.2,d:.018,h:2,rot:0,elevation:0};
