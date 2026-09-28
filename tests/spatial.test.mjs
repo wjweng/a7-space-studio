@@ -276,6 +276,10 @@ test('wall sockets stop at furniture standing or hanging against that wall',asyn
  assert.deepEqual(issues(socket(ward.x,2.5),[...items]),[],'above the wardrobe it is clear');
  const slid=guardedSocket(beside,{...beside,x:ward.x},items);
  assert.match(slid.reason,/臥室 A 衣櫃/);assert.ok(Math.abs(slid.item.x-(ward.x+ward.w/2+.06))<1e-4,'sliding along the wall stops at the wardrobe side');
+ const side=ward.x+ward.w/2+.06,diagonal=guardedSocket(beside,{...beside,x:ward.x,elevation:1},items);
+ assert.ok(Math.abs(diagonal.item.x-side)<1e-4&&Math.abs(diagonal.item.elevation-1)<1e-9,'a diagonal drag into the wardrobe stops at its side and still rises');
+ const touching=diagonal.item,raised=guardedSocket(touching,{...touching,x:ward.x,elevation:1.4},items);
+ assert.ok(Math.abs(raised.item.x-side)<1e-4&&Math.abs(raised.item.elevation-1.4)<1e-9,'a socket already touching the wardrobe slides up along it');
  const lowered=guardedSocket(socket(ward.x,2.5),{...socket(ward.x,2.5),elevation:.3},items);
  assert.ok(Math.abs(lowered.item.elevation-(ward.elevation||0)-ward.h)<1e-4,'lowering stops on the wardrobe top');
  assert.equal(guardedSocket(socket(ward.x+ward.w/2+.07),{...socket(ward.x+ward.w/2+.07),spin:90},items).reason,'','a turn clear of the wardrobe is kept');

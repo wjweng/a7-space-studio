@@ -262,22 +262,32 @@ export function guardedMove(f,target,items){
  const score=({item})=>Math.hypot(item.x-target.x,item.z-target.z);
  return score(xz)<=score(zx)?xz:zx;
 }
-// A wall socket moved, raised or turned: straight there when that buries it in nothing new,
-// otherwise along the straight path from where it was (x, z and height together, 1 cm steps,
-// as it is only 1.5 cm thick) up to contact. A turn or a move from another mount that would
-// bury it is refused (the socket stays as `f`).
+// A wall socket moved, raised or turned: straight there when that buries it in nothing new.
+// Otherwise, like `guardedMove`, it travels along the wall and up or down in turn (1 cm steps,
+// as it is only 1.5 cm thick), stopping at contact and sliding along what it touches, and
+// keeps whichever order ends nearer the pointer. A turn or a move from another mount that
+// would bury it is refused (the socket stays as `f`).
 export function guardedSocket(f,next,items){
  if(next.outletMount!=='wall')return{item:next,reason:''};
  const check=problemCheck(f,items),hit=check(next);if(!hit)return{item:next,reason:''};
  if(f.outletMount!=='wall'||(f.spin||0)!==(next.spin||0))return{item:f,reason:hit};
- const e0=f.elevation||0,e1=next.elevation||0,at=t=>({...next,x:f.x+(next.x-f.x)*t,z:f.z+(next.z-f.z)*t,elevation:e0+(e1-e0)*t});
- const n=Math.max(1,Math.ceil(Math.hypot(next.x-f.x,next.z-f.z,e1-e0)/.01));
- for(let i=1;i<=n;i++){
-  const found=check(at(i/n));if(!found)continue;
-  let lo=(i-1)/n,hi=i/n;for(let j=0;j<25;j++){const mid=(lo+hi)/2;if(check(at(mid)))hi=mid;else lo=mid;}
-  return{item:at(lo),reason:found};
- }
- return{item:next,reason:''};
+ const travel=({item:start,reason},goal)=>{
+  const at=t=>{const p={...next};for(const key of['x','z','elevation'])p[key]=(start[key]||0)+((goal[key]||0)-(start[key]||0))*t;return p;};
+  const n=Math.max(1,Math.ceil(Math.hypot(goal.x-start.x,goal.z-start.z,(goal.elevation||0)-(start.elevation||0))/.01));
+  for(let i=1;i<=n;i++){
+   const found=check(at(i/n));if(!found)continue;
+   let lo=(i-1)/n,hi=i/n;for(let j=0;j<25;j++){const mid=(lo+hi)/2;if(check(at(mid)))hi=mid;else lo=mid;}
+   return{item:at(lo),reason:reason||found};
+  }
+  return{item:at(1),reason};
+ };
+ // A move to another wall (a different facing) cannot be split into along and up, so it goes straight.
+ const first={item:{...next,x:f.x,z:f.z,elevation:f.elevation||0},reason:''};
+ if((f.rot||0)!==(next.rot||0))return travel(first,next);
+ const along=({item})=>({x:next.x,z:next.z,elevation:item.elevation}),up=({item})=>({x:item.x,z:item.z,elevation:next.elevation||0});
+ const a=(r=>travel(r,up(r)))(travel(first,along(first))),b=(r=>travel(r,along(r)))(travel(first,up(first)));
+ const score=({item})=>Math.hypot(item.x-next.x,item.z-next.z,(item.elevation||0)-(next.elevation||0));
+ return score(a)<=score(b)?a:b;
 }
 // The largest step toward a bigger size that adds no problem: `make(k)` builds the item k
 // whole centimetres of the way (k = 0 is `f` itself, k = steps the requested size).
