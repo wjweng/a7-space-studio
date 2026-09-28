@@ -79,8 +79,15 @@
 #touchPad.stick #joystick{display:block}
 
 /* Simple walk mode: only what moving needs (view switch, movement, mini map, room jump). */
-.simple.walking header,.simple.walking .sceneLabel,.simple.walking .sceneTools,.simple.walking .bottomBar,.simple.walking #toggleSide,.simple.walking #shot,.simple.walking #inspector,.simple.walking #sidebar,.simple.walking #walkHud>span,.simple.walking #walkHud label,.simple.walking .padKeys small{display:none!important}
-.simple.walking main{height:100dvh}
+/* Every view drops the header, scene name, display toggles and screenshot. The overview is only for looking, so it
+   also drops the bottom bar and panels; top view keeps 物件, the edit panel and undo/redo because it is for editing. */
+.simple header,.simple .sceneLabel,.simple .sceneTools,.simple #shot{display:none!important}
+.simple main{height:100dvh}
+.simple .viewbar #toggleSide{margin-left:auto}
+.simple.walking .bottomBar,.simple.walking #toggleSide,.simple.walking #inspector,.simple.walking #sidebar,.simple.walking #walkHud>span,.simple.walking #walkHud label,.simple.walking .padKeys small,.simple.orbiting .bottomBar,.simple.orbiting #toggleSide,.simple.orbiting #inspector,.simple.orbiting #sidebar{display:none!important}
+.simple.editing .bottomBar{left:auto;min-height:0;padding:8px;background:none;border:0}
+.simple.editing .bottomBar>span,.simple.editing #reset{display:none}
+.simple.editing .bottomBar button{background:#ffffffe6;font-size:15px;padding:8px 14px}
 .simple.walking #walkHud{bottom:12px;padding:6px}
 .simple.walking #walkHud:not([hidden]){display:flex}
 .simple.walking #roomJump{width:100%}
@@ -92,5 +99,8 @@
   #touchPad .padKeys button{width:56px;height:52px;font-size:18px}
   #touchPad .padKeys button[data-key="ArrowLeft"],#touchPad .padKeys button[data-key="ArrowRight"]{width:84px;font-size:15px}
   .simple.walking #walkHud{left:12px;right:12px}
+  .simple #sidebar{top:0}
+  .simple #inspector{top:76px;bottom:62px}
+  .simple.editing #selectionBar{bottom:66px}
   .simple.walking #miniMap,.simple.walking #touchPad{bottom:70px}
 }
