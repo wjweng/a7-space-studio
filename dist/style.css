@@ -83,8 +83,17 @@
    also drops the bottom bar and panels; top view keeps 物件, the edit panel and undo/redo because it is for editing. */
 .simple header,.simple .sceneLabel,.simple .sceneTools,.simple #shot{display:none!important}
 .simple main{height:100dvh}
-/* On a desktop the side panels are columns of the grid, not overlays: close them up so the view fills the width. */
-.simple.walking main,.simple.orbiting main{grid-template-columns:minmax(0,1fr)}
+/* On a desktop the side panels are columns of the grid, not overlays: close them up so the view fills the width.
+   Top view then opens them on demand like a phone does: 物件 slides in the list, selecting an item shows its panel,
+   both below the view bar so 完整 stays reachable. */
+.simple main{grid-template-columns:minmax(0,1fr)}
+@media(min-width:851px){
+  .simple.editing #toggleSide{display:block}
+  .simple.editing #sidebar{position:absolute;z-index:10;left:0;top:76px;bottom:0;width:260px;display:none;box-shadow:6px 0 20px #20383d24;border-radius:0 10px 0 0}
+  .simple.editing #sidebar.open{display:flex}
+  .simple.editing #inspector{position:absolute;z-index:8;right:0;top:76px;bottom:62px;width:290px;display:none;box-shadow:-5px 5px 20px #20383d20;border-radius:10px 0 0 10px}
+  .simple.editing #inspector.open{display:block}
+}
 .simple.walking .bottomBar,.simple.walking #toggleSide,.simple.walking #inspector,.simple.walking #sidebar,.simple.walking #walkHud>span,.simple.walking #walkHud label,.simple.walking .padKeys small,.simple.orbiting .bottomBar,.simple.orbiting #toggleSide,.simple.orbiting #inspector,.simple.orbiting #sidebar{display:none!important}
 .simple.editing .bottomBar{left:auto;min-height:0;padding:8px;background:none;border:0}
 .simple.editing .bottomBar>span,.simple.editing #reset{display:none}
@@ -100,7 +109,7 @@
   #touchPad .padKeys button{width:56px;height:52px;font-size:18px}
   #touchPad .padKeys button[data-key="ArrowLeft"],#touchPad .padKeys button[data-key="ArrowRight"]{width:84px;font-size:15px}
   .simple.walking #walkHud{left:12px;right:12px}
-  .simple #sidebar{top:0}
+  .simple #sidebar{top:76px}
   .simple #inspector{top:76px;bottom:62px}
   .simple.editing #selectionBar{bottom:66px}
   .simple.walking #miniMap,.simple.walking #touchPad{bottom:70px}
