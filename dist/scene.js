@@ -739,6 +739,12 @@ if(ceilingKinds.includes(f.type)){if(this.mode==='top'&&this.showCeiling===false
  bind(){
  const canvas=this.renderer.domElement;
  this.cancelGesture=()=>{if(this.drag?.moved)this.onDragEnd();if(this.socketDrag?.moved)this.onSocketDragEnd?.(this.socketDrag.id);this.socketDrag=null;if(this.resizeDrag?.moved)this.onResizeEnd?.();this.drag=null;this.resizeDrag=null;this.lookDrag=null;this.panDrag=null;this.down=null;};
+ // Two-finger pinch: walk view changes the field of view like the wheel, top view zooms the plan. It
+ // runs before the one-pointer handlers below and drops whatever the first finger had started.
+ const touches=new Map,spread=()=>{const [a,b]=[...touches.values()];return Math.hypot(a.x-b.x,a.y-b.y)||1;},lift=e=>{touches.delete(e.pointerId);if(touches.size<2)this.pinch=null;};
+ canvas.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;touches.set(e.pointerId,{x:e.clientX,y:e.clientY});if(touches.size===2&&(this.mode==='walk'||this.mode==='top')){e.stopImmediatePropagation();this.cancelGesture();canvas.setPointerCapture(e.pointerId);this.pinch={spread:spread(),fov:this.camera.fov,zoom:this.topCamera.zoom};}else if(this.pinch||touches.size>2)e.stopImmediatePropagation();});
+ canvas.addEventListener('pointermove',e=>{if(!touches.has(e.pointerId))return;touches.set(e.pointerId,{x:e.clientX,y:e.clientY});if(!this.pinch)return;e.stopImmediatePropagation();const ratio=spread()/this.pinch.spread;if(this.mode==='walk'){this.camera.fov=T.MathUtils.clamp(this.pinch.fov/ratio,45,95);this.camera.updateProjectionMatrix();this.onFov?.(this.camera.fov);}else{this.topCamera.zoom=T.MathUtils.clamp(this.pinch.zoom*ratio,.55,4);this.topCamera.updateProjectionMatrix();}});
+ for(const type of['pointerup','pointercancel'])canvas.addEventListener(type,lift);
  canvas.addEventListener('pointerdown',e=>{
   if(e.button!==0&&e.button!==1)return;this.cancelGesture();if(this.mode==='walk')this.stopTour();
   this.down={x:e.clientX,y:e.clientY,id:e.pointerId,moved:false};canvas.setPointerCapture(e.pointerId);
