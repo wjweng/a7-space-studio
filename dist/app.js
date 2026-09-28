@@ -400,12 +400,16 @@ render();
 function socketAlongWall(f,point){if(!point)return null;try{return validateFurniture([{...f,x:point.x,z:point.z,elevation:point.y-f.h/2}])[0];}catch{return null;}}
 function socketAt(f,surface){const candidate=socketOnSurface(f,surface,items);if(!candidate)return null;let n;try{n=validateFurniture([candidate])[0];}catch{return null;}return placeOutlet(n,items,{fromPoint:true});}
 function openSocketCell(f){const host=items.find(item=>item.id===f.supportId);if(f.outletMount!=='cell'||!host?.cabinetDesign||host.openCells?.[f.supportCell])return;const cell=cabinetCells(host).find(c=>c.id===f.supportCell);if(!cell||cell.front==='open')return;host.openCells={...host.openCells,[f.supportCell]:1};rebuildItem(host);}
-// A wall socket that the surface under the pointer cannot take (another wall past a corner, a TV,
-// a cabinet side) keeps following the pointer along its own wall, sliding along what it touches.
-scene.onSocketDrag=(id,surface,wallPoint)=>{if(!beforeDrag)beforeDrag=snapshot();const f=items.find(item=>item.id===id);if(!f)return;const candidate=surface&&socketAt(f,surface);let result=candidate&&guardedSocket(f,candidate,items);
- if(f.outletMount==='wall'&&(!result||result.reason)){const along=socketAlongWall(f,wallPoint(f));if(along)result=guardedSocket(f,along,items,{hop:false});}
- // One in a cabinet cell does the same on its back panel, staying inside the cells.
- if(f.outletMount==='cell'&&!candidate){const point=wallPoint(f),inCell=point&&socketInCellPlane(f,point,items);if(inCell)result={item:inCell,reason:''};}
+// A socket that the surface under the pointer cannot take (a cabinet side, a TV, the floor, or a
+// spot that would bury it) keeps following the pointer on its own wall, cell back or top,
+// sliding along what it touches or stopping at the edge.
+scene.onSocketDrag=(id,surface,planePoint)=>{if(!beforeDrag)beforeDrag=snapshot();const f=items.find(item=>item.id===id);if(!f)return;const candidate=surface&&socketAt(f,surface);let result=candidate&&guardedSocket(f,candidate,items);
+ if(f.outletMount==='wall'&&(!result||result.reason)){const along=socketAlongWall(f,planePoint(f));if(along)result=guardedSocket(f,along,items,{hop:false});}
+ // One in a cabinet cell does the same on its back panel, staying inside the cells, also when the
+ // surface would bury it (the wall just above the cabinet top): it moves there once it fits.
+ if(f.outletMount==='cell'&&(!result||result.reason)){const point=planePoint(f),inCell=point&&socketInCellPlane(f,point,items);if(inCell)result={item:inCell,reason:''};}
+ // One on a top slides over that top, stopping at its edges.
+ if(f.outletMount==='top'&&(!result||result.reason)){const point=planePoint(f);if(point)result={item:placeOutlet({...f,x:point.x,z:point.z},items,{fromPoint:true}),reason:''};}
  const n=result?.item;if(!n||n===f)return;for(const key of Object.keys(f))if(!(key in n))delete f[key];Object.assign(f,n);scene.resizeItem(f);renderProps();};
 scene.onSocketDragEnd=id=>{const f=items.find(item=>item.id===id);if(f)openSocketCell(f);if(beforeDrag){history.push(beforeDrag);future=[];beforeDrag=null;persist();renderList();updateUndo();}};
 scene.onPlaceSurface=surface=>{if(placementCandidate?.type!=='outlet')return;const n=socketAt(placementCandidate,surface);if(!n)return notify('請點牆面、櫃子或桌面的表面。');remember();items.push(n);placementCandidate=null;scene.cancelPlacement(false);$('placementHint').hidden=true;scene.buildFurniture(items);openSocketCell(n);select(n.id);render();persist();notify('插座已加入；可以直接拖到牆面、櫃子上或櫃格內。');};

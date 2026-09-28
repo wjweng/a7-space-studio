@@ -150,7 +150,7 @@ export function socketInCellPlane(o,point,items){
  const host=items.find(i=>i.id===o.supportId);if(!host?.cabinetDesign)return null;
  const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=point.x-host.x,dz=point.z-host.z,u=dx*c-dz*s;
  const lift=['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0,y=point.y-lift;
- const cell=cabinetCells(host).find(cell=>u>=cell.x-cell.w/2&&u<=cell.x+cell.w/2&&y>=cell.bottom&&y<=cell.bottom+cell.h);
+ const cell=cabinetCells(host).find(cell=>cell.front!=='drawers'&&u>=cell.x-cell.w/2&&u<=cell.x+cell.w/2&&y>=cell.bottom&&y<=cell.bottom+cell.h);
  return placeOutlet({...o,supportCell:cell?.id??o.supportCell,x:point.x,z:point.z,elevation:point.y-o.h/2},items,{fromPoint:true});
 }
 // Where a socket sits: on the nearest wall, or on its host (a cabinet's top, or a cell's back
@@ -211,7 +211,8 @@ export function socketOnSurface(o,{point,normal,id},items){
  // A side panel faces sideways in the cabinet's own axes: that is not a way into a cell.
  if(Math.abs(normal.x*c-normal.z*s)>.7&&Math.abs(u)>host.w/2-.03)return null;
  const cell=cabinetCells(host).find(cell=>u>=cell.x-cell.w/2-1e-6&&u<=cell.x+cell.w/2+1e-6&&y>=cell.bottom-1e-6&&y<=cell.bottom+cell.h+1e-6);
- if(!cell)return null;
+ // Nobody puts a socket inside a drawer, and there the drawer front would hide it.
+ if(!cell||cell.front==='drawers')return null;
  return{...base,outletMount:'cell',supportId:host.id,supportCell:cell.id,elevation:point.y-o.h/2};
 }
 // The desk's drawer, shared by the drawing and the opening check: 13 cm high just under the

@@ -320,6 +320,17 @@ test('a socket in a cabinet cell slides along the cell edges, crosses into the n
  assert.equal(shelf.outletMount,'cell');assert.equal(shelf.supportCell,second.id);
  assert.equal(socketOnSurface(o,{point:{x:2,y:cabinet.h,z:2.9},normal:{x:0,y:1,z:0},id:'c'},items).outletMount,'top','the cabinet top itself is still a top');
 });
+test('a socket never goes into a drawer cell, whether pointed at or slid across',async()=>{
+ const {socketInCellPlane,socketOnSurface}=await import('../dist/spatial.js');const {validateFurniture}=await import('../dist/model.js');
+ const {makeCabinetDesign,cabinetCells}=await import('../dist/cabinet-design.js');
+ const cabinet={id:'c',type:'console',name:'櫃',x:2,z:3,w:1.2,d:.4,h:.5,rot:0,open:0};cabinet.cabinetDesign=makeCabinetDesign(cabinet,'low');
+ const cells=cabinetCells(cabinet),drawer=cells.find(c=>c.front==='drawers'),open=cells.find(c=>c.front==='open'),items=[cabinet];
+ const at=cell=>({x:cabinet.x+cell.x,y:cell.bottom+cell.h/2,z:cabinet.z+cabinet.d/2});
+ const [o]=validateFurniture([{id:'s',type:'outlet',name:'插座',outletKind:'duplex',outletMount:'cell',x:2,z:3,w:.12,d:.015,h:.075,rot:0,supportId:'c',supportCell:open.id,elevation:open.bottom}]);
+ assert.equal(socketOnSurface(o,{point:at(drawer),normal:{x:0,y:0,z:1},id:'c'},items),null,'a drawer front is not a place for a socket');
+ assert.equal(socketOnSurface(o,{point:at(open),normal:{x:0,y:0,z:1},id:'c'},items).supportCell,open.id);
+ assert.equal(socketInCellPlane(o,at(drawer),items).supportCell,open.id,'sliding over the drawer keeps it in its own cell');
+});
 test('a wall socket on a back panel sits on the panel face',async()=>{
  const {validateFurniture}=await import('../dist/model.js');const {placeOutlet}=await import('../dist/spatial.js');
  const panel={id:'p',type:'panel',name:'背板',x:3.24,z:.06+.009,w:1.2,d:.018,h:2,rot:0,elevation:0};
