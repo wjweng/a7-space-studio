@@ -39,3 +39,4 @@ test('ceiling items turn see-through without touching shared materials, and back
   assert.notEqual(mesh.material,shared);assert.equal(mesh.material.transparent,true);assert(mesh.material.opacity<.5);assert.equal(shared.transparent,false);
   s.seeThrough(g,false);assert.equal(mesh.material,shared);
 });
+test('the touch joystick walks and turns in proportion, ends a room tour, and adds to keys without exceeding full speed',()=>{const{s}=setup();s.camera.position.set(1,1.6,3);s.stick={x:0,y:.5};s.frame();const half=3-s.camera.position.z;assert(half>0);assert.equal(s.walkYaw,0);s.camera.position.set(1,1.6,3);s.stick={x:0,y:1};s.keys.add('ArrowUp');s.frame();assert(Math.abs((3-s.camera.position.z)-2*half)<1e-9,'keys plus stick are capped at full speed');s.keys.clear();s.stick={x:-1,y:0};s.frame();assert(s.walkYaw>0,'pushing left turns left');s.route=[{x:5,z:5}];s.stopTour=()=>{s.route=[];};assert.equal(s.followTour(.04),false);assert.equal(s.route.length,0);});

@@ -67,3 +67,32 @@
 .cabinetFridgeRow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}.cabinetFridgeRow button{font-size:12px;padding:6px 9px}.cabinetFridgeRow button.active{border-color:var(--ink);background:#f0f5f2}.cabinetFridgeRow input[type=color]{width:34px;height:26px;padding:0;border:1px solid var(--line)}
 
 .cabinetSocket{fill:#fff;stroke:#c36b45;stroke-width:2px;vector-effect:non-scaling-stroke;cursor:move}
+
+/* Walk controls: never select text or open the long-press menu on the floating tools (form fields still work). */
+.viewbar,.sceneLabel,.sceneTools label,#touchPad,#walkHud>span,#walkHud label,.bottomBar,#selectionBar,#miniMap{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#touchPad{touch-action:none;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+#touchPad #padMode{width:auto;height:auto;padding:4px 10px;font-size:12px;background:#ffffffc9}
+.padKeys{text-align:center}
+#joystick{display:none;position:relative;width:132px;height:132px;border-radius:50%;background:#ffffff8c;border:1px solid #ffffffd0;box-shadow:inset 0 0 0 20px #ffffff40,0 3px 16px #20383d1f;touch-action:none}
+#joystick::before{content:'';position:absolute;inset:50% auto auto 50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:#20383d40}
+#joystick i{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px;border-radius:50%;background:#fff;border:1px solid var(--line);box-shadow:0 3px 10px #20383d33;pointer-events:none}
+#touchPad.stick .padKeys{display:none}
+#touchPad.stick #joystick{display:block}
+#touchPad.stick #padMode{margin-bottom:22px}
+
+/* Simple walk mode: only what moving needs (view switch, movement, mini map, room jump). */
+.simple.walking header,.simple.walking .sceneLabel,.simple.walking .sceneTools,.simple.walking .bottomBar,.simple.walking #toggleSide,.simple.walking #shot,.simple.walking #inspector,.simple.walking #sidebar,.simple.walking #walkHud>span,.simple.walking #walkHud label,.simple.walking .padKeys small{display:none!important}
+.simple.walking main{height:100dvh}
+.simple.walking #walkHud{bottom:12px;padding:6px}
+.simple.walking #walkHud:not([hidden]){display:flex}
+.simple.walking #roomJump{width:100%}
+.simple.walking #stopTour{flex:none}
+.simple.walking #miniMap{bottom:74px}
+.simple.walking #touchPad{bottom:74px}
+.simple.walking #selectionBar{bottom:74px}
+@media(max-width:850px){
+  #touchPad .padKeys button{width:56px;height:52px;font-size:18px}
+  #touchPad .padKeys button[data-key="ArrowLeft"],#touchPad .padKeys button[data-key="ArrowRight"]{width:84px;font-size:15px}
+  .simple.walking #walkHud{left:12px;right:12px}
+  .simple.walking #miniMap,.simple.walking #touchPad{bottom:70px}
+}
