@@ -298,6 +298,28 @@ test('a wall socket slides along its wall, stops at a partition or column and at
  const stub=socket(.5),off=guardedSocket(stub,{...stub,x:1.2},items,{hop:false});
  assert.equal(off.reason,'超出牆面');assert.ok(off.item.x<stub.x+.01);
 });
+test('a ceiling beam buries a wall socket in its height band, and raising one stops at its underside',async()=>{
+ const {initialFurniture,validateFurniture,HEIGHT}=await import('../dist/model.js');const {placeOutlet,guardedSocket}=await import('../dist/spatial.js');
+ const beam={id:'b',type:'beam',name:'樑',x:1.5,z:1,w:.3,d:1.9,h:.5,rot:0},items=[...validateFurniture(initialFurniture).filter(f=>f.id!=='wardA'),beam];
+ const socket=elevation=>placeOutlet(validateFurniture([{id:'s',type:'outlet',name:'插座',outletKind:'duplex',outletMount:'wall',x:1.5,z:.05,w:.12,d:.015,h:.075,rot:0,elevation}])[0],items);
+ assert.deepEqual(issues(socket(2.7),[...items]),['與樑重疊']);assert.deepEqual(issues(socket(1),[...items]),[]);
+ const low=socket(1),raised=guardedSocket(low,{...low,elevation:2.8},items);
+ assert.equal(raised.reason,'與樑重疊');assert.ok(Math.abs(raised.item.elevation+low.h-(HEIGHT-beam.h))<1e-4,'stops under the beam');
+});
+test('a socket in a cabinet cell slides along the cell edges, crosses into the next cell, and a shelf top inside stands for the cell above it',async()=>{
+ const {socketInCellPlane,socketOnSurface}=await import('../dist/spatial.js');const {validateFurniture}=await import('../dist/model.js');
+ const {makeCabinetDesign,cabinetCells,cellOpening}=await import('../dist/cabinet-design.js');
+ const cabinet={id:'c',type:'wardrobe',name:'櫃',x:2,z:3,w:.8,d:.5,h:2,rot:0,open:0};cabinet.cabinetDesign=makeCabinetDesign(cabinet,'shelves');
+ const cells=cabinetCells(cabinet),[first,second]=[cells[0],cells[1]],items=[cabinet];
+ const [o]=validateFurniture([{id:'s',type:'outlet',name:'插座',outletKind:'duplex',outletMount:'cell',x:2,z:3,w:.12,d:.015,h:.075,rot:0,supportId:'c',supportCell:first.id,elevation:first.bottom+.1}]);
+ const past=socketInCellPlane(o,{x:3,y:first.bottom+.15,z:2.9},items),open=cellOpening(cabinet,first.id);
+ assert.equal(past.supportCell,first.id);assert.ok(Math.abs(past.offsetX-(open.x+open.w/2-o.w/2))<1e-9,'pushed past the side it stops at the cell edge');
+ assert.ok(Math.abs(past.elevation-(first.bottom+.15-o.h/2))<1e-9,'and still follows up and down');
+ assert.equal(socketInCellPlane(o,{x:2,y:second.bottom+.1,z:2.9},items).supportCell,second.id,'over the next cell it moves in');
+ const shelf=socketOnSurface(o,{point:{x:2,y:second.bottom,z:2.9},normal:{x:0,y:1,z:0},id:'c'},items);
+ assert.equal(shelf.outletMount,'cell');assert.equal(shelf.supportCell,second.id);
+ assert.equal(socketOnSurface(o,{point:{x:2,y:cabinet.h,z:2.9},normal:{x:0,y:1,z:0},id:'c'},items).outletMount,'top','the cabinet top itself is still a top');
+});
 test('a wall socket on a back panel sits on the panel face',async()=>{
  const {validateFurniture}=await import('../dist/model.js');const {placeOutlet}=await import('../dist/spatial.js');
  const panel={id:'p',type:'panel',name:'背板',x:3.24,z:.06+.009,w:1.2,d:.018,h:2,rot:0,elevation:0};

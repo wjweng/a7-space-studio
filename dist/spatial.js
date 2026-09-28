@@ -142,6 +142,17 @@ export const onWallPlane=f=>f?.type==='outlet'&&f.outletMount!=='top'||f?.type==
 // height (validation then keeps it between the floor and the ceiling).
 const planeTall=f=>f.type==='outlet'?outletSize(f.outletKind,f.outletMount,f.spin||0)[2]:turnedSize(f.w,f.h,f.spin||0)[1];
 export const turnAboutCentre=(before,after)=>({...after,elevation:(before.elevation||0)+(planeTall(before)-planeTall(after))/2});
+// A socket in a cabinet cell dragged to `point` on the plane of its back panel: into the cell
+// under that point (so crossing a divider moves it to the next cell), else kept in its own cell,
+// clamped to the opening so it slides along the edge. Walk view uses it when the pointer is on
+// a board edge, a divider side or anything else that is not a cell.
+export function socketInCellPlane(o,point,items){
+ const host=items.find(i=>i.id===o.supportId);if(!host?.cabinetDesign)return null;
+ const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=point.x-host.x,dz=point.z-host.z,u=dx*c-dz*s;
+ const lift=['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0,y=point.y-lift;
+ const cell=cabinetCells(host).find(cell=>u>=cell.x-cell.w/2&&u<=cell.x+cell.w/2&&y>=cell.bottom&&y<=cell.bottom+cell.h);
+ return placeOutlet({...o,supportCell:cell?.id??o.supportCell,x:point.x,z:point.z,elevation:point.y-o.h/2},items,{fromPoint:true});
+}
 // Where a socket sits: on the nearest wall, or on its host (a cabinet's top, or a cell's back
 // panel) at `offsetX`/`offsetZ` in the host's own axes, so it follows the host. With
 // `fromPoint` its x/z (a drag) set that spot first.
@@ -192,9 +203,11 @@ export function socketOnSurface(o,{point,normal,id},items){
  if(!id){if(Math.abs(normal.y)>.3)return null;return{...base,outletMount:'wall',elevation:point.y-o.h/2};}
  const host=items.find(item=>item.id===id);if(!host||!socketHosts.includes(host.type))return null;
  const lift=['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0;
- if(normal.y>.7)return{...base,outletMount:'top',supportId:host.id};
+ // A shelf top inside a modular cabinet stands for the cell above it, not the cabinet's top.
+ if(normal.y>.7&&!(host.cabinetDesign&&point.y<lift+host.h-.005))return{...base,outletMount:'top',supportId:host.id};
  if(!host.cabinetDesign)return null;
- const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=point.x-host.x,dz=point.z-host.z,u=dx*c-dz*s,y=point.y-lift;
+ const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=point.x-host.x,dz=point.z-host.z,u=dx*c-dz*s,y=point.y-lift+(normal.y>.7?.005:normal.y<-.7?-.005:0);
+ // A board's top or underside lies on the line between two cells: it counts for the cell it faces.
  // A side panel faces sideways in the cabinet's own axes: that is not a way into a cell.
  if(Math.abs(normal.x*c-normal.z*s)>.7&&Math.abs(u)>host.w/2-.03)return null;
  const cell=cabinetCells(host).find(cell=>u>=cell.x-cell.w/2-1e-6&&u<=cell.x+cell.w/2+1e-6&&y>=cell.bottom-1e-6&&y<=cell.bottom+cell.h+1e-6);
