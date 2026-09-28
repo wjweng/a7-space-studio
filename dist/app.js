@@ -124,11 +124,12 @@ if(onWallPlane(f)){const a=f.rot*Math.PI/180,across=['ArrowLeft','ArrowRight'].i
 for(const r of rooms)$('roomJump').add(new Option(r.name,r.name));$('roomJump').value='玄關';$('roomJump').onchange=()=>{const r=rooms.find(r=>r.name===$('roomJump').value);select(null);scene.startTour(r);};
 
 document.querySelectorAll('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);scene.keys.add(b.dataset.key)};b.onpointerup=b.onpointercancel=b.onlostpointercapture=()=>scene.keys.delete(b.dataset.key);});
-// Mobile walk controls. A long press would otherwise select the button text and open the context menu, which also cancels the pointer and stops walking.
+// Walk-view touch controls. A long press would otherwise select the button text and open the context menu, which also cancels the pointer and stops walking.
 $('touchPad').addEventListener('contextmenu',e=>e.preventDefault());
 const prefKey=(name,fallback)=>{try{return localStorage.getItem(name)??fallback;}catch{return fallback;}},savePref=(name,value)=>{try{localStorage.setItem(name,value);}catch{}};
-function setSimple(on){document.body.classList.toggle('simple',on);$('simpleMode').textContent=on?'完整':'簡潔';$('simpleMode').setAttribute('aria-pressed',String(on));savePref('a7-studio-simple-walk',on?'1':'0');}
-$('simpleMode').onclick=()=>setSimple(!document.body.classList.contains('simple'));setSimple(prefKey('a7-studio-simple-walk','0')==='1');for(const[name,mode]of[['walking','walk'],['editing','top'],['orbiting','orbit']])document.body.classList.toggle(name,scene.mode===mode);
+// Simple mode (every view, both widths); the key was named for walk view when it applied only there.
+function setSimple(on){document.body.classList.toggle('simple',on);$('simpleMode').textContent=on?'完整':'簡潔';$('simpleMode').setAttribute('aria-pressed',String(on));savePref('a7-studio-simple',on?'1':'0');}
+$('simpleMode').onclick=()=>setSimple(!document.body.classList.contains('simple'));setSimple(prefKey('a7-studio-simple',prefKey('a7-studio-simple-walk','0'))==='1');for(const[name,mode]of[['walking','walk'],['editing','top'],['orbiting','orbit']])document.body.classList.toggle(name,scene.mode===mode);
 const stick=$('joystick'),knob=stick.firstElementChild;let stickPointer=null;
 function releaseStick(){stickPointer=null;scene.stick=null;knob.style.transform='';}
 function setPadMode(mode){const joy=mode==='stick';releaseStick();scene.keys.clear();$('touchPad').classList.toggle('stick',joy);$('padMode').textContent=joy?'按鍵':'搖桿';savePref('a7-studio-walk-pad',mode);}
