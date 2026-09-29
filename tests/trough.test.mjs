@@ -63,3 +63,12 @@ test('a trough goes on a shelf inside a cabinet, along the back panel, inside th
   assert.equal(turned.w,placed.w,'turned across a 40 cm shelf it keeps its length');assert.deepEqual(issues(turned,[tall,turned]),['超出電視櫃的層板']);
   const {onWallPlane}=await import('../dist/spatial.js');assert.equal(onWallPlane(placed),false,'the rotation field turns it on its shelf');
 });
+test('like furniture, a turn or a shrinking host never pushes a trough back: it stays put and is flagged; only a move stops at the edge',()=>{
+  const nearEnd=placeOutlet({...trough({w:.8}),x:9,z:.3},[desk],{fromPoint:true});
+  assert(Math.abs(nearEnd.x-(desk.x+desk.w/2-nearEnd.w/2))<1e-9,'dragged to the end it stops at the edge');
+  const turned=placeOutlet({...nearEnd,offsetRot:90},[desk]);
+  assert.equal(turned.x,nearEnd.x);assert.equal(turned.z,nearEnd.z,'turned about its centre, not pushed back');
+  assert.deepEqual(issues(turned,[desk,turned]),['超出書桌的檯面'],'and flagged like clashing furniture');
+  const smaller={...desk,w:1};const kept=placeOutlet(nearEnd,[smaller]);
+  assert.equal(kept.x,nearEnd.x,'a desk made smaller leaves it where it was');assert.deepEqual(issues(kept,[smaller,kept]),['超出書桌的檯面']);
+});

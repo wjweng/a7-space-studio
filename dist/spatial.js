@@ -169,18 +169,19 @@ export function placeOutlet(o,items,{fromPoint=false}={}){
   const opening=host.cabinetDesign&&cellOpening(host,o.supportCell);if(!opening)return o;
   return at(clamp(u,opening.x-opening.w/2+o.w/2,opening.x+opening.w/2-o.w/2),-host.d/2+CARCASS_T+o.d/2,clamp(o.elevation,base+opening.bottom,base+opening.bottom+opening.h-o.h));
  }
- // Face up on a top, or on a cell's shelf: turned by `offsetRot` (relative to the host), it slides over
- // that surface and stops at its edges. A trough placed for the first time turns along the host's edge
- // nearest a wall (in a cell, the back panel), slot on its back (-z), and keeps that turn from then on;
- // only the rotation field changes it. Too big to fit, it stays centred and is flagged (`issues`), like
- // furniture that clashes: nothing is cut to fit.
+ // Face up on a top, or on a cell's shelf, turned by `offsetRot` (relative to the host). Like furniture,
+ // only a move (`fromPoint`: a drag or a typed position) stops at the edges of that surface; a turn
+ // turns it about its centre and a host that shrinks or moves leaves it where it is, so running past
+ // the edge is flagged by `issues` (a red frame), never pushed back or cut to fit. A trough placed for
+ // the first time turns along the host's edge nearest a wall (in a cell, the back panel), slot on its
+ // back (-z), and keeps that turn from then on; only the rotation field changes it.
  const opening=o.outletMount==='shelf'&&host.cabinetDesign&&cellOpening(host,o.supportCell);if(o.outletMount==='shelf'&&!opening)return o;
  const area=flatArea(o,host);
  let turn=Number.isFinite(o.offsetRot)?o.offsetRot:o.trough?(opening?0:troughTurn(host)):0;
  if(o.trough?.flip)turn+=180; // saved before the flip switch was dropped
  turn=((turn%360)+360)%360;
  const t=turn*Math.PI/180,ac=Math.abs(Math.cos(t)),as=Math.abs(Math.sin(t)),span=[o.w*ac+o.d*as,o.w*as+o.d*ac],fit=(v,lo,hi)=>lo<=hi?clamp(v,lo,hi):(lo+hi)/2;
- const placed=at(fit(u,area.u1+span[0]/2,area.u2-span[0]/2),fit(v,area.v1+span[1]/2,area.v2-span[1]/2),opening?base+opening.bottom:base+host.h,turn);
+ const placed=fromPoint?at(fit(u,area.u1+span[0]/2,area.u2-span[0]/2),fit(v,area.v1+span[1]/2,area.v2-span[1]/2),opening?base+opening.bottom:base+host.h,turn):at(u,v,opening?base+opening.bottom:base+host.h,turn);
  if(o.trough){placed.offsetRot=turn;placed.trough={count:Math.min(o.trough.count,troughCapacity(o.w))};}
  return placed;
 }
