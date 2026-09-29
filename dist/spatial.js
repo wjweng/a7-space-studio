@@ -1,4 +1,4 @@
-import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,wallsHit,turnedSize,outletSize,WALL_THICKNESS} from './model.js';
+import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,wallsHit,turnedSize,outletSize,WALL_THICKNESS,TROUGH,troughCapacity} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference,clashes} from './geometry.js';
 import {modularCabinetRects,resizeCabinetDesign,cellOpening,cabinetCells,CARCASS_T} from './cabinet-design.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
@@ -168,8 +168,22 @@ export function placeOutlet(o,items,{fromPoint=false}={}){
   const opening=host.cabinetDesign&&cellOpening(host,o.supportCell);if(!opening)return o;
   return at(clamp(u,opening.x-opening.w/2+o.w/2,opening.x+opening.w/2-o.w/2),-host.d/2+CARCASS_T+o.d/2,clamp(o.elevation,base+opening.bottom,base+opening.bottom+opening.h-o.h));
  }
+ if(o.trough){
+  // A trough lies along the host's edge nearest a wall, its slot on that side (or the other, flipped),
+  // and never runs past the top: a longer one is cut to the edge and its sockets to what fits.
+  const turn=(troughTurn(host)+(o.trough.flip?180:0))%360,along=turn%180===0?host.w:host.d,w=Math.max(Math.min(TROUGH.minL,along),Math.min(o.w,along)),fit={trough:{...o.trough,count:Math.min(o.trough.count,troughCapacity(w))}},t=turn*Math.PI/180,span=[Math.abs(w*Math.cos(t))+Math.abs(o.d*Math.sin(t)),Math.abs(w*Math.sin(t))+Math.abs(o.d*Math.cos(t))];
+  const placed={...at(clamp(u,-host.w/2+span[0]/2,host.w/2-span[0]/2),clamp(v,-host.d/2+span[1]/2,host.d/2-span[1]/2),base+host.h,turn),w,trough:fit.trough};
+  delete placed.offsetRot;return placed;
+ }
  const turn=o.offsetRot||0,t=turn*Math.PI/180,across=[Math.abs(o.w*Math.cos(t))+Math.abs(o.d*Math.sin(t)),Math.abs(o.w*Math.sin(t))+Math.abs(o.d*Math.cos(t))];
  return at(clamp(u,-host.w/2+across[0]/2,host.w/2-across[0]/2),clamp(v,-host.d/2+across[1]/2,host.d/2-across[1]/2),base+host.h,turn);
+}
+// Which way a trough on `host` turns (degrees, relative to the host) so its slot faces the edge of
+// the top nearest a wall: 0 its back, 180 its front, 90 its left end, 270 its right end.
+export function troughTurn(host){
+ const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),world=(u,v)=>({x:host.x+u*c+v*s,z:host.z-u*s+v*c,w:.01,d:.01,rot:0}),rects=wallRects();
+ const edges=[[0,0,-host.d/2],[180,0,host.d/2],[90,-host.w/2,0],[270,host.w/2,0]].map(([turn,u,v])=>({turn,gap:Math.min(...rects.map(r=>signedDistance(world(u,v),r)))}));
+ return edges.reduce((best,e)=>e.gap<best.gap-1e-6?e:best).turn;
 }
 // Where a socket dragged or clicked onto a surface in walk view goes: a wall (a building face
 // that stands upright) at the pointer's height; the top of a cabinet, desk or table; or, on a
@@ -195,11 +209,15 @@ export function socketFromTopView(o,point,items){
  const host=topHostAt(point.x,point.z,items.filter(f=>f.id!==o.id)),next={...o,x:point.x,z:point.z};
  delete next.offsetX;delete next.offsetZ;
  if(host)return{...next,outletMount:'top',supportId:host.id};
+ // A trough only goes on a top: off one, it stays where it was.
+ if(o.trough)return o;
  delete next.supportId;delete next.supportCell;delete next.offsetRot;
  return{...next,outletMount:'wall'};
 }
 export function socketOnSurface(o,{point,normal,id},items){
  const base={...o,x:point.x,z:point.z};delete base.supportId;delete base.supportCell;delete base.offsetX;delete base.offsetZ;
+ // A trough only goes on a top.
+ if(o.trough){const host=id&&items.find(item=>item.id===id),lift=host&&['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0;return host&&socketHosts.includes(host.type)&&normal.y>.7&&!(host.cabinetDesign&&point.y<lift+host.h-.005)?{...base,outletMount:'top',supportId:host.id}:null;}
  if(!id){if(Math.abs(normal.y)>.3)return null;return{...base,outletMount:'wall',elevation:point.y-o.h/2};}
  const host=items.find(item=>item.id===id);if(!host||!socketHosts.includes(host.type))return null;
  const lift=['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0;

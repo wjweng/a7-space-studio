@@ -47,11 +47,13 @@ function drawDoors(){
 
 // How each kind of item is drawn: floor items solid, overhead ones dashed, rugs dotted.
 const overhead=new Set(['beam','hangingCabinet','cove','light']);
-const style=f=>f.type==='rug'?`fill="none" stroke="${INK}" stroke-width="${THIN}" stroke-dasharray=".4 .8"`:overhead.has(f.type)?`fill="none" stroke="${INK}" stroke-width="${THIN}" stroke-dasharray="2 1"`:cabinetTypes.includes(f.type)||f.type==='cornerShelf'?`fill="#f3ede4" stroke="${INK}" stroke-width="${MID}"`:`fill="#fff" stroke="${INK}" stroke-width="${MID}"`;
+const style=f=>f.trough?`fill="#fbeceb" stroke="#b3261e" stroke-width="${MID}"`:f.type==='rug'?`fill="none" stroke="${INK}" stroke-width="${THIN}" stroke-dasharray=".4 .8"`:overhead.has(f.type)?`fill="none" stroke="${INK}" stroke-width="${THIN}" stroke-dasharray="2 1"`:cabinetTypes.includes(f.type)||f.type==='cornerShelf'?`fill="#f3ede4" stroke="${INK}" stroke-width="${MID}"`:`fill="#fff" stroke="${INK}" stroke-width="${MID}"`;
 const size=f=>`${cm(f.w)}×${cm(f.d)}`;
 const lift=f=>Number.isFinite(f.elevation)&&f.elevation>0?f.elevation:0;
 // The size line: plan size, then what a carpenter needs: height, and where it hangs.
+const socketName={duplex:'雙插座',usb:'雙插座附 USB',data:'網路／電視'};
 export function itemSize(f){
+  if(f.trough)return`${size(f)}（${socketName[f.outletKind]||'雙插座'} ×${f.trough.count}）`;
   if(f.type==='beam')return`${size(f)} 深 ${cm(f.h)}（下緣離地 ${cm(HEIGHT-f.h)}）`;
   if(f.type==='rug')return size(f);
   const h=`${size(f)}×H${cm(f.h)}`;
@@ -98,7 +100,7 @@ function lightTagger(taken,tagged){
 // The schedule for tagged items, under the notes on the right.
 function schedule(tagged){
   if(!tagged.length)return'';
-  const x=300,y=150,row=Math.min(4.4,(250-y-8)/tagged.length);
+  const x=300,y=154,row=Math.min(4.4,(252-y-8)/tagged.length);
   return text(x,y,'編號物件（燈具與圖上放不下名稱者）',3.2,'font-weight="600"')+tagged.map((f,i)=>{const yy=y+7+i*row;return `<circle cx="${x+1.6}" cy="${r2(yy-.7)}" r="1.6" fill="#fff" stroke="${INK}" stroke-width="${THIN}"/>${text(x+1.6,yy-.05,i+1,1.8,'text-anchor="middle" font-weight="600"')}${text(x+5,yy,`${f.name}　${itemSize(f)}`,Math.min(2.3,row*.62))}`;}).join('');
 }
 const ROOM_SIZE=3.4,roomAt=r=>({x:px(r.x),y:py(r.z)-2.8});
@@ -155,13 +157,15 @@ function legend(){
     row(5,line('.4 .8',THIN),'地毯')+
     row(6,`<circle cx="4.5" cy="0" r="1.6" fill="#fff" stroke="${INK}" stroke-width="${THIN}"/><path d="M2.9 -1.6L6.1 1.6M6.1 -1.6L2.9 1.6" stroke="${INK}" stroke-width="${THIN}"/>`,'燈具（名稱見編號物件表）')+
     row(7,`<circle cx="4.5" cy="0" r="1.5" fill="#fff" stroke="#b3261e" stroke-width="${MID}"/>`,'插座：插 雙插座、U 附 USB、網 網路／電視；H 離地高度')+
-    `<g transform="translate(${x} ${y+76})">${text(0,0,'說明',3.2,'font-weight="600"')}${['配置參考圖，非施工圖；不含管線與迴路。','尺寸單位 cm；外圍尺寸為牆中心線距離。','家具標示：寬×深×高；離地為底面高度。','牆位依建案平面圖描繪，現場請以實測為準。'].map((s,i)=>text(0,7+i*5.5,s,2.4)).join('')}</g>`;
+    row(8,`<rect x="0" y="-1.2" width="9" height="2.4" fill="#fbeceb" stroke="#b3261e" stroke-width="${MID}"/>`,'線槽：嵌入檯面，內含插座')+
+    `<g transform="translate(${x} ${y+82})">${text(0,0,'說明',3.2,'font-weight="600"')}${['配置參考圖，非施工圖；不含管線與迴路。','尺寸單位 cm；外圍尺寸為牆中心線距離。','家具標示：寬×深×高；離地為底面高度。','牆位依建案平面圖描繪，現場請以實測為準。'].map((s,i)=>text(0,7+i*5.5,s,2.4)).join('')}</g>`;
 }
 function northArrow(){const x=285,y=48;return `<g transform="translate(${x} ${y})"><circle r="5" fill="none" stroke="${INK}" stroke-width="${THIN}"/><path d="M0 -5L2 2L0 .8L-2 2Z" fill="${INK}"/>${text(0,-6.5,'N',2.8,'text-anchor="middle" font-weight="600"')}</g>`;}
 
 export function planSvg(items,{date=new Date().toISOString().slice(0,10),project=TITLE_DEFAULTS.project,title=TITLE_DEFAULTS.title,author=TITLE_DEFAULTS.author}={}){
-  const list=items.filter(f=>f.type!=='outlet');
-  const floor=list.filter(f=>!overhead.has(f.type)),above=list.filter(f=>overhead.has(f.type)&&f.type!=='light'),lights=list.filter(f=>f.type==='light'),sockets=items.filter(f=>f.type==='outlet');
+  // Troughs are drawn and labelled like furniture (on top of their desk or cabinet); other sockets get a mark.
+  const list=items.filter(f=>f.type!=='outlet'||f.trough);
+  const floor=list.filter(f=>!overhead.has(f.type)),above=list.filter(f=>overhead.has(f.type)&&f.type!=='light'),lights=list.filter(f=>f.type==='light'),sockets=items.filter(f=>f.type==='outlet'&&!f.trough);
   const tagged=[],taken=[...rooms.map(roomBox),...lights.map(lightBox)],byArea=(a,b)=>b.w*b.d-a.w*a.d; // big things first, so smaller ones on top of them stay visible
   const body=[
     [...floor].sort(byArea).map(f=>rectPoly(f,style(f))).join(''),

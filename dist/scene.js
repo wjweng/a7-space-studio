@@ -7,7 +7,7 @@ import {BOARD,finishByCode} from './finishes.js';
 import {flooringByCode,tileSize} from './floorings.js';
 import {requestTexture,texturePixelsNow,texturesAsync} from './texture-cache.js';
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
-import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeCove,CORNER_BOARD,normalizeFabric,lightMountDrop,hangingElevation,mountDrop,cabinetTypes,fridgeColors,normalizeFridgeColor,turnedSize} from './model.js';
+import {HEIGHT,WALL_THICKNESS,TROUGH,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeCove,CORNER_BOARD,normalizeFabric,lightMountDrop,hangingElevation,mountDrop,cabinetTypes,fridgeColors,normalizeFridgeColor,turnedSize} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle,washerDoor,deskDrawer} from './spatial.js';
 import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,frontPanels,groupFronts,hingedFronts,doorGroupOf,FRONT_GAP,FRONT_T,FRONT_Z,SLIDE_SETBACK} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
@@ -646,23 +646,9 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   // from the front, as a turn on a top is seen from above.
   const y=f.elevation||0,kind=f.outletKind,top=f.outletMount==='top';
   const mat=colour=>this.outletMaterials?.[colour]||((this.outletMaterials??={})[colour]=new T.MeshStandardMaterial({color:colour,roughness:.45}));
-   const plate=new T.Group,pw=.12,ph=.075,pt=top?h:d,face=pt/2;g.add(plate);
-   if(top){plate.rotation.x=-Math.PI/2;plate.position.set(0,y+pt/2,0);}else{plate.position.set(0,y+h/2,0);plate.rotation.z=(f.spin||0)*Math.PI/180;}
-   const part=(sw,sh,depth,x,py,z,colour,r=0)=>this.box(plate,sw,sh,depth,x,py,z,mat(colour),r);
-   const dot=(radius,x,py,z,colour)=>{const c=this.cyl(plate,radius,radius,.0012,x,py,z,mat(colour));c.rotation.x=Math.PI/2;};
-   part(pw,ph,pt,0,0,0,'#e3e1db',.003);
-   part(pw-.008,ph-.008,.0016,0,0,face+.0008,'#f8f7f3',.002);
-   const front=face+.0016,dark='#1d2022';
-   const receptacle=x=>{
-    const py=0;
-    part(.031,.037,.001,x,py,front+.0005,'#b4b1aa',.004);part(.027,.033,.0016,x,py,front+.0008,'#eeede8',.004);
-    const z=front+.0022;
-    for(const dx of[-.0055,.0055])part(.0034,.012,.0012,x+dx,py+.005,z,dark);
-    dot(.0036,x,py-.01,z,dark);
-   };
-   if(kind==='data'){part(.024,.022,.0014,-.024,0,front+.0007,'#eeede8',.003);part(.014,.012,.0012,-.024,-.001,front+.0019,dark);dot(.008,.024,0,front+.0006,'#c9ccce');dot(.0018,.024,0,front+.0016,dark);}
-   else if(kind==='usb'){receptacle(-.026);for(const py of[-.009,.009]){part(.014,.006,.0012,.028,py,front+.0006,dark);part(.01,.0018,.0014,.028,py+.001,front+.0008,'#eeede8');}}
-   else for(const x of[-.028,.028])receptacle(x);
+   if(f.trough){this.makeTrough(g,f,y,kind,mat);return;}
+   const plate=this.outletPlate(kind,top?h:d,mat);g.add(plate);
+   if(top){plate.rotation.x=-Math.PI/2;plate.position.set(0,y+(top?h:d)/2,0);}else{plate.position.set(0,y+h/2,0);plate.rotation.z=(f.spin||0)*Math.PI/180;}
   // A socket inside a cell would hide under the cabinet top, so its ring goes above that; the
   // ring is the selection orange, so it does not read as part of the socket.
   const host=f.outletMount==='cell'&&this.items?.find(item=>item.id===f.supportId),hostTop=host?(host.type==='hangingCabinet'?host.elevation||0:0)+host.h:0;
@@ -751,6 +737,45 @@ stepLightFade(dt){if(!this.fading?.size)return false;for(const light of this.fad
  }
  // Where the pointer ray (set by the last surfaceAt) meets the plane an item lies in: a top's
  // level for a socket on a top, otherwise the plane of a wall item's face.
+ // One faceplate of `kind`, pt thick, facing +z in its own group (callers place and turn it).
+ outletPlate(kind,pt,mat){
+  const plate=new T.Group,pw=.12,ph=.075,face=pt/2;
+  const part=(sw,sh,depth,x,py,z,colour,r=0)=>this.box(plate,sw,sh,depth,x,py,z,mat(colour),r);
+  const dot=(radius,x,py,z,colour)=>{const c=this.cyl(plate,radius,radius,.0012,x,py,z,mat(colour));c.rotation.x=Math.PI/2;};
+  part(pw,ph,pt,0,0,0,'#e3e1db',.003);
+  part(pw-.008,ph-.008,.0016,0,0,face+.0008,'#f8f7f3',.002);
+  const front=face+.0016,dark='#1d2022';
+  const receptacle=x=>{
+   const py=0;
+   part(.031,.037,.001,x,py,front+.0005,'#b4b1aa',.004);part(.027,.033,.0016,x,py,front+.0008,'#eeede8',.004);
+   const z=front+.0022;
+   for(const dx of[-.0055,.0055])part(.0034,.012,.0012,x+dx,py+.005,z,dark);
+   dot(.0036,x,py-.01,z,dark);
+  };
+  if(kind==='data'){part(.024,.022,.0014,-.024,0,front+.0007,'#eeede8',.003);part(.014,.012,.0012,-.024,-.001,front+.0019,dark);dot(.008,.024,0,front+.0006,'#c9ccce');dot(.0018,.024,0,front+.0016,dark);}
+  else if(kind==='usb'){receptacle(-.026);for(const py of[-.009,.009]){part(.014,.006,.0012,.028,py,front+.0006,dark);part(.01,.0018,.0014,.028,py+.001,front+.0008,'#eeede8');}}
+  else for(const x of[-.028,.028])receptacle(x);
+  return plate;
+ }
+ // A cable trough let into a top (y is the top's surface): a lid in the host's finish, flush with
+ // the top, hinged along the cable slot at the back (-z); opening swings it up about that edge
+ // and shows the channel's dark floor with the sockets lying face up in a row. WebGL cannot cut
+ // the top, so the channel is drawn on its surface and shown only while the lid is open.
+ makeTrough(g,f,y,kind,mat){
+  const L=f.w,W=f.d,slot=TROUGH.slot,lidW=W-slot,host=this.items?.find(item=>item.id===f.supportId),finish=host?.finish&&this.finishMaterial(host.finish)||'wood';
+  this.box(g,L,.0012,slot,0,y+.0006,-W/2+slot/2,mat('#1d2022'));
+  // Hairline seams round the lid's other three edges, where it is cut out of the top.
+  const seam=.0015;this.box(g,L,.0008,seam,0,y+.0005,W/2-seam/2,mat('#3a3a38'));for(const side of[-1,1])this.box(g,seam,.0008,lidW,side*(L/2-seam/2),y+.0005,slot/2,mat('#3a3a38'));
+  const inside=new T.Group;g.add(inside);
+  this.box(inside,L-.004,.0008,lidW-.004,0,y+.0004,slot/2,mat('#2b2e30'));
+  const n=f.trough.count,pitch=TROUGH.plate+TROUGH.gap;
+  for(let i=0;i<n;i++){const plate=this.outletPlate(kind,.008,mat);plate.rotation.x=-Math.PI/2;plate.position.set((i-(n-1)/2)*pitch,y+.004,slot/2);inside.add(plate);}
+  const lid=new T.Group;lid.position.set(0,y,-W/2+slot);g.add(lid);
+  this.box(lid,L-2*seam,.018,lidW-seam,0,.0012-.009,(lidW-seam)/2,finish);
+  this.box(lid,Math.min(.06,L*.3),.0008,.01,0,.0016,lidW-.008,mat('#1d2022'));
+  const amount=f.open?1:0;lid.rotation.x=-amount*1.5;inside.visible=amount>.02;
+  this.actions.set(f.id,{type:'trough',pivot:lid,inside,item:f,amount});
+ }
  mountPlanePoint(f){const a=f.rot*Math.PI/180,flat=f.type==='outlet'&&f.outletMount==='top',normal=flat?new T.Vector3(0,1,0):new T.Vector3(Math.sin(a),0,Math.cos(a));return this.ray.ray.intersectPlane(new T.Plane().setFromNormalAndCoplanarPoint(normal,new T.Vector3(f.x,f.elevation||0,f.z)),new T.Vector3);}
  ground(e){const r=this.host.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.pointer,this.activeCamera);return this.ray.ray.intersectPlane(this.plane,new T.Vector3);}
  setForegroundDraft(id){this.foregroundDraft=this.items.some(f=>f.id===id&&f.draft)?id:null;this.refreshValidity();}
@@ -882,7 +907,7 @@ const hideCeiling=ceilingKinds.includes(f.type)&&this.mode==='top'&&this.showCei
  requestRender(ms=0){this.renderUntil=Math.max(this.renderUntil||0,performance.now()+ms);}
  cameraChanged(){const c=this.activeCamera;if(!c)return true;c.updateMatrixWorld();const key=c.matrixWorld.elements.join()+c.projectionMatrix.elements.join();if(key===this.lastCameraKey)return false;this.lastCameraKey=key;return true;}
  frame(){let dt=Math.min(this.clock.getDelta(),.04);let controlsMoved=false;if(this.mode==='orbit')controlsMoved=this.controls.update();if(this.mode==='walk'){this.ensureSafeCamera();this.followTour(dt);const sx=this.stick?.x||0,sy=this.stick?.y||0,forward=T.MathUtils.clamp((this.keys.has('KeyW')||this.keys.has('ArrowUp')?1:0)-(this.keys.has('KeyS')||this.keys.has('ArrowDown')?1:0)+sy,-1,1),side=(this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0),norm=Math.max(1,Math.hypot(forward,side)),speed=dt*1.5/norm;this.walkYaw+=T.MathUtils.clamp((this.keys.has('ArrowLeft')?1:0)-(this.keys.has('ArrowRight')?1:0)-sx,-1,1)*dt*1.3;let dx=(-Math.sin(this.walkYaw)*forward+Math.cos(this.walkYaw)*side)*speed,dz=(-Math.cos(this.walkYaw)*forward-Math.sin(this.walkYaw)*side)*speed;let p=this.camera.position;if(this.canWalk(p.x+dx,p.z))p.x+=dx;if(this.canWalk(p.x,p.z+dz))p.z+=dz;p.y=this.eye;this.camera.rotation.order='YXZ';this.camera.rotation.set(this.walkPitch,this.walkYaw,0);}
- let moving=false;for(const [id,a]of this.actions){let target=a.item?a.item.open||0:this.openStates[id]||0;if(Math.abs(a.amount-target)>1e-4)moving=true;a.amount=T.MathUtils.damp(a.amount,target,7,dt);if(a.type==='door')a.pivot.rotation.y=a.def.swing*a.amount*(a.def.maxAngle??89)*Math.PI/180;if(a.type==='shower')a.pivot.rotation.y=a.base+a.swing*a.amount*Math.PI/2;if(a.type==='washer')a.pivot.rotation.y=-a.amount*Math.PI*.5;if(a.type==='cabinet'){a.pivots.forEach(p=>p.rotation.y=(p.userData.swing??-1)*a.amount*Math.PI*.5);a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);a.slides.forEach(p=>p.position.x=p.userData.baseX+p.userData.travelX*a.amount);}if(a.type==='modularCabinet')for(const part of a.parts){const goal=a.item.openCells?.[part.id]?1:0;const amount=part.amount||0;if(Math.abs(amount-goal)>1e-4)moving=true;part.amount=T.MathUtils.damp(amount,goal,7,dt);if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+part.amount*part.travel;}if(a.type==='cabdrawer')a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);if(a.type==='drawer')a.pivot.position.z=a.base+a.amount*a.travel;if(a.type==='curtain')for(const p of a.panels){let factor=1-.8*a.amount;p.g.scale.x=factor;p.g.position.x=p.sign<0?-a.width/2:a.width/2-a.width/2*factor;}}
+ let moving=false;for(const [id,a]of this.actions){let target=a.item?a.item.open||0:this.openStates[id]||0;if(Math.abs(a.amount-target)>1e-4)moving=true;a.amount=T.MathUtils.damp(a.amount,target,7,dt);if(a.type==='door')a.pivot.rotation.y=a.def.swing*a.amount*(a.def.maxAngle??89)*Math.PI/180;if(a.type==='shower')a.pivot.rotation.y=a.base+a.swing*a.amount*Math.PI/2;if(a.type==='washer')a.pivot.rotation.y=-a.amount*Math.PI*.5;if(a.type==='trough'){a.pivot.rotation.x=-a.amount*1.5;a.inside.visible=a.amount>.02;}if(a.type==='cabinet'){a.pivots.forEach(p=>p.rotation.y=(p.userData.swing??-1)*a.amount*Math.PI*.5);a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);a.slides.forEach(p=>p.position.x=p.userData.baseX+p.userData.travelX*a.amount);}if(a.type==='modularCabinet')for(const part of a.parts){const goal=a.item.openCells?.[part.id]?1:0;const amount=part.amount||0;if(Math.abs(amount-goal)>1e-4)moving=true;part.amount=T.MathUtils.damp(amount,goal,7,dt);if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+part.amount*part.travel;}if(a.type==='cabdrawer')a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);if(a.type==='drawer')a.pivot.position.z=a.base+a.amount*a.travel;if(a.type==='curtain')for(const p of a.panels){let factor=1-.8*a.amount;p.g.scale.x=factor;p.g.position.x=p.sign<0?-a.width/2:a.width/2-a.width/2*factor;}}
  if(this.surroundings){this.surroundings.visible=this.mode==='walk';if(this.sky)this.sky.position.copy(this.camera.position);}
  const focus=this.viewFocus?.();this.fadeLights=true;if(focus&&(!this.shadowFocus||Math.hypot(focus.x-this.shadowFocus.x,focus.z-this.shadowFocus.z)>.5))this.assignLampShadows();
  if(this.bounce&&this.lightRoom()!==this.litRoom){this.assignLampShadows();this.updateRoomLight();}this.fadeLights=false;
