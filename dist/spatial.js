@@ -1,4 +1,4 @@
-import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,wallsHit,turnedSize,outletSize,WALL_THICKNESS,TROUGH,troughCapacity} from './model.js';
+import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,wallsHit,turnedSize,outletSize,WALL_THICKNESS,TROUGH,troughCapacity,flatMount,flatArea} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference,clashes} from './geometry.js';
 import {modularCabinetRects,resizeCabinetDesign,cellOpening,cabinetCells,CARCASS_T} from './cabinet-design.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
@@ -136,8 +136,8 @@ function ontoPanels(p,tall,items){
  return p;
 }
 // Things flat against a wall or back panel, which move along it and turn in its plane.
-// A trough lies flat on a top or shelf even inside a cell, so it turns like a top socket.
-export const onWallPlane=f=>f?.type==='outlet'&&f.outletMount!=='top'&&!f.trough||f?.type==='television'&&f.tvMount==='wall';
+// Sockets and troughs lying face up (on a top or a shelf) turn on it instead.
+export const onWallPlane=f=>f?.type==='outlet'&&!flatMount(f)||f?.type==='television'&&f.tvMount==='wall';
 // A turn in the wall plane keeps the plate's centre where it was, like a turn on a top: the
 // stored elevation is the bottom of the turned bounding box, so it moves by half the change in
 // height (validation then keeps it between the floor and the ceiling).
@@ -165,24 +165,24 @@ export function placeOutlet(o,items,{fromPoint=false}={}){
  if(fromPoint){const dx=o.x-host.x,dz=o.z-host.z;u=dx*c-dz*s;v=dx*s+dz*c;}
  // A plate lying on a top may turn on it (`offsetRot`, relative to the host); one on a back panel faces out.
  const at=(u,v,elevation,turn=0)=>({...o,offsetX:u,offsetZ:v,x:host.x+u*c+v*s,z:host.z-u*s+v*c,rot:((host.rot+turn)%360+360)%360,elevation});
- if(o.trough){
-  // A trough on a top lies along the host's edge nearest a wall, its slot on that side; on a cell's
-  // shelf it lies along the back panel. A turn the owner typed (`offsetRot`, relative to the host)
-  // replaces that; flipped, the slot faces the other way. It never runs past the top or the cell:
-  // a longer one is cut to the longest that fits at its angle, and its sockets to what fits.
-  const opening=o.outletMount==='cell'&&host.cabinetDesign&&cellOpening(host,o.supportCell);if(o.outletMount==='cell'&&!opening)return o;
-  const own=Number.isFinite(o.offsetRot)?o.offsetRot:opening?0:troughTurn(host),turn=((own+(o.trough.flip?180:0))%360+360)%360,room=opening?{u1:opening.x-opening.w/2,u2:opening.x+opening.w/2,v1:-host.d/2+CARCASS_T,v2:host.d/2}:{u1:-host.w/2,u2:host.w/2,v1:-host.d/2,v2:host.d/2};
-  const t=turn*Math.PI/180,ac=Math.abs(Math.cos(t)),as=Math.abs(Math.sin(t)),U=room.u2-room.u1,V=room.v2-room.v1,longest=Math.min(ac>1e-9?(U-o.d*as)/ac:Infinity,as>1e-9?(V-o.d*ac)/as:Infinity);
-  const w=Math.max(Math.min(TROUGH.minL,longest),Math.min(o.w,longest)),span=[w*ac+o.d*as,w*as+o.d*ac];
-  const surface=opening?base+opening.bottom:base+host.h;
-  return{...at(clamp(u,room.u1+span[0]/2,room.u2-span[0]/2),clamp(v,room.v1+span[1]/2,room.v2-span[1]/2),surface,turn),w,trough:{...o.trough,count:Math.min(o.trough.count,troughCapacity(w))}};
- }
  if(o.outletMount==='cell'){
   const opening=host.cabinetDesign&&cellOpening(host,o.supportCell);if(!opening)return o;
   return at(clamp(u,opening.x-opening.w/2+o.w/2,opening.x+opening.w/2-o.w/2),-host.d/2+CARCASS_T+o.d/2,clamp(o.elevation,base+opening.bottom,base+opening.bottom+opening.h-o.h));
  }
- const turn=o.offsetRot||0,t=turn*Math.PI/180,across=[Math.abs(o.w*Math.cos(t))+Math.abs(o.d*Math.sin(t)),Math.abs(o.w*Math.sin(t))+Math.abs(o.d*Math.cos(t))];
- return at(clamp(u,-host.w/2+across[0]/2,host.w/2-across[0]/2),clamp(v,-host.d/2+across[1]/2,host.d/2-across[1]/2),base+host.h,turn);
+ // Face up on a top, or on a cell's shelf: turned by `offsetRot` (relative to the host), it slides over
+ // that surface and stops at its edges. A trough placed for the first time turns along the host's edge
+ // nearest a wall (in a cell, the back panel), slot on its back (-z), and keeps that turn from then on;
+ // only the rotation field changes it. Too big to fit, it stays centred and is flagged (`issues`), like
+ // furniture that clashes: nothing is cut to fit.
+ const opening=o.outletMount==='shelf'&&host.cabinetDesign&&cellOpening(host,o.supportCell);if(o.outletMount==='shelf'&&!opening)return o;
+ const area=flatArea(o,host);
+ let turn=Number.isFinite(o.offsetRot)?o.offsetRot:o.trough?(opening?0:troughTurn(host)):0;
+ if(o.trough?.flip)turn+=180; // saved before the flip switch was dropped
+ turn=((turn%360)+360)%360;
+ const t=turn*Math.PI/180,ac=Math.abs(Math.cos(t)),as=Math.abs(Math.sin(t)),span=[o.w*ac+o.d*as,o.w*as+o.d*ac],fit=(v,lo,hi)=>lo<=hi?clamp(v,lo,hi):(lo+hi)/2;
+ const placed=at(fit(u,area.u1+span[0]/2,area.u2-span[0]/2),fit(v,area.v1+span[1]/2,area.v2-span[1]/2),opening?base+opening.bottom:base+host.h,turn);
+ if(o.trough){placed.offsetRot=turn;placed.trough={count:Math.min(o.trough.count,troughCapacity(o.w))};}
+ return placed;
 }
 // Which way a trough on `host` turns (degrees, relative to the host) so its slot faces the edge of
 // the top nearest a wall: 0 its back, 180 its front, 90 its left end, 270 its right end.
@@ -211,7 +211,7 @@ export function topHostAt(x,z,items){
 // A socket clicked or dragged in top view: onto the top under the pointer, else onto the
 // nearest wall. One in a cell stays in its cell (top view cannot reach inside cabinets).
 export function socketFromTopView(o,point,items){
- if(o.outletMount==='cell')return{...o,x:point.x,z:point.z};
+ if(o.outletMount==='cell'||o.outletMount==='shelf')return{...o,x:point.x,z:point.z};
  const host=topHostAt(point.x,point.z,items.filter(f=>f.id!==o.id)),next={...o,x:point.x,z:point.z};
  delete next.offsetX;delete next.offsetZ;
  if(host)return{...next,outletMount:'top',supportId:host.id};
@@ -222,20 +222,11 @@ export function socketFromTopView(o,point,items){
 }
 export function socketOnSurface(o,{point,normal,id},items){
  const base={...o,x:point.x,z:point.z};delete base.supportId;delete base.supportCell;delete base.offsetX;delete base.offsetZ;
- // A trough only goes on a top.
- // A trough lies on a surface facing up: a top, or a shelf inside a cabinet (the cell above it).
- if(o.trough){
-  const host=id&&items.find(item=>item.id===id);if(!host||!socketHosts.includes(host.type)||normal.y<=.7)return null;
-  const lift=['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0;
-  if(!(host.cabinetDesign&&point.y<lift+host.h-.005))return{...base,outletMount:'top',supportId:host.id};
-  const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),u=(point.x-host.x)*c-(point.z-host.z)*s,y=point.y-lift+.005;
-  const cell=cabinetCells(host).find(cell=>u>=cell.x-cell.w/2-1e-6&&u<=cell.x+cell.w/2+1e-6&&y>=cell.bottom-1e-6&&y<=cell.bottom+cell.h+1e-6);
-  return cell&&cell.front!=='drawers'?{...base,outletMount:'cell',supportId:host.id,supportCell:cell.id}:null;
- }
- if(!id){if(Math.abs(normal.y)>.3)return null;return{...base,outletMount:'wall',elevation:point.y-o.h/2};}
+ // A trough only lies on a surface facing up: a top or a shelf.
+ if(!id){if(o.trough||Math.abs(normal.y)>.3)return null;return{...base,outletMount:'wall',elevation:point.y-o.h/2};}
  const host=items.find(item=>item.id===id);if(!host||!socketHosts.includes(host.type))return null;
  const lift=['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0;
- // A shelf top inside a modular cabinet stands for the cell above it, not the cabinet's top.
+ // A shelf top inside a modular cabinet is that shelf, not the cabinet's top.
  if(normal.y>.7&&!(host.cabinetDesign&&point.y<lift+host.h-.005))return{...base,outletMount:'top',supportId:host.id};
  if(!host.cabinetDesign)return null;
  const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=point.x-host.x,dz=point.z-host.z,u=dx*c-dz*s,y=point.y-lift+(normal.y>.7?.005:normal.y<-.7?-.005:0);
@@ -245,6 +236,9 @@ export function socketOnSurface(o,{point,normal,id},items){
  const cell=cabinetCells(host).find(cell=>u>=cell.x-cell.w/2-1e-6&&u<=cell.x+cell.w/2+1e-6&&y>=cell.bottom-1e-6&&y<=cell.bottom+cell.h+1e-6);
  // Nobody puts a socket inside a drawer, and there the drawer front would hide it.
  if(!cell||cell.front==='drawers')return null;
+ // A shelf's top: lying on it. Otherwise (the back panel, a board's underside) on the cell's back panel.
+ if(normal.y>.7)return{...base,outletMount:'shelf',supportId:host.id,supportCell:cell.id};
+ if(o.trough)return null;
  return{...base,outletMount:'cell',supportId:host.id,supportCell:cell.id,elevation:point.y-o.h/2};
 }
 // The desk's drawer, shared by the drawing and the opening check: 13 cm high just under the

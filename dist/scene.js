@@ -7,7 +7,7 @@ import {BOARD,finishByCode} from './finishes.js';
 import {flooringByCode,tileSize} from './floorings.js';
 import {requestTexture,texturePixelsNow,texturesAsync} from './texture-cache.js';
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
-import {HEIGHT,WALL_THICKNESS,TROUGH,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeCove,CORNER_BOARD,normalizeFabric,lightMountDrop,hangingElevation,mountDrop,cabinetTypes,fridgeColors,normalizeFridgeColor,turnedSize} from './model.js';
+import {HEIGHT,WALL_THICKNESS,TROUGH,flatMount,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeCove,CORNER_BOARD,normalizeFabric,lightMountDrop,hangingElevation,mountDrop,cabinetTypes,fridgeColors,normalizeFridgeColor,turnedSize} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle,washerDoor,deskDrawer} from './spatial.js';
 import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,frontPanels,groupFronts,hingedFronts,doorGroupOf,FRONT_GAP,FRONT_T,FRONT_Z,SLIDE_SETBACK} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
@@ -644,14 +644,14 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   // coax pin. The plate faces out from a wall or back panel and lies face up on a top, and turns
   // as one piece, slots included, the same way in both: `spin` on a wall, counterclockwise seen
   // from the front, as a turn on a top is seen from above.
-  const y=f.elevation||0,kind=f.outletKind,top=f.outletMount==='top';
+  const y=f.elevation||0,kind=f.outletKind,top=flatMount(f);
   const mat=colour=>this.outletMaterials?.[colour]||((this.outletMaterials??={})[colour]=new T.MeshStandardMaterial({color:colour,roughness:.45}));
    if(f.trough){this.makeTrough(g,f,y,kind,mat);return;}
    const plate=this.outletPlate(kind,top?h:d,mat);g.add(plate);
    if(top){plate.rotation.x=-Math.PI/2;plate.position.set(0,y+(top?h:d)/2,0);}else{plate.position.set(0,y+h/2,0);plate.rotation.z=(f.spin||0)*Math.PI/180;}
   // A socket inside a cell would hide under the cabinet top, so its ring goes above that; the
   // ring is the selection orange, so it does not read as part of the socket.
-  const host=f.outletMount==='cell'&&this.items?.find(item=>item.id===f.supportId),hostTop=host?(host.type==='hangingCabinet'?host.elevation||0:0)+host.h:0;
+  const host=(f.outletMount==='cell'||f.outletMount==='shelf')&&this.items?.find(item=>item.id===f.supportId),hostTop=host?(host.type==='hangingCabinet'?host.elevation||0:0)+host.h:0;
   // In top view the ring is lifted above everything (refreshValidity), so no beam or cabinet hides it.
   const ring=new T.Mesh(new T.RingGeometry(.055,.07,32),mat('#c36b45'));ring.rotation.x=-Math.PI/2;ring.position.y=ring.userData.baseY=Math.max(y+h,hostTop)+.004;g.add(ring);this.topOutline(ring);
    // An unseen disc fills the ring, so a click anywhere inside it picks the socket, not only on the ring.
@@ -776,7 +776,7 @@ stepLightFade(dt){if(!this.fading?.size)return false;for(const light of this.fad
   const amount=f.open?1:0;lid.rotation.x=-amount*1.5;inside.visible=amount>.02;
   this.actions.set(f.id,{type:'trough',pivot:lid,inside,item:f,amount});
  }
- mountPlanePoint(f){const a=f.rot*Math.PI/180,flat=f.type==='outlet'&&(f.outletMount==='top'||!!f.trough),normal=flat?new T.Vector3(0,1,0):new T.Vector3(Math.sin(a),0,Math.cos(a));return this.ray.ray.intersectPlane(new T.Plane().setFromNormalAndCoplanarPoint(normal,new T.Vector3(f.x,f.elevation||0,f.z)),new T.Vector3);}
+ mountPlanePoint(f){const a=f.rot*Math.PI/180,flat=f.type==='outlet'&&flatMount(f),normal=flat?new T.Vector3(0,1,0):new T.Vector3(Math.sin(a),0,Math.cos(a));return this.ray.ray.intersectPlane(new T.Plane().setFromNormalAndCoplanarPoint(normal,new T.Vector3(f.x,f.elevation||0,f.z)),new T.Vector3);}
  ground(e){const r=this.host.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.pointer,this.activeCamera);return this.ray.ray.intersectPlane(this.plane,new T.Vector3);}
  setForegroundDraft(id){this.foregroundDraft=this.items.some(f=>f.id===id&&f.draft)?id:null;this.refreshValidity();}
  makeInvalidMarker(f){const marker=new T.Group,fill=new T.MeshBasicMaterial({color:0xef3434,transparent:true,opacity:.32,depthTest:false,depthWrite:false}),edge=new T.MeshBasicMaterial({color:0xd91515,transparent:true,opacity:.96,depthTest:false,depthWrite:false});this.box(marker,f.w,.014,f.d,0,0,0,fill);for(const z of[-f.d/2,f.d/2])this.box(marker,f.w+.06,.022,.04,0,.006,z,edge);for(const x of[-f.w/2,f.w/2])this.box(marker,.04,.022,f.d+.06,x,.006,0,edge);return marker;}

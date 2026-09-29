@@ -306,7 +306,7 @@ test('a ceiling beam buries a wall socket in its height band, and raising one st
  const low=socket(1),raised=guardedSocket(low,{...low,elevation:2.8},items);
  assert.equal(raised.reason,'與樑重疊');assert.ok(Math.abs(raised.item.elevation+low.h-(HEIGHT-beam.h))<1e-4,'stops under the beam');
 });
-test('a socket in a cabinet cell slides along the cell edges, crosses into the next cell, and a shelf top inside stands for the cell above it',async()=>{
+test('a socket in a cabinet cell slides along the cell edges, crosses into the next cell, and one pointed at a shelf top inside lies on that shelf',async()=>{
  const {socketInCellPlane,socketOnSurface}=await import('../dist/spatial.js');const {validateFurniture}=await import('../dist/model.js');
  const {makeCabinetDesign,cabinetCells,cellOpening}=await import('../dist/cabinet-design.js');
  const cabinet={id:'c',type:'wardrobe',name:'櫃',x:2,z:3,w:.8,d:.5,h:2,rot:0,open:0};cabinet.cabinetDesign=makeCabinetDesign(cabinet,'shelves');
@@ -317,7 +317,8 @@ test('a socket in a cabinet cell slides along the cell edges, crosses into the n
  assert.ok(Math.abs(past.elevation-(first.bottom+.15-o.h/2))<1e-9,'and still follows up and down');
  assert.equal(socketInCellPlane(o,{x:2,y:second.bottom+.1,z:2.9},items).supportCell,second.id,'over the next cell it moves in');
  const shelf=socketOnSurface(o,{point:{x:2,y:second.bottom,z:2.9},normal:{x:0,y:1,z:0},id:'c'},items);
- assert.equal(shelf.outletMount,'cell');assert.equal(shelf.supportCell,second.id);
+ assert.equal(shelf.outletMount,'shelf','a shelf top takes it face up (since 2026-09-29)');assert.equal(shelf.supportCell,second.id,'the shelf of the cell above it');
+ assert.equal(socketOnSurface(o,{point:{x:2,y:second.bottom+.2,z:2.9-.23},normal:{x:0,y:0,z:1},id:'c'},items).outletMount,'cell','its back panel still takes it upright');
  assert.equal(socketOnSurface(o,{point:{x:2,y:cabinet.h,z:2.9},normal:{x:0,y:1,z:0},id:'c'},items).outletMount,'top','the cabinet top itself is still a top');
 });
 test('a socket never goes into a drawer cell, whether pointed at or slid across',async()=>{
