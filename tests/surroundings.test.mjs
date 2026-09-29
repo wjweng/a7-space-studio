@@ -160,3 +160,11 @@ test('neighbours\' front-door handles follow the plan\'s swing arcs',()=>{
  const side=Object.fromEntries(corridor.doors.filter(d=>d.kind==='unit').map(d=>[d.label,d.handle]));
  assert.deepEqual(side,{A6:'left',A5:'right',A1:'left',A3:'right',A2:'left',A8:'right'});
 });
+test('the view outside is built once, on demand, and picks up the current day or night',()=>{
+ const s=Object.create(SpaceScene.prototype);let renders=0;
+ Object.assign(s,{scene:new THREE.Scene(),mode:'orbit',night:true,camera:{position:new THREE.Vector3()},requestRender(){renders++;}});
+ assert.equal(s.surroundings,undefined,'nothing is built before it is asked for');
+ s.ensureSurroundings();const first=s.surroundings;assert(first);assert.equal(renders,1);
+ assert(s.outdoor.every(m=>m.color.equals(m.userData.night)),'built at night, it starts in its night look');
+ s.ensureSurroundings();assert.equal(s.surroundings,first,'a second call keeps the same group');
+});
