@@ -56,3 +56,12 @@ const touchEvent=(emit,type,pointerId,clientX,clientY,isPrimary)=>emit(type,{poi
 const lift=pointerId=>{const e=new Event('pointerup');Object.assign(e,{pointerId,pointerType:'touch'});window.dispatchEvent(e);};
 test('two-finger pinch widens or narrows the walk field of view and zooms the top view without looking around',()=>{const{s,emit}=setup();s.camera.fov=70;touchEvent(emit,'pointerdown',1,100,100,true);touchEvent(emit,'pointerdown',2,200,100,false);touchEvent(emit,'pointermove',2,300,100,false);assert.equal(s.camera.fov,45,'spreading narrows the view, clamped at 45°');assert.equal(s.walkYaw,0);assert.equal(s.lookDrag,null);touchEvent(emit,'pointermove',2,150,100,false);assert.equal(s.camera.fov,95,'pinching widens the view, clamped at 95°');lift(2);lift(1);assert.equal(s.pinch,null);s.mode='top';s.topCamera.zoom=1;touchEvent(emit,'pointerdown',3,100,100,true);touchEvent(emit,'pointerdown',4,200,100,false);touchEvent(emit,'pointermove',4,250,100,false);assert(Math.abs(s.topCamera.zoom-1.5)<1e-9);});
 test('a finger whose lift was never heard does not turn the next one-finger drag into a pinch',()=>{const{s,emit}=setup();s.camera.fov=70;touchEvent(emit,'pointerdown',1,100,100,true);touchEvent(emit,'pointerdown',2,300,300,true);touchEvent(emit,'pointermove',2,340,320,true);assert.equal(s.camera.fov,70);assert(!s.pinch);assert(s.walkYaw>0,'one finger looks around');});
+test('a view snapshot survives JSON and restores the walk camera, the top view pan and zoom, and the overview camera',()=>{
+  const{s:a}=setup('walk');a.camera.position.set(2,1.6,5);a.walkYaw=.7;a.walkPitch=-.1;a.camera.fov=55;a.topCamera.position.set(3,25,6);a.topCamera.zoom=1.8;a.viewStates.orbit={position:new T.Vector3(9,12,14),quaternion:new T.Quaternion,target:new T.Vector3(4,0,4),fov:43,yaw:0,pitch:0};
+  const snap=JSON.parse(JSON.stringify(a.viewSnapshot()));assert.equal(snap.mode,'walk');
+  const{s:b}=setup('orbit');b.restoreView(snap);
+  assert.deepEqual(b.camera.position.toArray(),[9,12,14],'the overview camera is applied at once');assert.deepEqual(b.controls.target.toArray(),[4,0,4]);
+  assert.deepEqual(b.viewStates.walk.position.toArray(),[2,1.6,5]);assert.equal(b.viewStates.walk.yaw,.7);assert.equal(b.viewStates.walk.fov,55);
+  assert.equal(b.topCamera.position.x,3);assert.equal(b.topCamera.position.z,6);assert.equal(b.topCamera.zoom,1.8);
+  const{s:c}=setup('orbit');c.restoreView({views:{walk:{position:[1,'x',2]}},top:{x:NaN}});assert.equal(c.viewStates.walk,undefined,'a damaged snapshot is ignored');
+});

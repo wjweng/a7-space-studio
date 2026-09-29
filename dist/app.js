@@ -421,3 +421,13 @@ $('ceilingItems').onchange=()=>{scene.showCeiling=$('ceilingItems').checked;scen
 function syncCeilingControls(){$('ceilingItems').disabled=scene.mode!=='top';$('ceilingOpacityRow').hidden=scene.mode!=='top'||!$('ceilingItems').checked;}
 function setCeilingOpacity(percent){$('ceilingOpacity').value=percent;$('ceilingOpacityValue').textContent=percent+'%';scene.setCeilingOpacity(percent/100);}
 $('ceilingOpacity').oninput=()=>{setCeilingOpacity(Number($('ceilingOpacity').value));savePref('a7-studio-ceiling-opacity',$('ceilingOpacity').value);};setCeilingOpacity(Math.min(90,Math.max(10,Number(prefKey('a7-studio-ceiling-opacity','35'))||35)));syncCeilingControls();
+// A reload in the same tab keeps the view, every view's camera and the display switches; a new tab starts in the overview.
+// index.html hides the view-dependent controls ('booting') until then, so they never show the overview's state first.
+const VIEW_KEY='a7-studio-view',displaySwitches=['cutaway','labels','snap','lights','ceilingItems'];
+window.addEventListener('pagehide',()=>{try{sessionStorage.setItem(VIEW_KEY,JSON.stringify({...scene.viewSnapshot(),switches:Object.fromEntries(displaySwitches.map(id=>[id,$(id).checked])),night:scene.night,eye:$('eye').value}));}catch{}});
+(()=>{let saved=null;try{saved=JSON.parse(sessionStorage.getItem(VIEW_KEY)||'null');}catch{}
+if(saved){for(const id of displaySwitches)if(typeof saved.switches?.[id]==='boolean'&&$(id).checked!==saved.switches[id]){$(id).checked=saved.switches[id];$(id).dispatchEvent(new Event('change'));}
+if(saved.night===true&&!scene.night)$('daynight').click();
+if(saved.eye){$('eye').value=saved.eye;$('eye').dispatchEvent(new Event('input'));}
+scene.restoreView(saved);if(saved.mode==='top'||saved.mode==='walk')setView(saved.mode);}
+document.body.classList.remove('booting');})();
