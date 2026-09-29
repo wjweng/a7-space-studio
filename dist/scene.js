@@ -9,7 +9,7 @@ import {requestTexture,texturePixelsNow,texturesAsync} from './texture-cache.js'
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeCove,CORNER_BOARD,normalizeFabric,lightMountDrop,hangingElevation,mountDrop,cabinetTypes,fridgeColors,normalizeFridgeColor,turnedSize} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle,washerDoor,deskDrawer} from './spatial.js';
-import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,frontPanels,groupFronts,FRONT_GAP,FRONT_T,FRONT_Z} from './cabinet-design.js';
+import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,frontPanels,groupFronts,hingedFronts,doorGroupOf,FRONT_GAP,FRONT_T,FRONT_Z,SLIDE_SETBACK} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
 // A flush fitting sends all of its light downward and glows like a panel, so straight below
 // it is several times brighter than under a bare bulb of the same output.
@@ -439,7 +439,7 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
    parts.push({id:cell.id,kind:'drawer',pivot,base:pivot.position.z,travel:body*.7});
   }
   for(const panel of frontPanels(f)){
-   if(!groupFronts.includes(panel.front))continue;
+   if(!hingedFronts.includes(panel.front))continue;
    const frontW=panel.w-gap,frontH=panel.h-gap,bar=Math.min(.7,frontH*.55);
    const addDoor=(hinge,sign,width)=>{
     const pivot=new T.Group;pivot.position.set(hinge,panel.y,front+door/2);g.add(pivot);
@@ -459,25 +459,33 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   // Sides, top and each column's lowest board pass 'wood', which box()
   // resolves to the cabinet's finish or the palette; see cabinetFinishSlots.
   const finish=(code,fallback='wood')=>code&&this.finishMaterial(code)||fallback;
+  const structure=cabinetStructure(f),E=1e-6;
+  // A sliding door shared by several cells runs on tracks inside the carcass, so every board
+  // inside its rectangle (shelves, dividers, side panels between columns) stops short of the
+  // front by SLIDE_SETBACK; the boards around its edges stay full depth and carry the tracks.
+  const slideDoors=frontPanels(f).filter(p=>p.front==='sliding'&&p.ids.length>1).map(p=>{const m=structure.cells.filter(c=>p.ids.includes(c.id));return{...p,members:m,x1:Math.min(...m.map(c=>c.x-c.w/2)),x2:Math.max(...m.map(c=>c.x+c.w/2)),y1:Math.min(...m.map(c=>c.bottom)),y2:Math.max(...m.map(c=>c.bottom+c.h))};});
+  const shelfSetback=(x1,x2,y)=>slideDoors.some(s=>y>s.y1+E&&y<s.y2-E&&x1>=s.x1-E&&x2<=s.x2+E)?SLIDE_SETBACK:0;
+  // A vertical board from y1 to y2 at x, split where it passes through a sliding door.
+  const upright=(x,y1,y2,depth,z)=>{let cuts=[y1,y2];const inside=[];for(const s of slideDoors)if(x>s.x1+t+E&&x<s.x2-t-E&&s.y2>y1+E&&s.y1<y2-E){const a=Math.max(y1,s.y1),b=Math.min(y2,s.y2);cuts.push(a,b);inside.push([a,b]);}cuts=[...new Set(cuts)].sort((a,b)=>a-b);for(let i=1;i<cuts.length;i++){const a=cuts[i-1],b=cuts[i];if(b-a<E)continue;const back=inside.some(([p,q])=>a>=p-E&&b<=q+E)?SLIDE_SETBACK:0;box(t,b-a,depth-back,x,(a+b)/2,z-back/2);}};
   for(const column of cabinetColumns(f)){
    // Sides extended to the floor stand the raised column on them, leaving the gap open.
    const{width,bottom,x}=column,foot=column.sidesToFloor?0:bottom,sideHeight=f.h-foot-(column.top||0);
-   for(const side of[-1,1])box(t,sideHeight,d,x+side*(width/2-t/2),foot+sideHeight/2,0);
+   for(const side of[-1,1])upright(x+side*(width/2-t/2),foot,foot+sideHeight,d,0);
   }
-  const structure=cabinetStructure(f);
   // Dividers between side-by-side parts run the full height of their row;
   // every shelf, top board and back stops at the side panels or a divider,
   // so only the sides show outside and nothing overlaps.
-  for(const line of structure.partLines)box(t,line.h,d-t,line.x,line.bottom+line.h/2,t/2);
+  for(const line of structure.partLines)upright(line.x,line.bottom,line.bottom+line.h,d-t,t/2);
   for(const cell of structure.cells){
    const{x,y,w,h,bottom,front,id,last,insetL,insetR}=cell,frontW=w-FRONT_GAP,frontH=h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cellFinish(f,cell,'door'));
    const innerW=w-insetL-insetR,cx=x+(insetL-insetR)/2;
    box(innerW,h,t,cx,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));
    const lowest=cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom;
-   if(!cell.noBase)box(innerW,t,d-t,cx,bottom+t/2,t/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
+   const shelfBack=shelfSetback(x-w/2,x+w/2,bottom);
+   if(!cell.noBase)box(innerW,t,d-t-shelfBack,cx,bottom+t/2,t/2-shelfBack/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
    if(last)box(innerW,t,d-t,cx,bottom+h-t/2,t/2);
-   // Hinged doors are drawn per front panel below, since one may span cells.
-   if(front==='open'||groupFronts.includes(front))continue;
+   // Hinged doors, and sliding doors shared by several cells, are drawn per front panel below.
+   if(front==='open'||hingedFronts.includes(front)||front==='sliding'&&doorGroupOf(f.cabinetDesign,id))continue;
    // Clear opening between the side panels, above this cell's bottom board
    // and below the top board when the cell reaches the top.
    const openBottom=bottom+(cell.noBase?0:t),openTop=bottom+h-(last?t:0),openH=openTop-openBottom;
@@ -508,8 +516,25 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   // Hinged doors, one per front panel: a door group is a single door over
   // its cells, finished like its first cell. Handles only when asked for.
   for(const panel of frontPanels(f)){
-   if(!groupFronts.includes(panel.front))continue;
+   if(!groupFronts.includes(panel.front)||panel.front==='sliding'&&panel.ids.length<2)continue;
    const frontW=panel.w-FRONT_GAP,frontH=panel.h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cellFinish(f,panel.cell,'door'));
+   if(panel.front==='sliding'){
+    // A sliding door over several cells: leaves inside the carcass across the whole door,
+    // on the same two tracks as a single cell's, overlapping 2 cm.
+    const door=slideDoors.find(s=>s.id===panel.id),m=door.members,left=m.reduce((a,c)=>c.x-c.w/2<a.x-a.w/2?c:a),right=m.reduce((a,c)=>c.x+c.w/2>a.x+a.w/2?c:a),low=m.reduce((a,c)=>c.bottom<a.bottom?c:a),high=m.reduce((a,c)=>c.bottom+c.h>a.bottom+a.h?c:a);
+    const x1=door.x1+left.insetL,x2=door.x2-right.insetR,innerW=x2-x1,cx=(x1+x2)/2,openBottom=door.y1+(low.noBase?0:t),openTop=door.y2-(high.last?t:0);
+    const track=.008,leafH=openTop-openBottom-2*track-.004,leafW=innerW/2+.01,frontZ=d/2-.006-FRONT_T/2,backZ=frontZ-FRONT_T-.004;
+    for(const ty of[openBottom+track/2,openTop-track/2])box(innerW,track,FRONT_T*2+.012,cx,ty,(frontZ+backZ)/2,'metal');
+    for(const sign of[-1,1]){
+     const pivot=new T.Group;
+     pivot.position.set(cx+sign*(innerW/2-leafW/2),(openBottom+openTop)/2,sign>0?frontZ:backZ);
+     g.add(pivot);
+     this.box(pivot,leafW,leafH,FRONT_T,0,0,0,face,.003);
+     if(panel.handle)this.box(pivot,.012,.14,.004,sign*(leafW/2-.03),0,FRONT_T/2+.002,'dark',.002);
+     parts.push({id:panel.id,kind:'slide',pivot,base:pivot.position.x,travel:sign>0?0:innerW-leafW});
+    }
+    continue;
+   }
    const addDoor=(hinge,sign,width)=>{
     const pivot=new T.Group;
     pivot.position.set(hinge,panel.y,z);

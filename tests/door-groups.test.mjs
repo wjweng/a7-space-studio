@@ -82,3 +82,22 @@ test('an open cabinet door is checked at the thickness it is drawn, beside the s
   const outside=leaf.x+leaf.d/2-(f.x+f.w/2);
   assert(Math.abs(outside-(.009-FRONT_GAP/2))<1e-9,`pokes out ${outside}`);
 });
+
+test('merged cells can share a sliding door: leaves inside the carcass, the boards inside the door set back for the tracks',()=>{
+  const s=Object.create(SpaceScene.prototype);
+  s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow'].map(k=>[k,new THREE.MeshStandardMaterial()]));
+  Object.assign(s,{actions:new Map,items:[]});
+  const f=cabinet(),merged=withDesign(f,mergeDoorCells(f,['b','c','e','f'])),design=structuredClone(merged.cabinetDesign);
+  for(const col of design.columns)for(const cell of col.cells)if(['b','c','e','f'].includes(cell.id))cell.front='sliding';
+  const sliding=withDesign(merged,design);
+  assert.equal(sliding.cabinetDesign.doorGroups.length,1,'the group survives validation with a sliding front');
+  const panel=frontPanels(sliding).find(p=>p.ids.length===4);assert.equal(panel.front,'sliding');
+  const g=new THREE.Group;s.makeFurniture(g,sliding);
+  const slides=s.actions.get(sliding.id).parts.filter(p=>p.kind==='slide');
+  assert.equal(slides.length,2,'two leaves for the shared door');assert(slides.every(p=>p.id===panel.id));
+  assert(slides.every(p=>p.pivot.position.z+.009<=sliding.d/2),'the leaves stay inside the carcass front');
+  const depths=[];g.traverse(o=>{const p=o.geometry?.parameters;if(o.isMesh&&p?.depth)depths.push(Math.round(p.depth*1000));});
+  const full=500,set=55;
+  assert.equal(depths.filter(v=>v===full-set).length,2,'the two side panels between the columns step back inside the door');
+  assert.equal(depths.filter(v=>v===full-18-set).length,2,'the shelves inside the door step back; the ones on its edges do not');
+});

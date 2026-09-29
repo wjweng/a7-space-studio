@@ -11,7 +11,7 @@ export const cabinetTemplates={
 };
 // Fronts are full overlay: each covers its cell's carcass edges, leaving a
 // FRONT_GAP reveal to its neighbours, with its back face on the carcass face.
-export const FRONT_GAP=.003,FRONT_T=.018,FRONT_Z=FRONT_T/2,CARCASS_T=.018;
+export const FRONT_GAP=.003,FRONT_T=.018,FRONT_Z=FRONT_T/2,CARCASS_T=.018,SLIDE_SETBACK=.055;
 // Finishes form three levels: the cabinet's `finish` (sides, top and each
 // column's lowest board), then `partFinishes` for all doors, shelves, backs or
 // drawer boxes, then a cell's own `finishes`. An unset level follows the one
@@ -145,7 +145,11 @@ export function validateCabinetDesign(f,design){
 // cells, after a split, delete or new front, is dropped and each cell keeps
 // its own door. Drawers and sliding doors stay single-cell: across a shelf or
 // divider their boxes and leaves would run into the boards.
-export const groupFronts=['left','right','double'];
+// Fronts that can span several cells as one door: hinged doors, and sliding doors, whose
+// leaves run inside the carcass like a single cell's; the shelves, dividers and side panels
+// inside the door stop SLIDE_SETBACK short of the front to clear the tracks (see scene.js).
+// Drawers never span cells: their boxes would hit inner boards.
+export const hingedFronts=['left','right','double'],groupFronts=[...hingedFronts,'sliding'];
 export function boundsOf(cells){
   const l=Math.min(...cells.map(c=>c.x-c.w/2)),r=Math.max(...cells.map(c=>c.x+c.w/2)),b=Math.min(...cells.map(c=>c.bottom)),t=Math.max(...cells.map(c=>c.bottom+c.h));
   return{x:(l+r)/2,w:r-l,bottom:b,h:t-b,y:(b+t)/2};
