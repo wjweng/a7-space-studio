@@ -101,7 +101,9 @@ if(validated.type==='outlet'){
  // A typed or nudged position is the socket's new spot on its host; a turn only applies to a
  // plate lying on a top, since a wall or a back panel decides which way the others face.
  const moved=Math.hypot(validated.x-f.x,validated.z-f.z)>1e-9,turned=Math.abs(((validated.rot-f.rot)%360+360)%360)>1e-6,host=items.find(item=>item.id===validated.supportId);
- if(turned&&validated.outletMount==='top'&&host)validated.offsetRot=normalizeSpin(validated.rot-host.rot);
+ // A trough keeps a typed turn instead of turning itself to the wall; its flip stays on top of that.
+ if(turned&&host&&validated.trough)validated.offsetRot=normalizeSpin(validated.rot-host.rot-(validated.trough.flip?180:0));
+ else if(turned&&validated.outletMount==='top'&&host)validated.offsetRot=normalizeSpin(validated.rot-host.rot);
  validated=placeOutlet(validated,items,{fromPoint:moved});
  // A wall socket stops where it would sink into a cabinet, a TV or other furniture on that wall.
  const guard=guardedSocket(f,validated,items);if(guard.reason){if(guard.item===f)throw Error(guard.reason+'，這裡放不下插座');validated=guard.item;stopped=guard.reason+'，已停在邊緣';}
@@ -292,7 +294,7 @@ coveControls.after(tvControls);
 // walk view, so there are no mount, host or cell menus; the kind and mount fix the size.
 const outletControls=document.createElement('div');
 outletControls.className='tvControls';
-outletControls.innerHTML='<div class="sectiontitle space" id="outletTitle">插座</div><label><span id="outletKindLabel">型式</span><select id="outletKind"></select></label><label id="outletElevationField">底部離地（cm）<input id="outletElevation" type="number" min="0" max="295" step="0.1"></label><div id="troughFields" hidden><label>長度（cm）<input id="troughLength" type="number" step="0.1"></label><label>寬度（cm）<input id="troughWidth" type="number" step="0.1"></label><label>插座數量<select id="troughCount"></select></label><label class="checkline"><input id="troughFlip" type="checkbox">縫在另一側</label></div><p class="muted" id="outletHint"></p>';
+outletControls.innerHTML='<div class="sectiontitle space" id="outletTitle">插座</div><label><span id="outletKindLabel">型式</span><select id="outletKind"></select></label><label id="outletElevationField">底部離地（cm）<input id="outletElevation" type="number" min="0" max="295" step="0.1"></label><div id="troughFields" hidden><label>長度（cm）<input id="troughLength" type="number" step="0.1"></label><label>寬度（cm）<input id="troughWidth" type="number" step="0.1"></label><label>插座數量<select id="troughCount"></select></label><label class="checkline"><input id="troughFlip" type="checkbox">縫在另一側</label><button id="troughAuto" type="button">改回自動朝牆</button></div><p class="muted" id="outletHint"></p>';
 tvControls.after(outletControls);
 for(const [key,label]of outletKinds)$('outletKind').add(new Option(label,key));
 const renderWithTv=renderProps;
@@ -396,10 +398,10 @@ renderProps=()=>{
   $('outletKind').value=f.outletKind;$('outletElevationField').hidden=f.outletMount==='top';
   // A trough: its size, how many sockets it holds (as many as its length takes), and which side the slot is on.
   const trough=!!f.trough;$('troughFields').hidden=!trough;$('outletTitle').textContent=trough?'線槽':'插座';$('outletKindLabel').textContent=trough?'插座型式':'型式';
-  $('outletHint').textContent=trough?'在「室內導覽」或俯視圖把線槽拖到桌面或櫃子頂面；縫會自動朝向靠牆那一側。長度決定放得下幾個插座。':'在「室內導覽」把插座拖到牆面、櫃子或桌面上，或拖到櫃子正面放進櫃格。';
+  $('outletHint').textContent=trough?'在「室內導覽」把線槽拖到桌面、櫃子頂面或櫃格層板上（俯視圖只能放在頂面）；縫會自動朝向靠牆那一側，也可以在「旋轉角度」自己轉。長度決定放得下幾個插座。':'在「室內導覽」把插座拖到牆面、櫃子或桌面上，或拖到櫃子正面放進櫃格。';
   if(trough){
    for(const [id,value,lo,hi]of[['troughLength',f.w,TROUGH.minL,TROUGH.maxL],['troughWidth',f.d,TROUGH.minW,TROUGH.maxW]]){const input=$(id);input.min=Math.round(lo*1000)/10;input.max=Math.round(hi*1000)/10;if(document.activeElement!==input)input.value=Math.round(value*1000)/10;}
-   const most=troughCapacity(f.w),count=$('troughCount');if(count.options.length!==most){count.replaceChildren();for(let n=1;n<=most;n++)count.add(new Option(n+' 個',n));}count.value=f.trough.count;$('troughFlip').checked=!!f.trough.flip;
+   const most=troughCapacity(f.w),count=$('troughCount');if(count.options.length!==most){count.replaceChildren();for(let n=1;n<=most;n++)count.add(new Option(n+' 個',n));}count.value=f.trough.count;$('troughFlip').checked=!!f.trough.flip;$('troughAuto').hidden=!Number.isFinite(f.offsetRot);
   }
   if(document.activeElement!==$('outletElevation'))$('outletElevation').value=Math.round(f.elevation*1000)/10;
 };
@@ -409,6 +411,7 @@ const editTrough=change=>{const f=items.find(item=>item.id===selected);if(f?.tro
 $('troughLength').onchange=()=>editTrough(f=>({...f,w:Number($('troughLength').value)/100,trough:{...f.trough}}));
 $('troughWidth').onchange=()=>editTrough(f=>({...f,d:Number($('troughWidth').value)/100,trough:{...f.trough}}));
 $('troughCount').onchange=()=>editTrough(f=>({...f,trough:{...f.trough,count:Number($('troughCount').value)}}));
+$('troughAuto').onclick=()=>editTrough(f=>{const n={...f,trough:{...f.trough}};delete n.offsetRot;return n;});
 $('troughFlip').onchange=()=>editTrough(f=>{const trough={...f.trough};if($('troughFlip').checked)trough.flip=true;else delete trough.flip;return{...f,trough};});
 render();
 // Walk view: sockets go where the pointer points (socketOnSurface), by dragging an existing
@@ -423,12 +426,12 @@ scene.onSocketDrag=(id,surface,planePoint)=>{if(!beforeDrag)beforeDrag=snapshot(
  if(f.outletMount==='wall'&&(!result||result.reason)){const along=socketAlongWall(f,planePoint(f));if(along)result=guardedSocket(f,along,items,{hop:false});}
  // One in a cabinet cell does the same on its back panel, staying inside the cells, also when the
  // surface would bury it (the wall just above the cabinet top): it moves there once it fits.
- if(f.outletMount==='cell'&&(!result||result.reason)){const point=planePoint(f),inCell=point&&socketInCellPlane(f,point,items);if(inCell)result={item:inCell,reason:''};}
+ if(f.outletMount==='cell'&&!f.trough&&(!result||result.reason)){const point=planePoint(f),inCell=point&&socketInCellPlane(f,point,items);if(inCell)result={item:inCell,reason:''};}
  // One on a top slides over that top, stopping at its edges.
- if(f.outletMount==='top'&&(!result||result.reason)){const point=planePoint(f);if(point)result={item:placeOutlet({...f,x:point.x,z:point.z},items,{fromPoint:true}),reason:''};}
+ if((f.outletMount==='top'||f.trough)&&(!result||result.reason)){const point=planePoint(f);if(point)result={item:placeOutlet({...f,x:point.x,z:point.z},items,{fromPoint:true}),reason:''};}
  const n=result?.item;if(!n||n===f)return;for(const key of Object.keys(f))if(!(key in n))delete f[key];Object.assign(f,n);scene.resizeItem(f);renderProps();};
 scene.onSocketDragEnd=id=>{const f=items.find(item=>item.id===id);if(f)openSocketCell(f);if(beforeDrag){history.push(beforeDrag);future=[];beforeDrag=null;persist();renderList();updateUndo();}};
-scene.onPlaceSurface=surface=>{if(placementCandidate?.type!=='outlet')return;const n=socketAt(placementCandidate,surface);if(!n)return notify(placementCandidate.trough?'線槽要裝在桌面或櫃子頂面上，請點桌子或櫃子的頂面。':'請點牆面、櫃子或桌面的表面。');remember();items.push(n);placementCandidate=null;scene.cancelPlacement(false);$('placementHint').hidden=true;scene.buildFurniture(items);openSocketCell(n);select(n.id);render();persist();notify(n.trough?'線槽已加入；可以沿桌面或櫃面拖動，縫會自動朝向靠牆那一側。':'插座已加入；可以直接拖到牆面、櫃子上或櫃格內。');};
+scene.onPlaceSurface=surface=>{if(placementCandidate?.type!=='outlet')return;const n=socketAt(placementCandidate,surface);if(!n)return notify(placementCandidate.trough?'線槽要裝在桌面或櫃子頂面上，請點桌子或櫃子的頂面。':'請點牆面、櫃子或桌面的表面。');remember();items.push(n);placementCandidate=null;scene.cancelPlacement(false);$('placementHint').hidden=true;scene.buildFurniture(items);openSocketCell(n);select(n.id);render();persist();notify(n.trough?'線槽已加入；可以沿檯面或層板拖動，縫會自動朝向靠牆那一側，也可以在「旋轉角度」自己轉。':'插座已加入；可以直接拖到牆面、櫃子上或櫃格內。');};
 // Top view: a socket goes onto the top under the pointer (a table, desk or cabinet), else the nearest wall.
 function socketInTopView(f,point){const candidate=socketFromTopView(f,point,items);let n;try{n=validateFurniture([candidate])[0];}catch{return f;}return placeOutlet(n,items,{fromPoint:true});}
 // Top view: show (see-through) or hide the beams, hanging cabinets and lights.

@@ -47,3 +47,30 @@ test('the plan sheet draws a trough like furniture, with its sockets in the labe
   const svg=planSvg([desk,placeOutlet(trough(),[desk])]);
   assert(svg.includes('60×12（雙插座 ×2）'));assert(svg.includes('線槽：嵌入檯面'));
 });
+test('a trough goes on a shelf inside a cabinet, along the back panel, and stays inside that cell',async()=>{
+  const {makeCabinetDesign,cabinetCells,validateCabinetDesign}=await import('../dist/cabinet-design.js');
+  const row=(id,height,front='open')=>({id,height,front});
+  const tall={id:'tv',type:'console',name:'電視櫃',x:.26,z:1.5,w:1.8,d:.4,h:2.1,rot:90,open:0};
+  tall.cabinetDesign=validateCabinetDesign(tall,{template:'custom',columns:[{id:'c',width:1.8,bottom:0,cells:[row('low',.43,'double'),row('mid',1.1),row('high',.57,'double')]}]});
+  const shelf=cabinetCells(tall).find(c=>c.id==='mid'),a=tall.rot*Math.PI/180,point={x:tall.x+.5*Math.cos(a)-.1*Math.sin(a),y:shelf.bottom+.018,z:tall.z-.5*Math.sin(a)-.1*Math.cos(a)};
+  const onShelf=socketOnSurface(trough({supportId:'tv'}),{point,normal:{x:0,y:1,z:0},id:'tv'},[tall]);
+  assert.equal(onShelf.outletMount,'cell');assert.equal(onShelf.supportCell,'mid');
+  const placed=placeOutlet(validateFurniture([onShelf])[0],[tall],{fromPoint:true});
+  assert.equal(placed.outletMount,'cell','validation keeps it in the cell');
+  assert(Math.abs(placed.elevation-(shelf.bottom+.018))<1e-9,'it lies on the shelf');
+  assert.equal(placed.rot,tall.rot,'its slot faces the back panel');
+  const long=placeOutlet({...placed,w:2.4},[tall]);assert(long.w<=1.8-2*.018+1e-9,'cut to the opening between the side panels');
+});
+test('a typed turn replaces the turn to the wall until it is cleared, and a slanted trough is cut to fit',()=>{
+  const turned=placeOutlet({...trough(),offsetRot:90},[desk]);
+  assert.equal(turned.rot,90);assert(turned.w<=desk.d+1e-9,'across a 60 cm desk it is at most 60 cm long');
+  assert.equal(placeOutlet({...trough(),offsetRot:90,trough:{count:2,flip:true}},[desk]).rot,270,'the flip still turns it round');
+  const slanted=placeOutlet({...trough({w:1.4}),offsetRot:30},[desk]),t=Math.PI/6;
+  assert(slanted.w*Math.sin(t)+slanted.d*Math.cos(t)<=desk.d+1e-9,'at 30° it still fits across the desk');
+  const auto={...turned};delete auto.offsetRot;assert.equal(placeOutlet(auto,[desk]).rot,0,'cleared, it turns to the wall again');
+});
+test('a trough in a cell is not a wall-plane item, so the rotation field turns it on its shelf',async()=>{
+  const {onWallPlane}=await import('../dist/spatial.js');
+  assert.equal(onWallPlane({type:'outlet',outletMount:'cell',trough:{count:1}}),false);
+  assert.equal(onWallPlane({type:'outlet',outletMount:'cell'}),true,'a socket on a cell back panel still is');
+});

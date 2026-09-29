@@ -136,7 +136,8 @@ function ontoPanels(p,tall,items){
  return p;
 }
 // Things flat against a wall or back panel, which move along it and turn in its plane.
-export const onWallPlane=f=>f?.type==='outlet'&&f.outletMount!=='top'||f?.type==='television'&&f.tvMount==='wall';
+// A trough lies flat on a top or shelf even inside a cell, so it turns like a top socket.
+export const onWallPlane=f=>f?.type==='outlet'&&f.outletMount!=='top'&&!f.trough||f?.type==='television'&&f.tvMount==='wall';
 // A turn in the wall plane keeps the plate's centre where it was, like a turn on a top: the
 // stored elevation is the bottom of the turned bounding box, so it moves by half the change in
 // height (validation then keeps it between the floor and the ceiling).
@@ -164,16 +165,21 @@ export function placeOutlet(o,items,{fromPoint=false}={}){
  if(fromPoint){const dx=o.x-host.x,dz=o.z-host.z;u=dx*c-dz*s;v=dx*s+dz*c;}
  // A plate lying on a top may turn on it (`offsetRot`, relative to the host); one on a back panel faces out.
  const at=(u,v,elevation,turn=0)=>({...o,offsetX:u,offsetZ:v,x:host.x+u*c+v*s,z:host.z-u*s+v*c,rot:((host.rot+turn)%360+360)%360,elevation});
+ if(o.trough){
+  // A trough on a top lies along the host's edge nearest a wall, its slot on that side; on a cell's
+  // shelf it lies along the back panel. A turn the owner typed (`offsetRot`, relative to the host)
+  // replaces that; flipped, the slot faces the other way. It never runs past the top or the cell:
+  // a longer one is cut to the longest that fits at its angle, and its sockets to what fits.
+  const opening=o.outletMount==='cell'&&host.cabinetDesign&&cellOpening(host,o.supportCell);if(o.outletMount==='cell'&&!opening)return o;
+  const own=Number.isFinite(o.offsetRot)?o.offsetRot:opening?0:troughTurn(host),turn=((own+(o.trough.flip?180:0))%360+360)%360,room=opening?{u1:opening.x-opening.w/2,u2:opening.x+opening.w/2,v1:-host.d/2+CARCASS_T,v2:host.d/2}:{u1:-host.w/2,u2:host.w/2,v1:-host.d/2,v2:host.d/2};
+  const t=turn*Math.PI/180,ac=Math.abs(Math.cos(t)),as=Math.abs(Math.sin(t)),U=room.u2-room.u1,V=room.v2-room.v1,longest=Math.min(ac>1e-9?(U-o.d*as)/ac:Infinity,as>1e-9?(V-o.d*ac)/as:Infinity);
+  const w=Math.max(Math.min(TROUGH.minL,longest),Math.min(o.w,longest)),span=[w*ac+o.d*as,w*as+o.d*ac];
+  const surface=opening?base+opening.bottom:base+host.h;
+  return{...at(clamp(u,room.u1+span[0]/2,room.u2-span[0]/2),clamp(v,room.v1+span[1]/2,room.v2-span[1]/2),surface,turn),w,trough:{...o.trough,count:Math.min(o.trough.count,troughCapacity(w))}};
+ }
  if(o.outletMount==='cell'){
   const opening=host.cabinetDesign&&cellOpening(host,o.supportCell);if(!opening)return o;
   return at(clamp(u,opening.x-opening.w/2+o.w/2,opening.x+opening.w/2-o.w/2),-host.d/2+CARCASS_T+o.d/2,clamp(o.elevation,base+opening.bottom,base+opening.bottom+opening.h-o.h));
- }
- if(o.trough){
-  // A trough lies along the host's edge nearest a wall, its slot on that side (or the other, flipped),
-  // and never runs past the top: a longer one is cut to the edge and its sockets to what fits.
-  const turn=(troughTurn(host)+(o.trough.flip?180:0))%360,along=turn%180===0?host.w:host.d,w=Math.max(Math.min(TROUGH.minL,along),Math.min(o.w,along)),fit={trough:{...o.trough,count:Math.min(o.trough.count,troughCapacity(w))}},t=turn*Math.PI/180,span=[Math.abs(w*Math.cos(t))+Math.abs(o.d*Math.sin(t)),Math.abs(w*Math.sin(t))+Math.abs(o.d*Math.cos(t))];
-  const placed={...at(clamp(u,-host.w/2+span[0]/2,host.w/2-span[0]/2),clamp(v,-host.d/2+span[1]/2,host.d/2-span[1]/2),base+host.h,turn),w,trough:fit.trough};
-  delete placed.offsetRot;return placed;
  }
  const turn=o.offsetRot||0,t=turn*Math.PI/180,across=[Math.abs(o.w*Math.cos(t))+Math.abs(o.d*Math.sin(t)),Math.abs(o.w*Math.sin(t))+Math.abs(o.d*Math.cos(t))];
  return at(clamp(u,-host.w/2+across[0]/2,host.w/2-across[0]/2),clamp(v,-host.d/2+across[1]/2,host.d/2-across[1]/2),base+host.h,turn);
@@ -217,7 +223,15 @@ export function socketFromTopView(o,point,items){
 export function socketOnSurface(o,{point,normal,id},items){
  const base={...o,x:point.x,z:point.z};delete base.supportId;delete base.supportCell;delete base.offsetX;delete base.offsetZ;
  // A trough only goes on a top.
- if(o.trough){const host=id&&items.find(item=>item.id===id),lift=host&&['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0;return host&&socketHosts.includes(host.type)&&normal.y>.7&&!(host.cabinetDesign&&point.y<lift+host.h-.005)?{...base,outletMount:'top',supportId:host.id}:null;}
+ // A trough lies on a surface facing up: a top, or a shelf inside a cabinet (the cell above it).
+ if(o.trough){
+  const host=id&&items.find(item=>item.id===id);if(!host||!socketHosts.includes(host.type)||normal.y<=.7)return null;
+  const lift=['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0;
+  if(!(host.cabinetDesign&&point.y<lift+host.h-.005))return{...base,outletMount:'top',supportId:host.id};
+  const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),u=(point.x-host.x)*c-(point.z-host.z)*s,y=point.y-lift+.005;
+  const cell=cabinetCells(host).find(cell=>u>=cell.x-cell.w/2-1e-6&&u<=cell.x+cell.w/2+1e-6&&y>=cell.bottom-1e-6&&y<=cell.bottom+cell.h+1e-6);
+  return cell&&cell.front!=='drawers'?{...base,outletMount:'cell',supportId:host.id,supportCell:cell.id}:null;
+ }
  if(!id){if(Math.abs(normal.y)>.3)return null;return{...base,outletMount:'wall',elevation:point.y-o.h/2};}
  const host=items.find(item=>item.id===id);if(!host||!socketHosts.includes(host.type))return null;
  const lift=['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0;
