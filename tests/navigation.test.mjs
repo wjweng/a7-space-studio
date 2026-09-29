@@ -39,6 +39,12 @@ test('ceiling items turn see-through without touching shared materials, and back
   assert.notEqual(mesh.material,shared);assert.equal(mesh.material.transparent,true);assert(mesh.material.opacity<.5);assert.equal(shared.transparent,false);
   s.seeThrough(g,false);assert.equal(mesh.material,shared);
 });
+test('hiding ceiling items hides what is drawn but leaves a light\'s lamps on, and brings it back',()=>{
+  const s=Object.create(SpaceScene.prototype),g=new T.Group,shade=new T.Mesh(new T.BoxGeometry,new T.MeshStandardMaterial),lamp=new T.SpotLight;g.add(shade,lamp);
+  s.hideDrawn(g,true);
+  assert.equal(g.visible,true);assert.equal(shade.visible,false);assert.equal(lamp.visible,true,'the lamp still lights the room');
+  s.hideDrawn(g,false);assert.equal(shade.visible,true);
+});
 test('the ceiling opacity slider changes existing see-through copies and new ones, never the shared material',()=>{
   const s=Object.create(SpaceScene.prototype),shared=new T.MeshStandardMaterial,g=new T.Group,mesh=new T.Mesh(new T.BoxGeometry,shared),later=new T.Group,other=new T.Mesh(new T.BoxGeometry,new T.MeshStandardMaterial);g.add(mesh);later.add(other);
   s.seeThrough(g,true);s.setCeilingOpacity(.8);
