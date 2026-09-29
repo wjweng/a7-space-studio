@@ -1,6 +1,6 @@
 import {SpaceScene} from './scene.js';
 import {VERSION,LAYOUT_REVISION,migrateLayout,HEIGHT,outline,walls,initialFurniture,palettes,rooms,doors,curtains,clone,issues,overlaps,wallRects,validateFurniture,normalizeSinkBasin,normalizeKitchenParts,normalizeLight,lightKinds,lightShapes,lightColorTemperatures,corners,inside,insideShell} from './model.js';
-import {outletKinds,outletMounts,TROUGH,troughCapacity,flatMount,normalizeSpin,turnedSize,minimumsFor,linearLightDefaults,wetRooms,normalizeFloors,fabricTypes,fabricColors,mountedOn,mountDrop,ceilingTypes,cabinetTypes,hangingElevation} from './model.js';
+import {outletKinds,outletMounts,outletSize,TROUGH,troughCapacity,flatMount,normalizeSpin,turnedSize,minimumsFor,linearLightDefaults,wetRooms,normalizeFloors,fabricTypes,fabricColors,mountedOn,mountDrop,ceilingTypes,cabinetTypes,hangingElevation} from './model.js';
 import {finishes,finishFamilies,finishByCode,finishableTypes,finishPixels} from './finishes.js';
 import {floorings,flooringSeries,flooringByCode,flooringPixels} from './floorings.js';
 import {exteriorWallRects} from './model.js';
@@ -85,28 +85,37 @@ function nicheWarnings(f){if(!f)return[];if(f.type==='television')return nicheTv
 // beams, and what hangs under a beam or cabinet is placed by refreshValidity,
 // so the edited item plus the TVs it holds are all that change shape.
 function rebuildItem(f){scene.resizeItem(f);for(const tv of items)if(['television','outlet'].includes(tv.type)&&tv.supportId===f.id)scene.resizeItem(tv);}
-function commitFurniture(f,next,{clamp=false,exact=false}={}){try{if(next.type==='television')next=attachTvToSupport(next,items);if(f.cabinetDesign&&next.cabinetDesign&&(next.w!==f.w||next.h!==f.h)&&!exact)next={...next,cabinetDesign:resizeCabinetDesign(next.cabinetDesign,{w:f.w,h:f.h},{w:next.w,h:next.h})};let validated=validateFurniture([next])[0];const requested=validated;if((validated.w!==f.w||validated.d!==f.d)&&!exact)validated=fitResize(f,validated,items);
+function commitFurniture(f,next,{clamp=false,exact=false}={}){try{if(next.type==='television')next=attachTvToSupport(next,items);if(f.cabinetDesign&&next.cabinetDesign&&(next.w!==f.w||next.h!==f.h)&&!exact)next={...next,cabinetDesign:resizeCabinetDesign(next.cabinetDesign,{w:f.w,h:f.h},{w:next.w,h:next.h})};let validated=validateFurniture([next])[0];const requested=validated;
+// A socket or wall TV turned in its wall plane changes its bounding box, not its size: like turned
+// furniture it is neither shifted clear nor shrunk to fit; what it then overlaps is flagged instead.
+const turning=(next.spin||0)!==(f.spin||0);if((validated.w!==f.w||validated.d!==f.d)&&!exact&&!turning)validated=fitResize(f,validated,items);
 // Typed sizes and positions stop at the first new clash, like drags: a size at the largest
 // clear whole centimetre (growing centred or from either side), a position at contact.
 let stopped='';const attached=next.type==='television'&&['cabinet','niche'].includes(next.tvMount);
-if(!exact&&!attached&&next.rot===f.rot){const grown=['w','d','h'].some(key=>requested[key]>f[key]+1e-9),moved=Math.hypot(requested.x-f.x,requested.z-f.z)>1e-9;
+if(!exact&&!attached&&!turning&&next.rot===f.rot){const grown=['w','d','h'].some(key=>requested[key]>f[key]+1e-9),moved=Math.hypot(requested.x-f.x,requested.z-f.z)>1e-9;
  if(grown){let best=null;for(const{x,z}of resizeAnchors(f,requested)){const fit=fitSize(f,{...requested,x,z},items);if(!best||fit.k>best.k)best=fit;if(!fit.reason)break;}
   if(best.reason){if(!best.item)throw Error(best.reason+'，這個方向已經沒有空間');validated=validateFurniture([best.item])[0];stopped=`${best.reason}；已停在最大可用尺寸：${Math.round(validated.w*100)} × ${Math.round(validated.d*100)} × ${Math.round(validated.h*100)} cm`;}}
  else if(moved){const move=guardedMove(f,{x:requested.x,z:requested.z},items);if(move.reason){validated={...validated,x:move.item.x,z:move.item.z};stopped=move.reason+'，已停在邊緣';}}}let placed=placeAtTarget(f,validated,items);if(placed.blocked&&(!clamp||!placed.item))throw Error('家具不能超出 A7 戶型外框');
 // Only the position: placeAtTarget spreads the old item under the new one, which would bring
 // back fields the edit removed (a fabric reset to the palette default, a cleared finish).
 validated={...validated,x:placed.item.x,z:placed.item.z}; // A wall TV that moves, turns or is newly wall-mounted goes flat onto the nearest wall.
-if(validated.type==='television'&&validated.tvMount==='wall'&&(f.tvMount!=='wall'||Math.hypot(validated.x-f.x,validated.z-f.z)>1e-9||(validated.spin||0)!==(f.spin||0)||validated.w!==f.w||validated.h!==f.h))Object.assign(validated,wallTvMount(validated,items));
+if(validated.type==='television'&&validated.tvMount==='wall'&&(f.tvMount!=='wall'||Math.hypot(validated.x-f.x,validated.z-f.z)>1e-9||(validated.spin||0)!==(f.spin||0)||validated.w!==f.w||validated.h!==f.h))Object.assign(validated,wallTvMount(validated,items,{clamp:f.tvMount!=='wall'||Math.hypot(validated.x-f.x,validated.z-f.z)>1e-9}));
 if(validated.type==='outlet'){
  // A typed or nudged position is the socket's new spot on its host; a turn only applies to a
  // plate lying on a top, since a wall or a back panel decides which way the others face.
  const moved=Math.hypot(validated.x-f.x,validated.z-f.z)>1e-9,turned=Math.abs(((validated.rot-f.rot)%360+360)%360)>1e-6,host=items.find(item=>item.id===validated.supportId);
  if(turned&&flatMount(validated)&&host)validated.offsetRot=normalizeSpin(validated.rot-host.rot);
- validated=placeOutlet(validated,items,{fromPoint:moved});
+ // A move (a new spot, a new place in its host, a new height) stops at the edges of its wall, cell or
+ // top; a turn does not, as a turned piece of furniture is not pushed back either.
+ const spun=turned||(validated.spin||0)!==(f.spin||0),shifted=moved||['offsetX','offsetZ','elevation'].some(key=>Math.abs((validated[key]||0)-(f[key]||0))>1e-9);
+ validated=placeOutlet(validated,items,{fromPoint:moved,stop:shifted&&!spun});
  // A wall socket stops where it would sink into a cabinet, a TV or other furniture on that wall.
  const guard=guardedSocket(f,validated,items);if(guard.reason){if(guard.item===f)throw Error(guard.reason+'，這裡放不下插座');validated=guard.item;stopped=guard.reason+'，已停在邊緣';}
 }validated.draft=issues(validated,items).length>0;if(validated.h<.1&&!['rug','light','cove','outlet'].includes(f.type))throw Error('家具高度至少 10 cm');remember();Object.assign(f,validated);syncSupportedTvs(f);const nicheIssue=nicheWarnings(f)[0];if(!('finish' in validated))delete f.finish;if(!('fabric' in validated))delete f.fabric;if(!('supportId' in validated))delete f.supportId;if(!('supportCell' in validated))delete f.supportCell;if(!('partFinishes' in validated))delete f.partFinishes;for(const key of['spin','offsetRot','offsetX','offsetZ'])if(!(key in validated))delete f[key];for(const item of items)if(item.draft)item.draft=issues(item,items).length>0;rebuildItem(f);setForegroundDraft(f.id);render();persist();if(stopped)notify(stopped);else if(f.draft)notify('調整已保留，但目前有干涉；已在俯視編輯用紅框標示。');else if(placed.blocked)notify('已貼齊 A7 戶型外框。');else if(nicheIssue)notify(nicheIssue);commitFurniture.lastError='';return true;}catch(e){commitFurniture.lastError=e.message;notify(e.message);renderProps();return false;}}
-for(const key of['x','z','w','d','h','rot'])$(key).addEventListener('change',()=>{let f=items.find(f=>f.id===selected);if(!f)return;if(key==='rot'&&onWallPlane(f)){commitFurniture(f,turnAboutCentre(f,{...f,spin:Number($('rot').value)}));return;}let value=Number($(key).value)/(key==='rot'?1:100);let n=clone(f);if(['w','d'].includes(key)&&$('proportions').checked){let scale=value/f[key];for(let k of['w','d'])n[k]*=scale;}else n[key]=value;commitFurniture(f,n);$(key).value=key==='rot'?f[key]:Math.round(f[key]*1000)/10;});
+for(const key of['x','z','w','d','h','rot'])$(key).addEventListener('change',()=>{let f=items.find(f=>f.id===selected);if(!f)return;if(key==='rot'&&onWallPlane(f)){const n=turnAboutCentre(f,{...f,spin:Number($('rot').value)});
+ // Like furniture crossing the outline, a turn that would take a socket through the floor or ceiling is refused.
+ if(f.type==='outlet'){const tall=outletSize(n.outletKind,n.outletMount,normalizeSpin(n.spin))[2];if(n.elevation<-1e-6||n.elevation+tall>HEIGHT+1e-6){notify('轉了之後會超出地板或天花板，這個角度放不下');$('rot').value=f.spin||0;return;}}
+ commitFurniture(f,n);return;}let value=Number($(key).value)/(key==='rot'?1:100);let n=clone(f);if(['w','d'].includes(key)&&$('proportions').checked){let scale=value/f[key];for(let k of['w','d'])n[k]*=scale;}else n[key]=value;commitFurniture(f,n);$(key).value=key==='rot'?f[key]:Math.round(f[key]*1000)/10;});
 // The ratio lock starts off and then keeps the owner's last choice, across items and reloads.
 $('proportions').checked=readRatioLock();scene.keepRatio=$('proportions').checked;
 $('proportions').addEventListener('change',()=>{scene.keepRatio=$('proportions').checked;try{localStorage.setItem(ratioLockKey,$('proportions').checked?'1':'0');}catch{}});

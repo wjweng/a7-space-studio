@@ -157,7 +157,7 @@ test('sockets sit flat on the nearest wall, on a cabinet top, or on a cell back 
   const {CARCASS_T,makeCabinetDesign,cabinetCells,cellOpening}=await import('../dist/cabinet-design.js');
   const [wall]=validateFurniture([{id:'o',type:'outlet',name:'插座',x:.3,z:3,w:.1,d:.1,h:.1,rot:0,open:0}]);
   assert.deepEqual([wall.w,wall.d,wall.h,wall.elevation,wall.outletKind,wall.outletMount],[.12,.015,.075,.3,'duplex','wall']);
-  const onWall=placeOutlet(wall,[wall]);
+  const onWall=placeOutlet(wall,[wall],{fromPoint:true});
   assert(Math.abs(onWall.x-(WALL_THICKNESS/2+wall.d/2))<1e-9,`against the living room's west wall, x=${onWall.x}`);
   assert.equal(onWall.rot,90,'facing into the room');
   const kitchen=validateFurniture([initialFurniture.find(f=>f.id==='kitchen')])[0];
@@ -169,9 +169,9 @@ test('sockets sit flat on the nearest wall, on a cabinet top, or on a cell back 
   const cabinet={id:'c',type:'wardrobe',name:'櫃',x:2,z:3,w:.8,d:.5,h:2,rot:0,open:0};cabinet.cabinetDesign=makeCabinetDesign(cabinet,'shelves');
   const cell=cabinetCells(cabinet)[1],opening=cellOpening(cabinet,cell.id);
   const [inside]=validateFurniture([{...wall,id:'i',outletMount:'cell',supportId:'c',supportCell:cell.id,elevation:0}]);
-  const inCell=placeOutlet(inside,[cabinet,inside]);
+  const inCell=placeOutlet(inside,[cabinet,inside],{fromPoint:true});
   assert(Math.abs(inCell.z-(cabinet.z-cabinet.d/2+CARCASS_T+inside.d/2))<1e-9,'on the back panel');
-  assert(Math.abs(inCell.elevation-opening.bottom)<1e-9,'kept inside the cell');
+  assert(Math.abs(inCell.elevation-opening.bottom)<1e-9,'moved into the cell, it stops inside it');
 });
 
 test('a socket put on a surface in walk view mounts on the wall, a top, or the cell under the pointer',async()=>{
@@ -222,8 +222,10 @@ test('dropped socket kinds become duplex, and a wall socket turned upright swaps
   const cabinet={id:'c',type:'wardrobe',name:'櫃',x:2,z:3,w:.8,d:.5,h:2,rot:0,open:0};cabinet.cabinetDesign=makeCabinetDesign(cabinet,'shelves');
   const cell=cabinetCells(cabinet)[1],opening=cellOpening(cabinet,cell.id);
   const [inside]=validateFurniture([{...base,id:'i',outletMount:'cell',supportId:'c',supportCell:cell.id,elevation:9,spin:90}]);
-  const placed=placeOutlet(inside,[cabinet,inside]);
-  assert(Math.abs(placed.elevation+placed.h-(opening.bottom+opening.h))<1e-9,'the taller upright plate still fits in the cell');
+  const placed=placeOutlet(inside,[cabinet,inside],{fromPoint:true});
+  assert(Math.abs(placed.elevation+placed.h-(opening.bottom+opening.h))<1e-9,'moved there, the taller upright plate stops at the cell top');
+  const kept=placeOutlet(inside,[cabinet,inside]);
+  assert.equal(kept.elevation,inside.elevation,'turned or loaded, it stays where it was (since 2026-09-29, like furniture)');assert.deepEqual(issues(kept,[cabinet,kept]),['超出櫃格'],'and is flagged');
 });
 
 test('in top view a socket goes onto the table or cabinet under the pointer, else the nearest wall',async()=>{
@@ -289,7 +291,7 @@ test('wall sockets stop at furniture standing or hanging against that wall',asyn
 test('a wall socket slides along its wall, stops at a partition or column and at the end of the wall, and never passes through',async()=>{
  const {initialFurniture,validateFurniture}=await import('../dist/model.js');const {placeOutlet,guardedSocket}=await import('../dist/spatial.js');
  const items=validateFurniture(initialFurniture).filter(f=>f.id!=='wardA');
- const socket=(x,elevation=1)=>placeOutlet(validateFurniture([{id:'s',type:'outlet',name:'插座',outletKind:'duplex',outletMount:'wall',x,z:.05,w:.12,d:.015,h:.075,rot:0,elevation}])[0],items);
+ const socket=(x,elevation=1)=>placeOutlet(validateFurniture([{id:'s',type:'outlet',name:'插座',outletKind:'duplex',outletMount:'wall',x,z:.05,w:.12,d:.015,h:.075,rot:0,elevation}])[0],items,{fromPoint:true});
  // Bedroom A's north wall: a partition to the east (plate edge stops at x 2.761), a column to the west.
  const s=socket(1.5),east=guardedSocket(s,{...s,x:3.2,elevation:2},items,{hop:false});
  assert.equal(east.reason,'與牆體重疊');assert.ok(Math.abs(east.item.x-2.701)<1e-3,'stops at the partition');assert.equal(east.item.elevation,2,'and still rises along it');
@@ -337,4 +339,29 @@ test('a wall socket on a back panel sits on the panel face',async()=>{
  const panel={id:'p',type:'panel',name:'背板',x:3.24,z:.06+.009,w:1.2,d:.018,h:2,rot:0,elevation:0};
  const s=placeOutlet(validateFurniture([{id:'s',type:'outlet',name:'插座',outletKind:'duplex',outletMount:'wall',x:3.24,z:.05,w:.12,d:.015,h:.075,rot:0,elevation:1}])[0],[panel]);
  assert.ok(Math.abs(s.z-(.06+.018+.0075))<1e-6,'pushed out to the panel face');assert.deepEqual(issues(s,[panel,s]),[]);
+});
+test('like furniture, a turned socket or wall TV turns in place and is flagged, whatever it is mounted on; only moves stop at edges',async()=>{
+ const {initialFurniture,validateFurniture,issues}=await import('../dist/model.js');const {placeOutlet,guardedSocket,turnAboutCentre,wallTvMount}=await import('../dist/spatial.js');
+ const {makeCabinetDesign,cabinetCells,cellOpening}=await import('../dist/cabinet-design.js');
+ const items=validateFurniture(initialFurniture).filter(f=>f.id!=='wardA');
+ const wallSocket=(x,elevation=1)=>placeOutlet(validateFurniture([{id:'s',type:'outlet',name:'插座',outletKind:'duplex',outletMount:'wall',x,z:.05,w:.12,d:.015,h:.075,rot:0,elevation}])[0],items,{fromPoint:true});
+ const turn=(s,spin,list)=>{const n=placeOutlet(validateFurniture([turnAboutCentre(s,{...s,spin})])[0],list);return{n,guard:guardedSocket(s,n,list)};};
+ // On a wall, against a partition: the turned plate is wider, it stays put and overlaps the partition.
+ const atPartition=guardedSocket(wallSocket(1.5),{...wallSocket(1.5),x:3.2},items,{hop:false}).item;
+ let {n,guard}=turn(atPartition,45,items);
+ assert.equal(guard.reason,'','a turn is never refused');assert(Math.abs(n.x-atPartition.x)<1e-9,'not pushed back along the wall');
+ assert(issues(n,[...items,n]).includes('與牆體重疊'),'flagged');
+ // At the end of a short wall stub: it now runs past the end.
+ const stub=wallSocket(.5),atEnd=guardedSocket(stub,{...stub,x:1.2},items,{hop:false}).item;
+ ({n}=turn(atEnd,45,items));assert(Math.abs(n.x-atEnd.x)<1e-9);assert(issues(n,[...items,n]).includes('超出牆面'));
+ // On a cell's back panel, at the top of its cell: turned upright it is taller than the space left.
+ const cabinet={id:'c',type:'wardrobe',name:'櫃',x:2,z:3,w:.8,d:.5,h:2,rot:0,open:0};cabinet.cabinetDesign=makeCabinetDesign(cabinet,'shelves');
+ const cell=cabinetCells(cabinet)[1],opening=cellOpening(cabinet,cell.id),list=[cabinet];
+ const high=placeOutlet(validateFurniture([{id:'i',type:'outlet',name:'插座',outletKind:'duplex',outletMount:'cell',supportId:'c',supportCell:cell.id,x:2,z:3,w:.12,d:.015,h:.075,rot:0,elevation:9}])[0],list,{fromPoint:true});
+ assert(Math.abs(high.elevation+high.h-(opening.bottom+opening.h))<1e-9,'moved up, it stops at the top of the cell');
+ ({n}=turn(high,90,list));assert(n.elevation+n.h>opening.bottom+opening.h,'turned, it keeps its centre and is not pushed down');assert.deepEqual(issues(n,[cabinet,n]),['超出櫃格']);
+ const raised=placeOutlet({...high,elevation:5},list,{stop:true});assert(Math.abs(raised.elevation+raised.h-(opening.bottom+opening.h))<1e-9,'a typed height stops at the cell top');
+ // A wall TV: only a move keeps it on the wall run; a turn leaves it where it is.
+ const tv={id:'tv',type:'television',name:'電視',x:1.2,z:.1,w:1.2,d:.06,h:.7,rot:0,elevation:1,tvMount:'wall',spin:90};
+ assert(Math.abs(wallTvMount(tv,items,{clamp:false}).x-1.2)<1e-9,'turned, it stays');
 });

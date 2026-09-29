@@ -102,16 +102,20 @@ export function showerDoorLayout(f){
  return{hingeX,hingeZ,endX,endZ,width:Math.hypot(endX-hingeX,endZ-hingeZ),swing:1};
 }
 // A socket flat against the nearest wall or column face inside the flat, facing out.
-export function wallMount(f){
+// With `clamp` (a move) it stays on a wall run and off other walls; without (a turn, a load) it keeps
+// its place on the wall it is on, even past the run's end, which `issues` then flags like a clash.
+export function wallMount(f,{clamp=true}={}){
  let best=null;const rects=wallRects();
  // Wall joints only fill corners; a socket goes on a wall run or a column face.
  for(const w of rects){
   if(w.id?.startsWith('wall-joint-'))continue;
-  const a=w.rot*Math.PI/180,tx=Math.cos(a),tz=-Math.sin(a),half=w.w/2-f.w/2;if(half<0)continue;
-  const along=Math.max(-half,Math.min(half,(f.x-w.x)*tx+(f.z-w.z)*tz));
+  const a=w.rot*Math.PI/180,tx=Math.cos(a),tz=-Math.sin(a),half=w.w/2-f.w/2;if(half<0&&clamp)continue;
+  // Unclamped, only a run the plate still overlaps counts, not the line through a distant wall.
+  const raw=(f.x-w.x)*tx+(f.z-w.z)*tz;if(!clamp&&Math.abs(raw)>w.w/2+f.w/2)continue;
+  const along=clamp?Math.max(-half,Math.min(half,raw)):raw;
   for(const sign of[-1,1]){
    const nx=Math.sin(a)*sign,nz=Math.cos(a)*sign,out=w.d/2+f.d/2,x=w.x+tx*along+nx*out,z=w.z+tz*along+nz*out,rot=Math.round(Math.atan2(nx,nz)*180/Math.PI)||0;
-   if(!insideOrOutline(x,z)||rects.some(o=>o!==w&&clashes({...f,x,z,rot},o)))continue;
+   if(!insideOrOutline(x,z)||clamp&&rects.some(o=>o!==w&&clashes({...f,x,z,rot},o)))continue;
    const dist=Math.hypot(x-f.x,z-f.z);if(!best||dist<best.dist)best={x,z,rot,dist};
   }
  }
@@ -120,8 +124,8 @@ export function wallMount(f){
 // A wall-mounted TV flat on the nearest wall, facing out; turned in the wall by `spin`, it
 // takes up its turned width along the wall.
 // A back panel on that wall (a TV wall) comes between: the TV then hangs on the panel's face.
-export function wallTvMount(tv,items=[]){
- const [w,tall]=turnedSize(tv.w,tv.h,tv.spin||0),placed=wallMount({...tv,w});if(!Number.isFinite(placed.x))return placed;
+export function wallTvMount(tv,items=[],{clamp=true}={}){
+ const [w,tall]=turnedSize(tv.w,tv.h,tv.spin||0),placed=wallMount({...tv,w},{clamp});if(!Number.isFinite(placed.x))return placed;
  const p=ontoPanels({...tv,...placed,w},tall,items);
  return{x:p.x,z:p.z,rot:p.rot};
 }
@@ -157,8 +161,12 @@ export function socketInCellPlane(o,point,items){
 // Where a socket sits: on the nearest wall, or on its host (a cabinet's top, or a cell's back
 // panel) at `offsetX`/`offsetZ` in the host's own axes, so it follows the host. With
 // `fromPoint` its x/z (a drag) set that spot first.
-export function placeOutlet(o,items,{fromPoint=false}={}){
- if(o.outletMount==='wall')return ontoPanels({...o,...wallMount(o)},o.h,items);
+// `stop` (a move; any `fromPoint` is one) stops it at the edges of its wall, cell or top; without it
+// (a turn, a load, its host changing) it stays where it is.
+export function placeOutlet(o,items,{fromPoint=false,stop=fromPoint}={}){
+ // Only a move (`stop`) stops at edges; a turn or a load leaves it in place, flagged by `issues` if
+ // it now runs past its wall or cell, as furniture that clashes stays put with a red frame.
+ if(o.outletMount==='wall')return ontoPanels({...o,...wallMount(o,{clamp:stop})},o.h,items);
  const host=items.find(i=>i.id===o.supportId);if(!host)return o;
  const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v)),base=['hangingCabinet','panel','cove','television'].includes(host.type)?host.elevation||0:0;
  let u=o.offsetX||0,v=o.offsetZ||0;
@@ -167,6 +175,7 @@ export function placeOutlet(o,items,{fromPoint=false}={}){
  const at=(u,v,elevation,turn=0)=>({...o,offsetX:u,offsetZ:v,x:host.x+u*c+v*s,z:host.z-u*s+v*c,rot:((host.rot+turn)%360+360)%360,elevation});
  if(o.outletMount==='cell'){
   const opening=host.cabinetDesign&&cellOpening(host,o.supportCell);if(!opening)return o;
+  if(!stop)return at(u,-host.d/2+CARCASS_T+o.d/2,o.elevation);
   return at(clamp(u,opening.x-opening.w/2+o.w/2,opening.x+opening.w/2-o.w/2),-host.d/2+CARCASS_T+o.d/2,clamp(o.elevation,base+opening.bottom,base+opening.bottom+opening.h-o.h));
  }
  // Face up on a top, or on a cell's shelf, turned by `offsetRot` (relative to the host). Like furniture,
@@ -181,7 +190,7 @@ export function placeOutlet(o,items,{fromPoint=false}={}){
  if(o.trough?.flip)turn+=180; // saved before the flip switch was dropped
  turn=((turn%360)+360)%360;
  const t=turn*Math.PI/180,ac=Math.abs(Math.cos(t)),as=Math.abs(Math.sin(t)),span=[o.w*ac+o.d*as,o.w*as+o.d*ac],fit=(v,lo,hi)=>lo<=hi?clamp(v,lo,hi):(lo+hi)/2;
- const placed=fromPoint?at(fit(u,area.u1+span[0]/2,area.u2-span[0]/2),fit(v,area.v1+span[1]/2,area.v2-span[1]/2),opening?base+opening.bottom:base+host.h,turn):at(u,v,opening?base+opening.bottom:base+host.h,turn);
+ const placed=stop?at(fit(u,area.u1+span[0]/2,area.u2-span[0]/2),fit(v,area.v1+span[1]/2,area.v2-span[1]/2),opening?base+opening.bottom:base+host.h,turn):at(u,v,opening?base+opening.bottom:base+host.h,turn);
  if(o.trough){placed.offsetRot=turn;placed.trough={count:Math.min(o.trough.count,troughCapacity(o.w))};}
  return placed;
 }
@@ -308,7 +317,7 @@ export function guardedMove(f,target,items){
 // into the air; and no wall entering the plate. Sockets are exempt from wall clashes
 // (`wallsHit`) because they sit on one, so the plate is shrunk by a millimetre to tell the
 // wall it lies on from a corner or partition it runs into.
-function wallSlideProblem(items){
+export function wallSlideProblem(items){
  const backs=[...wallRects(),...items.filter(o=>o.type==='panel')],solid=[...wallRects(),...exteriorWallRects()];
  const within=(r,x,z)=>{const a=r.rot*Math.PI/180,dx=x-r.x,dz=z-r.z;return Math.abs(dx*Math.cos(a)-dz*Math.sin(a))<=r.w/2+1e-6&&Math.abs(dx*Math.sin(a)+dz*Math.cos(a))<=r.d/2+1e-6;};
  return p=>{const a=p.rot*Math.PI/180,nx=Math.sin(a),nz=Math.cos(a),tx=Math.cos(a),tz=-Math.sin(a),back=p.d/2+.005,half=Math.max(0,p.w/2-.005);
@@ -318,14 +327,17 @@ function wallSlideProblem(items){
 // A wall socket moved, raised or turned: straight there when that buries it in nothing new.
 // Otherwise, like `guardedMove`, it travels along the wall and up or down in turn (1 cm steps,
 // as it is only 1.5 cm thick), stopping at contact and sliding along what it touches, and
-// keeps whichever order ends nearer the pointer. A turn or a move from another mount that
-// would bury it is refused (the socket stays as `f`). With `hop` false it never jumps straight to
+// keeps whichever order ends nearer the pointer. A move from another mount that would bury it is
+// refused (the socket stays as `f`); a turn on the wall turns in place and `issues` flags any clash. With `hop` false it never jumps straight to
 // a clear target, so a point on the wall's plane past a partition does not carry it into the next room.
 export function guardedSocket(f,next,items,{hop=true}={}){
  if(next.outletMount!=='wall')return{item:next,reason:''};
  const clash=problemCheck(f,items),wall=wallSlideProblem(items),guard=wall(f)?()=>'':wall;
  const check=p=>clash(p)||guard(p),hit=check(next);if(!hit&&hop)return{item:next,reason:''};
- if(f.outletMount!=='wall'||(f.spin||0)!==(next.spin||0))return{item:f,reason:hit};
+ // A turn on the wall turns in place: what it then covers or runs past is flagged by `issues`, like
+ // furniture turned into a clash. A move onto the wall from elsewhere that would bury it is refused.
+ if(f.outletMount==='wall'&&(f.spin||0)!==(next.spin||0))return{item:next,reason:''};
+ if(f.outletMount!=='wall')return{item:f,reason:hit};
  const travel=({item:start,reason},goal)=>{
   const at=t=>{const p={...next};for(const key of['x','z','elevation'])p[key]=(start[key]||0)+((goal[key]||0)-(start[key]||0))*t;return p;};
   const n=Math.max(1,Math.ceil(Math.hypot(goal.x-start.x,goal.z-start.z,(goal.elevation||0)-(start.elevation||0))/.01));
