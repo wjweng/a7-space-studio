@@ -92,7 +92,9 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
   // Level two (all doors, shelves, backs, drawer boxes) sits at the top of the
   // editor; level three (this cell's own) sits with the cell's settings.
   const partText=(f,key)=>f.partFinishes?.[key]?finishLabel(f.partFinishes[key]):'跟隨整體';
-  const clearSlot=(slot,only)=>edit(next=>{for(const cell of designLeaves(next))if(cell.finishes&&(!only||cell.id===only)){delete cell.finishes[slot];if(!Object.keys(cell.finishes).length)delete cell.finishes;}});
+  // A shared door takes its finish from its first cell on every save, so clearing one member's
+  // door finish must clear the whole door, or the first cell's finish comes straight back.
+  const clearSlot=(slot,only)=>edit(next=>{const group=only&&slot==='door'&&doorGroupOf(next,only),ids=group?group.cells:only?[only]:null;for(const cell of designLeaves(next))if(cell.finishes&&(!ids||ids.includes(cell.id))){delete cell.finishes[slot];if(!Object.keys(cell.finishes).length)delete cell.finishes;}});
   function renderFinishes(f,selectedCell,simple){
     const host=dialog.querySelector('.cabinetFinishes');host.replaceChildren();
     // A fridge has a colour, not board finishes: the four finishes or any colour.
@@ -275,7 +277,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     if(!simple&&picked.size>1){
       dialog.querySelector('.cabinetFinishes').replaceChildren();
       const ids=[...picked];
-      fields.append(elt('h3','',`已選 ${ids.length} 格`),elt('p','cabinetHint','選到的格子要剛好拼成一個矩形；合併後共用一片平開門板，門板邊緣對齊這些格子。'));
+      fields.append(elt('h3','',`已選 ${ids.length} 格`),elt('p','cabinetHint','選到的格子要剛好拼成一個矩形；合併後共用一片門板（平開或滑門），門板邊緣對齊這些格子。'));
       const row=elt('div','cabinetToolbar');
       row.append(button('合併成一片門板',()=>{if(blockedByTv(ids,'合併門板'))return;try{const next=mergeDoorCells(item(),ids);picked=new Set([leafId]);save(next);}catch(error){dialog.querySelector('.cabinetError').textContent=error.message;}}),button('取消多選',()=>{picked=new Set([leafId]);render();}));
       fields.append(row);
