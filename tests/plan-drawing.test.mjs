@@ -30,3 +30,13 @@ test('names are escaped, and the page prints the sheet on A3 landscape',()=>{
   const svg=planSvg([{...items[0],name:'<櫃&子>'}]);assert(svg.includes('&lt;櫃&amp;子&gt;'));assert(!svg.includes('<櫃&子>'));
   const page=planPage(svg);assert.match(page,/@page\{size:A3 landscape;margin:0\}/);assert(page.includes('下載 SVG'));
 });
+test('lights keep their symbol and are listed by number in the schedule',()=>{
+  const svg=planSvg(items),lights=items.filter(f=>f.type==='light');assert(lights.length>0);
+  for(const f of lights)assert(svg.includes(`>${f.name}　`),f.name);
+  assert(svg.includes('燈具與圖上放不下名稱者'));
+});
+test('the owner\'s title-block fields take typed values and are marked for the page to retype',()=>{
+  const svg=planSvg(items,{project:'我的新家',title:'客廳配置',date:'2026-10-01',author:'王小明'});
+  for(const [field,value] of [['project','我的新家'],['title','客廳配置'],['date','2026-10-01'],['author','王小明']])assert.match(svg,new RegExp(`data-field="${field}">${value}<`));
+  assert.match(planSvg(items),/data-field="project">A7 空間配置</);
+});
