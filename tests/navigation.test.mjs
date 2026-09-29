@@ -39,6 +39,12 @@ test('ceiling items turn see-through without touching shared materials, and back
   assert.notEqual(mesh.material,shared);assert.equal(mesh.material.transparent,true);assert(mesh.material.opacity<.5);assert.equal(shared.transparent,false);
   s.seeThrough(g,false);assert.equal(mesh.material,shared);
 });
+test('the ceiling opacity slider changes existing see-through copies and new ones, never the shared material',()=>{
+  const s=Object.create(SpaceScene.prototype),shared=new T.MeshStandardMaterial,g=new T.Group,mesh=new T.Mesh(new T.BoxGeometry,shared),later=new T.Group,other=new T.Mesh(new T.BoxGeometry,new T.MeshStandardMaterial);g.add(mesh);later.add(other);
+  s.seeThrough(g,true);s.setCeilingOpacity(.8);
+  assert.equal(mesh.material.opacity,.8);assert.equal(shared.opacity,1);
+  s.seeThrough(later,true);assert.equal(other.material.opacity,.8);
+});
 test('the touch joystick walks and turns in proportion, ends a room tour, and adds to keys without exceeding full speed',()=>{const{s}=setup();s.camera.position.set(1,1.6,3);s.stick={x:0,y:.5};s.frame();const half=3-s.camera.position.z;assert(half>0);assert.equal(s.walkYaw,0);s.camera.position.set(1,1.6,3);s.stick={x:0,y:1};s.keys.add('ArrowUp');s.frame();assert(Math.abs((3-s.camera.position.z)-2*half)<1e-9,'keys plus stick are capped at full speed');s.keys.clear();s.stick={x:-1,y:0};s.frame();assert(s.walkYaw>0,'pushing left turns left');s.route=[{x:5,z:5}];s.stopTour=()=>{s.route=[];};assert.equal(s.followTour(.04),false);assert.equal(s.route.length,0);});
 const touchEvent=(emit,type,pointerId,clientX,clientY,isPrimary)=>emit(type,{pointerType:'touch',buttons:1,pointerId,clientX,clientY,isPrimary});
 const lift=pointerId=>{const e=new Event('pointerup');Object.assign(e,{pointerId,pointerType:'touch'});window.dispatchEvent(e);};
