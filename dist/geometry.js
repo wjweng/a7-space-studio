@@ -1,3 +1,4 @@
+import {isAirConditioner,acBox} from './air-conditioner-shape.js';
 import {cabinetOccupiedRects} from './cabinet-design.js';
 export const EPS=1e-7;
 export function roomAt(x,z){
@@ -57,12 +58,15 @@ export function robotVacuumRects(f){
 // and legs, so a socket may sit under a desk. Only the socket is flagged: a socket stops a
 // socket, never the furniture, which moves as before. Hanging cabinets need their elevation.
 export function socketCovered(s,o){
+ if(isAirConditioner(o))o=acBox(o);
  if(s.outletMount!=='wall'||['rug','light','beam','outlet'].includes(o.type))return false;
  const lift=['television','hangingCabinet','panel','cove'].includes(o.type)?o.elevation||0:0,plate={...s,yMin:s.elevation||0,yMax:(s.elevation||0)+s.h};
  const parts=o.cabinetDesign?cabinetOccupiedRects(o):o.type==='robotVacuum'?robotVacuumRects(o):isTableLike(o)?[{...o,yMin:o.h-.045,yMax:o.h},...tableLegRects(o).map(leg=>({...leg,yMin:0,yMax:o.h}))]:[{...o,yMin:lift,yMax:lift+o.h}];
  return parts.some(part=>plate.yMin<part.yMax-EPS&&part.yMin<plate.yMax-EPS&&clashes(plate,part));
 }
 export function furnitureInterference(a,b){
+ if(isAirConditioner(a)){a=acBox(a);a.elevation-=.001;a.h+=.002;}
+ if(isAirConditioner(b)){b=acBox(b);b.elevation-=.001;b.h+=.002;}
  // TVs, hanging cabinets, back panels and light coves carry their underside height as `elevation`.
  const lifted=f=>['television','hangingCabinet','panel','cove'].includes(f.type)?f.elevation||0:0,ay=lifted(a),by=lifted(b);
  if(ay+a.h<=by+EPS||by+b.h<=ay+EPS)return false;

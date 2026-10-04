@@ -4,6 +4,7 @@
 // how to build. Plain SVG in millimetres, so it prints to scale and opens in drawing tools.
 import {outline,walls,doors,rooms,wallRects,structuralSolids,inside,HEIGHT,WALL_THICKNESS,outletKinds,cabinetTypes} from './model.js';
 import {corners} from './geometry.js';
+import {isAirConditioner,acBox} from './air-conditioner-shape.js';
 import {doorLeaf} from './spatial.js';
 
 export const SHEET={w:420,h:297},SCALE=50,MM=1000/SCALE; // millimetres on paper per metre
@@ -16,7 +17,7 @@ const bounds=outline.reduce((b,[x,z])=>({minX:Math.min(b.minX,x),maxX:Math.max(b
 const ORIGIN={x:48,y:38};
 const px=x=>r2(ORIGIN.x+(x-bounds.minX)*MM),py=z=>r2(ORIGIN.y+(z-bounds.minZ)*MM);
 const pts=list=>list.map(([x,z])=>`${px(x)},${py(z)}`).join(' ');
-const rectPoly=(f,attrs)=>`<polygon points="${pts(corners(f))}" ${attrs}/>`;
+const rectPoly=(f,attrs)=>`<polygon points="${pts(corners(isAirConditioner(f)?acBox(f):f))}" ${attrs}/>`;
 const text=(x,y,s,size,extra='')=>`<text x="${r2(x)}" y="${r2(y)}" font-size="${r2(size)}" ${extra}>${esc(s)}</text>`;
 
 // Wall pieces along the centre line: [start, end] in metres from the wall's first endpoint.
@@ -53,6 +54,7 @@ const lift=f=>Number.isFinite(f.elevation)&&f.elevation>0?f.elevation:0;
 // The size line: plan size, then what a carpenter needs: height, and where it hangs.
 const socketName={duplex:'雙插座',usb:'雙插座附 USB',data:'網路／電視'};
 export function itemSize(f){
+  if(isAirConditioner(f)&&f.acKind==='outdoor')return`${size(f)}×H${cm(f.h)}（附鐵架，架底離地 ${cm(lift(f))}）`;
   if(f.trough)return`${size(f)}（${socketName[f.outletKind]||'雙插座'} ×${f.trough.count}）`;
   if(f.type==='beam')return`${size(f)} 深 ${cm(f.h)}（下緣離地 ${cm(HEIGHT-f.h)}）`;
   if(f.type==='rug')return size(f);
@@ -67,7 +69,7 @@ const hit=(a,b)=>Math.max(0,Math.min(a.x2,b.x2)-Math.max(a.x1,b.x1))*Math.max(0,
 function labeller(taken,tagged){
   const place=(spots)=>{const scored=spots.map(b=>({b,cost:taken.reduce((n,t)=>n+hit(b,t),0)}));return scored.find(s=>s.cost===0)||null;};
   return f=>{
-    const c=corners(f),xs=c.map(p=>px(p[0])),ys=c.map(p=>py(p[1])),bw=Math.max(...xs)-Math.min(...xs),bh=Math.max(...ys)-Math.min(...ys);
+    const c=corners(isAirConditioner(f)?acBox(f):f),xs=c.map(p=>px(p[0])),ys=c.map(p=>py(p[1])),bw=Math.max(...xs)-Math.min(...xs),bh=Math.max(...ys)-Math.min(...ys);
     const cx=(Math.max(...xs)+Math.min(...xs))/2,cy=(Math.max(...ys)+Math.min(...ys))/2,turn=bh>bw*1.3,along=turn?bh:bw,across=turn?bw:bh;
     const lines=[f.name,itemSize(f)],widest=Math.max(...lines.map(textLength));
     const size=Math.min(2.2,(along-1)/widest,(across-.6)/2.3),long=widest*size,deep=size*2.3;

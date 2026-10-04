@@ -1,3 +1,4 @@
+import {isAirConditioner,acBox} from './air-conditioner.js';
 import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,wallsHit,turnedSize,outletSize,WALL_THICKNESS,TROUGH,troughCapacity,flatMount,flatArea} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference,clashes} from './geometry.js';
 import {modularCabinetRects,resizeCabinetDesign,cellOpening,cabinetCells,CARCASS_T} from './cabinet-design.js';
@@ -46,6 +47,7 @@ function doorSweep(d){
  return sweepCache.get(d.id);
 }
 export function blocksDoor(d,f){
+ if(isAirConditioner(f))f=acBox(f);
  if(['rug','light','beam'].includes(f.type)||(f.elevation||0)>=d.height-EPS)return false;
  const sweep=doorSweep(d);if(Math.hypot(f.x-sweep.x,f.z-sweep.z)>sweep.reach+Math.hypot(f.w,f.d)/2)return false;
  return sweep.rects.some(r=>signedDistance(r,f)<-EPS);
@@ -74,7 +76,7 @@ export function findRoute(start,goal,clear){
 
 // Low tables/chairs can be viewed from above; tall furniture always protects the camera.
 // Plants are leaves you brush past, so walking goes through them.
-export const blocksCamera=(f,eye=1.6)=>!['rug','light','beam','plant','outlet'].includes(f.type)&&(['television','hangingCabinet'].includes(f.type)?f.elevation<eye+.1&&f.elevation+f.h>eye-.2:f.h>.15&&(!['table','chair','desk'].includes(f.type)||f.h>=eye-.2));
+export const blocksCamera=(f,eye=1.6)=>isAirConditioner(f)?blocksCamera({...acBox(f),type:'television'},eye):!['rug','light','beam','plant','outlet'].includes(f.type)&&(['television','hangingCabinet'].includes(f.type)?f.elevation<eye+.1&&f.elevation+f.h>eye-.2:f.h>.15&&(!['table','chair','desk'].includes(f.type)||f.h>=eye-.2));
 export function cabinetLayout(f){
  const style=f.doorStyle||'double',edge=.015;
  if(style==='drawers'){const n=f.type==='console'?Math.max(1,Math.ceil(f.w/.6)):Math.max(1,Math.ceil(f.w/.8)),pw=(f.w-edge*2)/n;return{doors:[],drawers:Array.from({length:n},(_,i)=>({x:-f.w/2+edge+pw*(i+.5),width:pw-edge,rows:f.type==='console'?1:3})),slides:[]};}
@@ -141,11 +143,11 @@ function ontoPanels(p,tall,items){
 }
 // Things flat against a wall or back panel, which move along it and turn in its plane.
 // Sockets and troughs lying face up (on a top or a shelf) turn on it instead.
-export const onWallPlane=f=>f?.type==='outlet'&&!flatMount(f)||f?.type==='television'&&f.tvMount==='wall';
+export const onWallPlane=f=>isAirConditioner(f)||f?.type==='outlet'&&!flatMount(f)||f?.type==='television'&&f.tvMount==='wall';
 // A turn in the wall plane keeps the plate's centre where it was, like a turn on a top: the
 // stored elevation is the bottom of the turned bounding box, so it moves by half the change in
 // height (validation then keeps it between the floor and the ceiling).
-const planeTall=f=>f.type==='outlet'?outletSize(f.outletKind,f.outletMount,f.spin||0)[2]:turnedSize(f.w,f.h,f.spin||0)[1];
+const planeTall=f=>isAirConditioner(f)?acBox(f).h:f.type==='outlet'?outletSize(f.outletKind,f.outletMount,f.spin||0)[2]:turnedSize(f.w,f.h,f.spin||0)[1];
 export const turnAboutCentre=(before,after)=>({...after,elevation:(before.elevation||0)+(planeTall(before)-planeTall(after))/2});
 // A socket in a cabinet cell dragged to `point` on the plane of its back panel: into the cell
 // under that point (so crossing a divider moves it to the next cell), else kept in its own cell,
@@ -338,6 +340,16 @@ export function guardedSocket(f,next,items,{hop=true}={}){
  // furniture turned into a clash. A move onto the wall from elsewhere that would bury it is refused.
  if(f.outletMount==='wall'&&(f.spin||0)!==(next.spin||0))return{item:next,reason:''};
  if(f.outletMount!=='wall')return{item:f,reason:hit};
+ return guardedPlaneMove(f,next,check,{hop});
+}
+// Shared wall-plane slide, with along/up contact and no tunnelling in walk view.
+export function guardedAirConditioner(f,next,items,{hop=true}={}){
+ const check=problemCheck(f,items);
+ if((f.spin||0)!==(next.spin||0))return{item:next,reason:''};
+ return guardedPlaneMove(f,next,check,{hop});
+}
+function guardedPlaneMove(f,next,check,{hop}){
+ if(hop&&!check(next))return{item:next,reason:''};
  const travel=({item:start,reason},goal)=>{
   const at=t=>{const p={...next};for(const key of['x','z','elevation'])p[key]=(start[key]||0)+((goal[key]||0)-(start[key]||0))*t;return p;};
   const n=Math.max(1,Math.ceil(Math.hypot(goal.x-start.x,goal.z-start.z,(goal.elevation||0)-(start.elevation||0))/.01));
