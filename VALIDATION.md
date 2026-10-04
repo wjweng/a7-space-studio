@@ -1,5 +1,28 @@
 # Validation and work history
 
+## Air conditioners and archive audit — 2026-10-05
+
+Application commit `538ca47` adds indoor units and individually rack-mounted outdoor units. Both use the supplied body dimensions; rack dimensions are visual estimates stored in `AC_RACK`, not supplied model specifications. Current behaviour and implementation remain in README.md / AGENTS.md; the linked Dropbox project's `_archive/2026-10-05-冷氣機新增與驗證.md` records the owner's decision and this delivery.
+
+All **268 automated tests passed**, including **17 new air-conditioner tests**. This audit checked the completed run's log, the committed source, tests and browser results; documentation-only edits did not trigger another identical test run.
+
+| Area | Verified result / evidence |
+| --- | --- |
+| Dimensions and persistence | Both supplied unit sizes, kind, height and rotation survive validation; share-link round trip preserves them |
+| Supporting surfaces | Whole-back wall / beam support, beam width and height limits, internal window gaps, door lintels, removal of support, and refusal of floor / cabinet faces |
+| Collisions | Floor / ceiling boundaries, floor and ceiling furniture, rack-inclusive vertical stacking, collision symmetry, rotated shell footprint and rendered bounds |
+| Real browser interaction | Mouse drag stopped at the beam end (centre x ≈ 1.50151 m for a beam at x 1.3 m, width 1.6 m, unit width 1.197 m); size stopped at available width; deleting support flagged the AC, undo restored it; reload preserved the edited unit |
+| Other editor controls | Catalogue insertion, typed height, arrow-key height change, depth resize preserving the mounting plane, undo / redo and outdoor stack height stop |
+| Desktop / phone layouts | Chromium with software WebGL; 1440 × 960 desktop and 412 × 915 phone viewport. Catalogue and AC controls stayed inside the phone viewport (controls x 186–399 px); no page errors in the recorded browser runs |
+| Existing phone overflow | Before/after document scrollWidth both 433 px at viewport 412 px. This is an existing page-width issue, not a clean global overflow check or a new AC regression |
+| Visual review | Indoor vane / cover and outdoor fan grille / racks inspected close up. Screenshots in Dropbox `air-conditioner-review/`; the indoor screenshot shows a depth edited to 30 cm, not the 26.2 cm default |
+| Delivery | `538ca47` pushed to `origin/main`; repository clean at the start of this documentation audit |
+
+Remaining verification: owner review of the new appearance and operation on their actual device, including physical touch dragging. The browser checks used independent test layouts; the owner has not yet supplied an AC layout or accepted the appearance. Live Cloudflare asset equality was not checked in this delivery, so the verified deployment statement is **pushed to main**, not a verified live deployment. Outdoor racks currently require a fully supported rear mounting rectangle; a side-wall-only rack arrangement is not modelled separately.
+
+The archive audit also corrected a stale README statement about sockets: moves and height changes stop at contact, while wall-plane turns remain centred and flag conflicts, matching the behaviour already introduced before the AC commit.
+
+
 ## Cleanup after owner review — 2026-09-26
 
 All 187 automated tests pass (172 at the first row). The owner confirmed on the live site: a TV standing on a cabinet shelf rests its foot on the shelf (`d746353`), a dragged ratio-locked resize, the A1 and A8 handles, SPC flooring display, and the herringbone knots as they are.
