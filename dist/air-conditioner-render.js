@@ -1,6 +1,9 @@
 import * as T from 'three';
 import {acSize,acBox,AC_RACK} from './air-conditioner.js';
 
+// Grille and vent lines are decoration on solid boxes. A raycaster picks lines within
+// `params.Line.threshold` (1 m by default), so a click anywhere near a unit selected it.
+const noPick=()=>{};
 // Original geometry based on the supplied references; no supplier images or logos.
 export function makeAirConditioner(scene,g,f){
   const {w,d,h}=f,size=acSize(f),bounds=acBox(f),unit=new T.Group;
@@ -8,7 +11,7 @@ export function makeAirConditioner(scene,g,f){
   const mat=(color,roughness=.45)=>{const key=color+roughness;return (scene.acMaterials??={})[key]??=new T.MeshStandardMaterial({color,roughness});};
   const white=mat('#e9eae7'),front=mat('#f0f0ed',.32),dark=mat('#272e32'),steel=mat('#aeb7bd',.3),fin=mat('#46575c');
   const box=(ww,hh,dd,x,y,z,m=white,r=0)=>scene.box(unit,ww,hh,dd,x,y,z,m,r);
-  const lines=(points,color)=>{const geometry=new T.BufferGeometry().setFromPoints(points.map(p=>new T.Vector3(...p)));const mesh=new T.LineSegments(geometry,((scene.acLineMaterials??={})[color]??=new T.LineBasicMaterial({color})));unit.add(mesh);return mesh;};
+  const lines=(points,color)=>{const geometry=new T.BufferGeometry().setFromPoints(points.map(p=>new T.Vector3(...p)));const mesh=new T.LineSegments(geometry,((scene.acLineMaterials??={})[color]??=new T.LineBasicMaterial({color})));mesh.raycast=noPick;unit.add(mesh);return mesh;};
   if(f.acKind!=='outdoor'){
     box(w,h*.96,d*.9,0,h*.02,-d*.05,white,Math.min(.028,h*.12,d*.15));
     // Swept front cover and a dark lower outlet with a broad open vane.

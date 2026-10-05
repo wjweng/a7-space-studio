@@ -98,3 +98,33 @@ test('a rotated unit near the shell uses its rotated footprint for boundary chec
  const f=ac('indoor',{x:8.209,z:.3,rot:-90,spin:90,elevation:1});
  assert(acSupported(f,[]));assert.deepEqual(warnings(f),[]);
 });
+
+test('an outdoor rack mounts on the balcony railing and needs only part of its back on a face',()=>{
+ const rail=mountAirConditioner(ac('outdoor',{x:8.1,z:5.7,rot:-90}),[]);
+ assert(Math.abs(rail.x-(8.34-acBox(rail).d/2))<1e-6,'back on the railing wall face');assert.equal(rail.rot,-90);
+ assert(acSupported(rail,[]));assert.deepEqual(warnings(rail),[]);
+ assert(acSupported({...rail,elevation:1.6},[]),'height above the railing does not matter');
+ const f=ac('outdoor');assert(acSupported({...f,elevation:2},[]));
+ assert(!acSupported({...f,x:f.x+.05},[]),'a back standing off the wall is unsupported');
+ assert(warnings({...f,x:f.x+.05}).includes('鐵架背面需靠著牆面或欄杆'));
+ const surface={point:{x:8.38,y:.8,z:5.7},normal:{x:-1,y:0,z:0},id:null},placed=acOnSurface(ac('outdoor'),surface,[]);
+ assert(Math.abs(placed.x-rail.x)<1e-6,'a click on a railing bar puts the back on the wall face');
+});
+test('the user layout: a unit placed into a beam may slide or leave but never sink deeper',()=>{
+ const userBeam={id:'b',name:'天花板樑',type:'beam',x:1.4,z:.3025,w:2.45,d:.485,h:.3,rot:0},f=ac('indoor',{x:1.36,z:.191,rot:0,elevation:2.39999});
+ assert(warnings(f,[userBeam]).includes('與天花板樑重疊'),'30 cm between the window head and this beam cannot take a 33.9 cm unit');
+ const up=guardedAirConditioner(f,{...f,elevation:2.6},[f,userBeam],{hop:false});assert(up.reason.includes('天花板樑'));assert(Math.abs(up.item.elevation-f.elevation)<1e-5);
+ assert.equal(guardedAirConditioner(f,{...f,x:1.5},[f,userBeam],{hop:false}).reason,'','sliding at the same depth stays allowed');
+ const away={...f,x:3.4,z:.191,elevation:2.45},into=guardedAirConditioner(away,{...away,x:1.36},[away,userBeam]);assert(into.reason.includes('天花板樑'));
+});
+test('grille and vent lines are not pickable, so clicks beside a unit miss it',()=>{
+ const scene=Object.create(SpaceScene.prototype);scene.m={};
+ for(const kind of ['indoor','outdoor']){
+  const f=ac(kind,{x:0,z:0,rot:0}),g=new T.Group;scene.makeFurniture(g,f);g.updateMatrixWorld(true);
+  const top=f.elevation+acBox(f).h,ray=new T.Raycaster(new T.Vector3(0,top+.3,5),new T.Vector3(0,0,-1));
+  // Compare a count: a failing deepEqual on hits would print whole three.js object graphs.
+  assert.equal(ray.intersectObject(g,true).length,0,`${kind}: a ray 30 cm above the unit picks nothing`);
+  const hit=new T.Raycaster(new T.Vector3(0,f.elevation+acBox(f).h*.6,5),new T.Vector3(0,0,-1)).intersectObject(g,true);
+  assert(hit.length&&hit[0].object.isMesh,`${kind}: the body itself is still picked`);
+ }
+});

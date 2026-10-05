@@ -1,5 +1,5 @@
 import {isAirConditioner,acBox} from './air-conditioner.js';
-import {corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,wallsHit,turnedSize,outletSize,WALL_THICKNESS,TROUGH,troughCapacity,flatMount,flatArea} from './model.js';
+import {HEIGHT,corners,overlaps,inside,insideOrOutline,insideShell,walls,wallRects,exteriorWallRects,minimumsFor,issues,wallsHit,turnedSize,outletSize,WALL_THICKNESS,TROUGH,troughCapacity,flatMount,flatArea} from './model.js';
 import {EPS,signedDistance,roomAt,sameRoom,furnitureInterference,clashes} from './geometry.js';
 import {modularCabinetRects,resizeCabinetDesign,cellOpening,cabinetCells,CARCASS_T} from './cabinet-design.js';
 export {EPS,signedDistance,roomAt,sameRoom,distanceLabel,furnitureInterference} from './geometry.js';
@@ -342,9 +342,20 @@ export function guardedSocket(f,next,items,{hop=true}={}){
  if(f.outletMount!=='wall')return{item:f,reason:hit};
  return guardedPlaneMove(f,next,check,{hop});
 }
-// Shared wall-plane slide, with along/up contact and no tunnelling in walk view.
+// How far an AC sinks into another item: the smaller of the plan and the height overlap, the
+// shortest way out. Others are taken as their footprint over their own height band.
+function acDepth(f,o){
+ const a=acBox(f),b=isAirConditioner(o)?acBox(o):o;
+ const lift=['television','hangingCabinet','panel','cove'].includes(b.type)||isAirConditioner(o)?b.elevation||0:['beam','light'].includes(b.type)?HEIGHT-b.h:0;
+ const plan=-signedDistance(a,b),high=Math.min(a.elevation+a.h,lift+b.h)-Math.max(a.elevation,lift);
+ return Math.max(0,Math.min(plan,high));
+}
+// Shared wall-plane slide, with along/up contact and no tunnelling in walk view. A clash the
+// unit already has never locks it in place, but it may not sink any deeper into that item
+// (placed overlapping a beam, a walk-view drag once carried it up into the beam).
 export function guardedAirConditioner(f,next,items,{hop=true}={}){
- const check=problemCheck(f,items);
+ const added=problemCheck(f,items),before=issues(f,items,{doorSweeps:false}),sunk=items.filter(o=>o.id!==f.id&&before.includes(`與${o.name}重疊`)).map(o=>({o,depth:acDepth(f,o)}));
+ const deeper=p=>sunk.find(({o,depth})=>acDepth(p,o)>depth+1e-6),check=p=>added(p)||(deeper(p)?`與${deeper(p).o.name}重疊`:'');
  if((f.spin||0)!==(next.spin||0))return{item:next,reason:''};
  return guardedPlaneMove(f,next,check,{hop});
 }

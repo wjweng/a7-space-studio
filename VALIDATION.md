@@ -1,5 +1,19 @@
 # Validation and work history
 
+## Air conditioner owner fixes — 2026-10-05
+
+From the owner's first use with their layout (Dropbox `issue/A7-空間配置_8.json`). All **271 automated tests passed** (3 new).
+
+| Report | Finding / change | How it was checked |
+| --- | --- | --- |
+| Indoor unit will not fit under the beam | Measured, not a bug: the living-room window head is 2.40 m and the owner's beam (30 cm, an estimate) starts at 2.70 m, leaving 30 cm of wall for a 33.9 cm unit. The owner kept the rule | Unit test on the layout's beam and unit positions |
+| Walk view drags an AC into the beam | An existing clash never locked the unit, so it could also sink deeper. `guardedAirConditioner` now refuses any move that deepens an existing overlap (`acDepth`: the smaller of plan and height overlap), while sliding at the same depth or leaving stays free | Unit test; on the owner's layout an upward drag stops at the starting height |
+| Clicks near an outdoor unit select it; the lower of two stacked units cannot be picked | Grille and vent `LineSegments` were pickable within three.js's default 1 m line threshold. They no longer raycast | Unit test (fails without the fix); browser, walk view on the balcony with two units stacked on the railing: each body picks its own unit, clicks beside them miss |
+| The railing is not a wall | Outdoor mounting faces include the railing (`railingSolids`, wall face, curb to `RAILING_TOP`); a click on a railing bar snaps the back to that face | Unit test; browser layout with units on the railing has no warning |
+| Racks need not cover the whole back | Outdoor support is now any coplanar wall or railing face behind part of the back, at any height (`鐵架背面需靠著牆面或欄杆`); indoor units still need the whole back | Unit tests |
+
+A failing `assert.deepEqual` on raycast hits printed whole three.js object graphs and an 11 GB node process was OOM-killed (twice). Tests compare counts instead.
+
 ## Air conditioners and archive audit — 2026-10-05
 
 Application commit `538ca47` adds indoor units and individually rack-mounted outdoor units. Both use the supplied body dimensions; rack dimensions are visual estimates stored in `AC_RACK`, not supplied model specifications. Current behaviour and implementation remain in README.md / AGENTS.md; the linked Dropbox project's `_archive/2026-10-05-冷氣機新增與驗證.md` records the owner's decision and this delivery.
