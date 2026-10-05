@@ -12,6 +12,8 @@ From the owner's first use with their layout (Dropbox `issue/A7-空間配置_8.j
 | The railing is not a wall | Outdoor mounting faces include the railing (`railingSolids`, wall face, curb to `RAILING_TOP`); a click on a railing bar snaps the back to that face | Unit test; browser layout with units on the railing has no warning |
 | Racks need not cover the whole back | Outdoor support is now any coplanar wall or railing face behind part of the back, at any height (`鐵架背面需靠著牆面或欄杆`); indoor units still need the whole back | Unit tests |
 
+| Outdoor unit stuck at 60 cm wide (`issue/A7-空間配置_9.json`) | Not support: the unit sits in the balcony corner against the south wall, and a typed AC width only grew centred. It now tries centred, then either end, like furniture (`resizeAnchors`, width only) | Browser, owner's layout: 100 cm and 140 cm grow northward with no warning; a top-view edge drag north grows to 110 cm, south stops at the wall |
+
 A failing `assert.deepEqual` on raycast hits printed whole three.js object graphs and an 11 GB node process was OOM-killed (twice). Tests compare counts instead.
 
 ## Air conditioners and archive audit — 2026-10-05

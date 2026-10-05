@@ -104,7 +104,9 @@ if(air){
  const moved=Math.hypot(validated.x-f.x,validated.z-f.z)>1e-9,sized=['w','d','h'].some(k=>validated[k]!==f[k]);
  if(moved)validated=mountAirConditioner(validated,items);
  else if(sized){const before=acBox(f),after=acBox(validated),a=f.rot*Math.PI/180;validated={...validated,x:f.x+Math.sin(a)*(after.d-before.d)/2,z:f.z+Math.cos(a)*(after.d-before.d)/2};}
- if(sized&&!turning){const fit=fitSize(f,validated,items);if(!fit.item)throw Error(fit.reason+'，這個尺寸放不下');validated=validateFurniture([fit.item])[0];if(fit.reason)stopped=fit.reason+'，已停在最大可用尺寸';}
+ // Like furniture, a wider unit grows centred, then from either end (a unit in a corner grows
+ // away from it); the depth stays on the mounting plane, so only the width shifts it.
+ if(sized&&!turning){let fit=null;for(const{x,z}of resizeAnchors(f,{...validated,d:f.d})){const tried=fitSize(f,{...validated,x,z},items);if(!fit||tried.k>fit.k)fit=tried;if(!tried.reason)break;}if(!fit.item)throw Error(fit.reason+'，這個尺寸放不下');validated=validateFurniture([fit.item])[0];if(fit.reason)stopped=fit.reason+'，已停在最大可用尺寸';}
  const guard=guardedAirConditioner(f,validated,items);validated=guard.item;if(guard.reason)stopped=guard.reason+'，已停在邊緣';
 }
 let placed=air?{item:validated,blocked:false}:placeAtTarget(f,validated,items);if(placed.blocked&&(!clamp||!placed.item))throw Error('家具不能超出 A7 戶型外框');
