@@ -116,3 +116,5 @@
 }
 
 .shareError{max-width:min(460px,92vw);border-top:4px solid #c0392b}.shareError h2{color:#a8322a}.shareErrorReason{padding:10px 12px;border-radius:8px;background:#fbeceb;color:#8c2a23;font-weight:600}
+#backupSchemes{display:block;width:100%;margin-top:8px;background:none;border:1px dashed var(--line);color:var(--muted);font-size:12px}
+#backupSchemes[hidden]{display:none}
