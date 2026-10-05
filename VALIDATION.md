@@ -2,7 +2,7 @@
 
 ## Air conditioner owner fixes — 2026-10-05
 
-From the owner's first use with their layout (Dropbox `issue/A7-空間配置_8.json`). All **271 automated tests passed** (3 new).
+From the owner's use with their own layouts (Dropbox `issue/A7-空間配置_8.json` to `_11.json`, `issue_40`-`44`), in commits `6c54b5e`, `64724b5`, `571b7d6`, `c1fdc49`, `fcff99c` and `7caa095`. At the end all **277 automated tests passed**, 26 of them air-conditioner tests (9 added by these fixes). The owner then confirmed that units place correctly, and the live site's AC, spatial, app and scene modules were checked byte-identical to `7caa095`.
 
 | Report | Finding / change | How it was checked |
 | --- | --- | --- |
@@ -42,7 +42,7 @@ All **268 automated tests passed**, including **17 new air-conditioner tests**. 
 | Visual review | Indoor vane / cover and outdoor fan grille / racks inspected close up. Screenshots in Dropbox `air-conditioner-review/`; the indoor screenshot shows a depth edited to 30 cm, not the 26.2 cm default |
 | Delivery | `538ca47` pushed to `origin/main`; repository clean at the start of this documentation audit |
 
-Remaining verification: owner review of the new appearance and operation on their actual device, including physical touch dragging. The browser checks used independent test layouts; the owner has not yet supplied an AC layout or accepted the appearance. Live Cloudflare asset equality was not checked in this delivery, so the verified deployment statement is **pushed to main**, not a verified live deployment. Outdoor racks currently require a fully supported rear mounting rectangle; a side-wall-only rack arrangement is not modelled separately.
+Remaining verification (updated after the owner fixes in the section above): the owner confirmed placement with their own layouts and the live site matches `7caa095`. Phone touch dragging of ACs has not been separately confirmed. (At this first delivery the owner had not reviewed anything, live deployment was unchecked, and outdoor racks needed a fully supported back; all three were superseded the same day.)
 
 The archive audit also corrected a stale README statement about sockets: moves and height changes stop at contact, while wall-plane turns remain centred and flag conflicts, matching the behaviour already introduced before the AC commit.
 
