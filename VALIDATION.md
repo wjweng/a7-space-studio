@@ -14,6 +14,8 @@ From the owner's first use with their layout (Dropbox `issue/A7-空間配置_8.j
 
 | Outdoor unit stuck at 60 cm wide (`issue/A7-空間配置_9.json`) | Not support: the unit sits in the balcony corner against the south wall, and a typed AC width only grew centred. It now tries centred, then either end, like furniture (`resizeAnchors`, width only) | Browser, owner's layout: 100 cm and 140 cm grow northward with no warning; a top-view edge drag north grows to 110 cm, south stops at the wall |
 
+| Top-view drags leave the outdoor unit red in odd places (`issue/issue_40`-`43`); it cannot slide north off the column (`issue_44`, `_9.json`) | A move to another face turned the unit in place first and kept that turn when the slide was blocked, so it sat turned into a wall or across the railing; `guardedAirConditioner` now stays put if its result has a new problem, and the top-view drag shows the dashed ghost like furniture. The slide clamp still kept the whole unit on the face. Owner's rule: both rack rails (`AC_RAILS`, `acRailSpans`) must stand in front of a wall or railing face; the slide stops where a rail reaches the face end and jumps to the railing once that spot is clear | Unit tests; 7200 random top-view drag steps on the owner's layout: before, wall / boundary / washer / rail warnings appeared; after, only the door-swing warning, which stays warn-only as for furniture. Browser with real mouse drags: east stays put with the ghost, north slides to z 6.681 then jumps onto the railing |
+
 A failing `assert.deepEqual` on raycast hits printed whole three.js object graphs and an 11 GB node process was OOM-killed (twice). Tests compare counts instead.
 
 ## Air conditioners and archive audit — 2026-10-05

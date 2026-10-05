@@ -106,7 +106,7 @@ test('an outdoor rack mounts on the balcony railing and needs only part of its b
  assert(acSupported({...rail,elevation:1.6},[]),'height above the railing does not matter');
  const f=ac('outdoor');assert(acSupported({...f,elevation:2},[]));
  assert(!acSupported({...f,x:f.x+.05},[]),'a back standing off the wall is unsupported');
- assert(warnings({...f,x:f.x+.05}).includes('鐵架背面需靠著牆面或欄杆'));
+ assert(warnings({...f,x:f.x+.05}).includes('鐵架的兩根立柱都要靠著牆面或欄杆'));
  const surface={point:{x:8.38,y:.8,z:5.7},normal:{x:-1,y:0,z:0},id:null},placed=acOnSurface(ac('outdoor'),surface,[]);
  assert(Math.abs(placed.x-rail.x)<1e-6,'a click on a railing bar puts the back on the wall face');
 });
@@ -127,4 +127,18 @@ test('grille and vent lines are not pickable, so clicks beside a unit miss it',(
   const hit=new T.Raycaster(new T.Vector3(0,f.elevation+acBox(f).h*.6,5),new T.Vector3(0,0,-1)).intersectObject(g,true);
   assert(hit.length&&hit[0].object.isMesh,`${kind}: the body itself is still picked`);
  }
+});
+test('an outdoor rack needs both rails on a face and slides along it until a rail reaches the end',()=>{
+ // issue/A7-空間配置_9.json: a 60 cm unit on the west face of the balcony's south column (x 8.1, z 6.46-7.31).
+ const f=ac('outdoor',{w:.6,x:7.9,z:6.85,rot:-90,elevation:.031});assert(acSupported(f,[]));
+ const reach=.6*.34+.035/2,edge=6.46+reach;
+ assert(acSupported({...f,z:edge+.001},[]),'the north rail still on the column');assert(!acSupported({...f,z:edge-.01},[]),'the north rail past the column');
+ const slid=mountAirConditioner({...f,z:6.5},[]);assert(Math.abs(slid.z-edge)<1e-6&&Math.abs(slid.x-f.x)<1e-9,'clamped where the rail reaches the column end');
+});
+test('a drag toward another face that cannot be reached stays put, never turned into the wall',()=>{
+ const f=ac('outdoor',{w:.6,x:7.9,z:6.85,rot:-90,elevation:.031});
+ const r=guardedAirConditioner(f,mountAirConditioner({...f,x:8.2,z:6.85},[f]),[f]);
+ assert.equal(r.item,f);assert(r.reason);assert.deepEqual(warnings(r.item),[]);
+ const north=guardedAirConditioner(f,mountAirConditioner({...f,x:7.9,z:6.0},[f]),[f]);
+ assert.equal(north.item.rot,-90);assert(Math.abs(north.item.x-(8.34-acBox(f).d/2))<1e-6,'jumps onto the railing face once that spot is clear');assert.deepEqual(warnings(north.item),[]);
 });

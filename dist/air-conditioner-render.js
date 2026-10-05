@@ -1,5 +1,5 @@
 import * as T from 'three';
-import {acSize,acBox,AC_RACK} from './air-conditioner.js';
+import {acSize,acBox,AC_RACK,AC_RAILS} from './air-conditioner.js';
 
 // Grille and vent lines are decoration on solid boxes. A raycaster picks lines within
 // `params.Line.threshold` (1 m by default), so a click anywhere near a unit selected it.
@@ -44,9 +44,9 @@ export function makeAirConditioner(scene,g,f){
   box(w*.002,h*.91,.002,-w*.285,cy,z+.002,steel);
   box(w*.11,h*.014,.002,-w*.385,cy+h*.37,z+.002,steel);
   // Two slotted wall rails and triangular shelf brackets move with the unit.
-  const back=-size.d/2+.012,frontZ=size.d/2-.012,railTop=bodyBottom+h*.91;
-  for(const x of[-w*.34,w*.34]){
-    box(.035,railTop-bottom,.024,x,(railTop+bottom)/2,back,steel,.002);
+  const back=-size.d/2+.012,frontZ=size.d/2-.012,railTop=bodyBottom+h*AC_RAILS.top;
+  for(const x of[-w*AC_RAILS.offset,w*AC_RAILS.offset]){
+    box(AC_RAILS.width,railTop-bottom,.024,x,(railTop+bottom)/2,back,steel,.002);
     for(let y=bottom+.055;y<railTop-.02;y+=.075)box(.009,.032,.001,x,y,back+.0125,dark,.003);
     box(.03,.03,size.d-.024,x,bottom+.04,0,steel,.002);
     box(.045,.042,.065,x,bodyBottom-.021,cz-d*.23,dark,.004);

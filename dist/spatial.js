@@ -357,7 +357,10 @@ export function guardedAirConditioner(f,next,items,{hop=true}={}){
  const added=problemCheck(f,items),before=issues(f,items,{doorSweeps:false}),sunk=items.filter(o=>o.id!==f.id&&before.includes(`與${o.name}重疊`)).map(o=>({o,depth:acDepth(f,o)}));
  const deeper=p=>sunk.find(({o,depth})=>acDepth(p,o)>depth+1e-6),check=p=>added(p)||(deeper(p)?`與${deeper(p).o.name}重疊`:'');
  if((f.spin||0)!==(next.spin||0))return{item:next,reason:''};
- return guardedPlaneMove(f,next,check,{hop});
+ // A move to another face starts by turning in place; when that turn is already blocked the
+ // slide used to stop there, turned into the wall or out past the railing. Stay put instead.
+ const result=guardedPlaneMove(f,next,check,{hop}),left=check(result.item);
+ return left?{item:f,reason:result.reason||left}:result;
 }
 function guardedPlaneMove(f,next,check,{hop}){
  if(hop&&!check(next))return{item:next,reason:''};

@@ -1,8 +1,8 @@
 import {HEIGHT,WALL_THICKNESS,walls,structuralSolids,wallJoints,insideOrOutline} from './model.js';
 import {corners,clashes} from './geometry.js';
 
-import {isAirConditioner,acBox} from './air-conditioner-shape.js';
-export {isAirConditioner,AC_UNITS,AC_RACK,acSize,acBox} from './air-conditioner-shape.js';
+import {isAirConditioner,acBox,acRailSpans} from './air-conditioner-shape.js';
+export {isAirConditioner,AC_UNITS,AC_RACK,AC_RAILS,acRailSpans,acSize,acBox} from './air-conditioner-shape.js';
 
 // Real wall solids, including window sills and lintels. The plan-only wallRects
 // deliberately fills windows and omits door lintels, so cannot validate a mount.
@@ -37,13 +37,16 @@ export function acMountFaces(f,items){
 }
 // An indoor unit must cover its entire mounting rectangle, not only its corners: sweep each
 // height band and merge horizontal intervals, catching openings between supported ends.
-// An outdoor rack stands out from the wall on brackets, so its back only has to stand against
-// some wall or railing face; height does not matter (the owner, 2026-10-05).
+// An outdoor rack stands out from the wall on brackets: only its two rails must stand against a
+// wall or railing face (merged along the wall), at any height (the owner, 2026-10-05).
 export function acSupported(f,items){
   const p=acBox(f),a=p.rot*Math.PI/180,nx=Math.sin(a),nz=Math.cos(a),tx=Math.cos(a),tz=-Math.sin(a),bx=p.x-nx*p.d/2,bz=p.z-nz*p.d/2,tol=1e-5;
   const outdoor=f.acKind==='outdoor';
   const rects=acMountFaces(f,items).filter(s=>Math.cos((s.rot-p.rot)*Math.PI/180)>1-1e-8&&Math.abs((s.x-bx)*nx+(s.z-bz)*nz)<tol).map(s=>{const u=(s.x-bx)*tx+(s.z-bz)*tz;return {lo:Math.max(-p.w/2,u-s.w/2),hi:Math.min(p.w/2,u+s.w/2),bottom:Math.max(p.elevation,s.bottom),top:Math.min(p.elevation+p.h,s.top)};}).filter(s=>s.hi>s.lo+tol&&(outdoor||s.top>s.bottom));
-  if(outdoor)return rects.length>0;
+  if(outdoor){
+    const runs=rects.sort((a,b)=>a.lo-b.lo),covered=({lo,hi})=>{let end=lo;for(const run of runs){if(run.lo>end+tol)break;end=Math.max(end,run.hi);if(end>=hi-tol)return true;}return false;};
+    return acRailSpans(f).every(rail=>covered({lo:Math.max(-p.w/2,rail.lo),hi:Math.min(p.w/2,rail.hi)}));
+  }
   const ys=[...new Set([p.elevation,p.elevation+p.h,...rects.flatMap(s=>[s.bottom,s.top])])].sort((a,b)=>a-b);
   for(let i=1;i<ys.length;i++){
     if(ys[i]-ys[i-1]<tol)continue;const mid=(ys[i]+ys[i-1])/2;
@@ -61,7 +64,7 @@ export function acMountIssues(f,items){
   const p=acBox(f),messages=[];
   if(p.elevation<.031-1e-6)messages.push(f.acKind==='outdoor'?'室外機鐵架不能碰到地面':'冷氣機不能碰到地面');
   if(p.elevation+p.h>HEIGHT-.001+1e-6)messages.push('冷氣機不能碰到天花板');
-  if(!acSupported(f,items))messages.push(f.acKind==='outdoor'?'鐵架背面需靠著牆面或欄杆':'冷氣機安裝面需完整貼牆或樑');
+  if(!acSupported(f,items))messages.push(f.acKind==='outdoor'?'鐵架的兩根立柱都要靠著牆面或欄杆':'冷氣機安裝面需完整貼牆或樑');
   if(corners(p).some(([x,z])=>!insideOrOutline(x,z)))messages.push('超出戶型邊界');
   return messages;
 }
@@ -70,7 +73,8 @@ export function mountAirConditioner(f,items,{clamp=true,face=null}={}){
   for(const s of surfaces){
     const a=s.rot*Math.PI/180,nx=Math.sin(a),nz=Math.cos(a),tx=Math.cos(a),tz=-Math.sin(a),raw=(f.x-s.x)*tx+(f.z-s.z)*tz,half=(s.w-p.w)/2;
     if(Math.abs(raw)>s.w/2+p.w/2&&!clamp)continue;
-    const limit=Math.max(0,half),along=clamp?Math.max(-limit,Math.min(limit,raw)):raw;
+    // An outdoor rack slides along a face until a rail reaches its end.
+    const reach=Math.max(...acRailSpans(f).flatMap(r=>[-r.lo,r.hi])),limit=f.acKind==='outdoor'?Math.max(0,s.w/2-reach):Math.max(0,half),along=clamp?Math.max(-limit,Math.min(limit,raw)):raw;
     const candidate={...f,x:s.x+tx*along+nx*p.d/2,z:s.z+tz*along+nz*p.d/2,rot:s.rot};
     const box=acBox(candidate);if(corners(box).some(([x,z])=>!insideOrOutline(x,z)))continue;
     // Prefer a supported face only on a near tie; if the nearest face cannot fit keep a
