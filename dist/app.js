@@ -396,7 +396,7 @@ async function openSharedLink(){
   const data=sharedData(location.hash);if(!data)return;
   window.history.replaceState(null,'',location.pathname+location.search);
   let shared,key;
-  try{shared=await decodeShare(data);key=stateKey(shared.state);}catch(e){notify('無法開啟分享的配置：'+e.message);return;}
+  try{shared=await decodeShare(data);key=stateKey(shared.state);}catch(e){showShareError(e.message,data.length);return;}
   const saved=k=>schemes.find(s=>{try{return stateKey(s.state)===k;}catch{return false;}}),current=stateKey(snapshot());
   if(current!==key&&current!==pristineKey&&!saved(current))schemes.push({id:crypto.randomUUID(),name:'開啟分享前的配置 '+new Date().toLocaleString('zh-TW',{hour12:false,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}),state:snapshot()});
   let scheme=saved(key);
@@ -404,6 +404,12 @@ async function openSharedLink(){
   schemes=schemes.slice(-30);
   remember();applyState(scheme.state);$('scheme').value=scheme.id;renderSchemes();
   notify('已載入分享的方案「'+scheme.name+'」，已加入設計方案清單。');
+}
+// A broken link gets a dialog, not a toast: a toast was easy to miss, and the layout
+// silently staying as it was looked like the link had opened.
+function showShareError(reason,length){
+  $('shareErrorReason').textContent=`${reason}（收到的連結資料長 ${length.toLocaleString('zh-TW')} 字）`;
+  if(!$('shareErrorDialog').open)$('shareErrorDialog').showModal();
 }
 window.addEventListener('hashchange',openSharedLink);openSharedLink();
 const renderWithOutlet=renderProps;
