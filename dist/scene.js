@@ -779,6 +779,24 @@ stepLightFade(dt){if(!this.fading?.size)return false;for(const light of this.fad
   const amount=f.open?1:0;lid.rotation.x=-amount*1.5;inside.visible=amount>.02;
   this.actions.set(f.id,{type:'trough',pivot:lid,inside,item:f,amount});
  }
+ // The balcony railing's opening as a surface for outdoor racks, from the curb to the ceiling, on
+ // the face toward the viewer. Above the top rail (and between bars) the pointer otherwise meets
+ // nothing, so a rack could not be dragged or placed there in walk view. Uses the last surfaceAt
+ // ray; returns `surface` unless the railing is nearer.
+ railingSurface(surface){
+  const ray=this.ray.ray;let best=surface,far=surface?ray.origin.distanceTo(surface.point):Infinity;
+  for(const wall of walls){
+   if(wall.openingType!=='railing')continue;
+   const dx=wall.b[0]-wall.a[0],dz=wall.b[1]-wall.a[1],length=Math.hypot(dx,dz),tx=dx/length,tz=dz/length;
+   let nx=-tz,nz=tx;if((ray.origin.x-wall.a[0])*nx+(ray.origin.z-wall.a[1])*nz<0){nx=-nx;nz=-nz;}
+   const normal=new T.Vector3(nx,0,nz),plane=new T.Plane().setFromNormalAndCoplanarPoint(normal,new T.Vector3(wall.a[0]+nx*WALL_THICKNESS/2,0,wall.a[1]+nz*WALL_THICKNESS/2));
+   const point=ray.intersectPlane(plane,new T.Vector3);if(!point)continue;
+   const [start,width,sill]=wall.opening,u=(point.x-wall.a[0])*tx+(point.z-wall.a[1])*tz,distance=ray.origin.distanceTo(point);
+   if(u<start||u>start+width||point.y<sill||point.y>HEIGHT||distance>=far)continue;
+   best={point,normal,id:null};far=distance;
+  }
+  return best;
+ }
  mountPlanePoint(f){const a=f.rot*Math.PI/180,flat=f.type==='outlet'&&flatMount(f),normal=flat?new T.Vector3(0,1,0):new T.Vector3(Math.sin(a),0,Math.cos(a));return this.ray.ray.intersectPlane(new T.Plane().setFromNormalAndCoplanarPoint(normal,new T.Vector3(f.x,f.elevation||0,f.z)),new T.Vector3);}
  ground(e){const r=this.host.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.pointer,this.activeCamera);return this.ray.ray.intersectPlane(this.plane,new T.Vector3);}
  setForegroundDraft(id){this.foregroundDraft=this.items.some(f=>f.id===id&&f.draft)?id:null;this.refreshValidity();}

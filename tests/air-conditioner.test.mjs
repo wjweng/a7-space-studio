@@ -142,3 +142,11 @@ test('a drag toward another face that cannot be reached stays put, never turned 
  const north=guardedAirConditioner(f,mountAirConditioner({...f,x:7.9,z:6.0},[f]),[f]);
  assert.equal(north.item.rot,-90);assert(Math.abs(north.item.x-(8.34-acBox(f).d/2))<1e-6,'jumps onto the railing face once that spot is clear');assert.deepEqual(warnings(north.item),[]);
 });
+test('walk view can point at the balcony railing above its top rail, so racks can be stacked there',()=>{
+ const scene=Object.create(SpaceScene.prototype),aim=(from,to)=>{scene.ray=new T.Raycaster(new T.Vector3(...from),new T.Vector3(...to).sub(new T.Vector3(...from)).normalize());};
+ aim([7,1.6,5.8],[8.4,1.8,5.8]);const hit=scene.railingSurface(null);
+ assert(hit&&Math.abs(hit.point.x-8.34)<1e-9&&hit.normal.x===-1&&hit.id===null,'the inner wall face, 1.8 m up');
+ const placed=acOnSurface(ac('outdoor'),hit,[]);assert(acSupported(placed,[]));assert.deepEqual(warnings(placed),[]);
+ const near={point:new T.Vector3(7.5,1.7,5.8),normal:new T.Vector3(-1,0,0),id:'x'};assert.equal(scene.railingSurface(near),near,'something nearer wins');
+ aim([7,1.6,4.7],[8.4,1.6,4.7]);assert.equal(scene.railingSurface(null),null,'beside the opening there is no railing');
+});
