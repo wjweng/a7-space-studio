@@ -175,3 +175,17 @@ test('pointing at a face near a corner slides the rack along that face to clear 
  }
  assert.equal(acOnSurface(f,{point:{x:8.1,y:1.17,z:6.9},normal:{x:-1,y:0,z:0},id:null,action:'door-5'},[]),null,'a door leaf is no mounting surface');
 });
+test('the bottom of a stack, whose gap fits it to within a micron, still drops back in from any spot on the face',()=>{
+ // issue/A7-空間配置_11.json, exact values: the middle unit was stopped at contact on the bottom one.
+ const unit=(id,v)=>ac('outdoor',{id,name:id,w:.8,...v});
+ const low=unit('low',{x:7.660000099928275,z:6.96738817862882,d:.33522364274236194,rot:-180,elevation:.030999000188277115});
+ const mid=unit('mid',{x:7.894159439320522,z:6.749499999999999,d:.3016811213589538,rot:-90,elevation:.7929989002060583});
+ const top=unit('top',{x:7.8999999999999995,z:6.749499999999999,d:.29,rot:-90,elevation:1.5549990002060583}),items=[low,mid,top];
+ let home=0,spots=0;
+ for(let i=0;i<=17;i++)for(let k=0;k<=14;k++){
+  spots++;const raw=acOnSurface(low,{point:{x:8.1,y:.1+k*.05,z:6.47+i*.05},normal:{x:-1,y:0,z:0},id:null},items);
+  const r=guardedAirConditioner(low,nearestClearHeight(low,raw,items)||raw,items);
+  if(r.item.rot===-90&&!warnings(r.item,[mid,top]).length)home++;
+ }
+ assert.equal(home,spots);
+});

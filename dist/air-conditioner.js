@@ -68,9 +68,13 @@ export function acMountIssues(f,items){
   if(corners(p).some(([x,z])=>!insideOrOutline(x,z)))messages.push('超出戶型邊界');
   return messages;
 }
-// `facing` (degrees) keeps to faces turned that way: the face the pointer is on in walk view.
-export function mountAirConditioner(f,items,{clamp=true,face=null,facing=null}={}){
-  const p=acBox(f),surfaces=(face?[face]:acMountFaces(f,items)).filter(s=>facing===null||Math.cos((s.rot-facing)*Math.PI/180)>.9999);let best=null;
+// `facing` (degrees) and `on` (a point) keep to faces turned that way whose plane passes within
+// 10 cm of the point: the face the pointer is on in walk view (a railing's bars stand a few cm
+// off its face), not a parallel face nearby such as the railing beside a column.
+export function mountAirConditioner(f,items,{clamp=true,face=null,facing=null,on=null}={}){
+  const turned=s=>facing===null||Math.cos((s.rot-facing)*Math.PI/180)>.9999,a=s=>s.rot*Math.PI/180;
+  const near=s=>!on||Math.abs((on.x-s.x)*Math.sin(a(s))+(on.z-s.z)*Math.cos(a(s)))<.1;
+  const p=acBox(f),surfaces=(face?[face]:acMountFaces(f,items)).filter(s=>turned(s)&&near(s));let best=null;
   for(const s of surfaces){
     const a=s.rot*Math.PI/180,nx=Math.sin(a),nz=Math.cos(a),tx=Math.cos(a),tz=-Math.sin(a),raw=(f.x-s.x)*tx+(f.z-s.z)*tz,half=(s.w-p.w)/2;
     if(Math.abs(raw)>s.w/2+p.w/2&&!clamp)continue;
@@ -106,5 +110,5 @@ export function acOnSurface(f,surface,items){
   const {point,normal}=surface,box=acBox(f),rot=Math.atan2(normal.x,normal.z)*180/Math.PI;
   const next={...f,x:point.x+normal.x*box.d/2,z:point.z+normal.z*box.d/2,rot,elevation:Math.max(.031,Math.min(HEIGHT-box.h-.001,point.y-box.h/2))};
   // A railing's bars stand in the middle of its wall line; the rack's back goes on the wall face.
-  return f.acKind==='outdoor'?mountAirConditioner(next,items,{facing:rot}):next;
+  return f.acKind==='outdoor'?mountAirConditioner(next,items,{facing:rot,on:point}):next;
 }

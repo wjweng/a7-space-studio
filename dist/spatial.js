@@ -362,20 +362,25 @@ function acCheck(f,items){
 }
 // Walk view places a unit at the pointer's height, so a gap between stacked units (a few mm
 // taller than the unit) was almost impossible to hit. When the spot under the pointer is blocked,
-// try the heights just above and just below each thing in that column, nearest the pointer first,
-// within half a metre. Returns `next` itself when it is clear, null when nothing nearby is.
+// take the clear height nearest the pointer, within half a metre. Returns `next` itself when it is clear, null when nothing nearby is.
 // `strict` (a new unit, not yet in `items`) accepts only a spot with no problem at all.
 export function nearestClearHeight(f,next,items,{range=.5,strict=false}={}){
  const others=items.filter(o=>o.id!==f.id),check=strict?p=>issues(p,[...others,p],{doorSweeps:false})[0]||'':acCheck(f,items);if(!check(next))return next;
- const box=acBox(next),start=next.elevation||0,gap=.002+1e-7,heights=[],spans=[];
+ const box=acBox(next),start=next.elevation||0,clear=.002,slack=1e-5,heights=[];
+ // What is above or below in this column, plus the floor and ceiling limits as bounds. Between
+ // each pair, the unit may rest on the lower (2 mm rack clearance), hang under the upper, or sit
+ // anywhere between; a gap made by stopping a unit at contact fits another to within a micron,
+ // so sample the whole gap, a little past both ends, rather than trusting one computed height.
+ const floor=.031-1e-6,ceiling=HEIGHT-.001+1e-6,lows=[floor],highs=[ceiling];
  for(const o of items){
   if(o.id===f.id||['rug','outlet'].includes(o.type))continue;const {box:b,bottom,top}=acSpan(o);
-  if(clashes(box,b))spans.push([bottom,top]);
+  if(clashes(box,b)){lows.push(top+clear);highs.push(bottom-clear);}
  }
- // Resting on or hanging under each one, or centred in a gap that is only just tall enough (a
- // unit stopped at contact leaves about 2 mm a side, which the rack clearance needs exactly).
- for(const [bottom,top] of spans){heights.push(top+gap,bottom-box.h-gap);for(const [above] of spans)if(above-top>=box.h)heights.push((top+above-box.h)/2);}
- heights.push(HEIGHT-.001-box.h,.031);
+ for(const lo of lows)for(const top of highs){
+  const hi=top-box.h;if(hi<lo-slack)continue;
+  for(let k=0;k<=20;k++)heights.push(lo-slack+(hi-lo+2*slack)*k/20);
+  heights.push(lo,hi);
+ }
  for(const elevation of heights.filter(e=>Math.abs(e-start)<=range).sort((a,b)=>Math.abs(a-start)-Math.abs(b-start))){const p={...next,elevation};if(!check(p))return p;}
  return null;
 }
