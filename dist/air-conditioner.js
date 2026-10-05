@@ -68,15 +68,29 @@ export function acMountIssues(f,items){
   if(corners(p).some(([x,z])=>!insideOrOutline(x,z)))messages.push('超出戶型邊界');
   return messages;
 }
-export function mountAirConditioner(f,items,{clamp=true,face=null}={}){
-  const p=acBox(f),surfaces=face?[face]:acMountFaces(f,items);let best=null;
+// `facing` (degrees) keeps to faces turned that way: the face the pointer is on in walk view.
+export function mountAirConditioner(f,items,{clamp=true,face=null,facing=null}={}){
+  const p=acBox(f),surfaces=(face?[face]:acMountFaces(f,items)).filter(s=>facing===null||Math.cos((s.rot-facing)*Math.PI/180)>.9999);let best=null;
   for(const s of surfaces){
     const a=s.rot*Math.PI/180,nx=Math.sin(a),nz=Math.cos(a),tx=Math.cos(a),tz=-Math.sin(a),raw=(f.x-s.x)*tx+(f.z-s.z)*tz,half=(s.w-p.w)/2;
     if(Math.abs(raw)>s.w/2+p.w/2&&!clamp)continue;
     // An outdoor rack slides along a face until a rail reaches its end.
     const reach=Math.max(...acRailSpans(f).flatMap(r=>[-r.lo,r.hi])),limit=f.acKind==='outdoor'?Math.max(0,s.w/2-reach):Math.max(0,half),along=clamp?Math.max(-limit,Math.min(limit,raw)):raw;
-    const candidate={...f,x:s.x+tx*along+nx*p.d/2,z:s.z+tz*along+nz*p.d/2,rot:s.rot};
-    const box=acBox(candidate);if(corners(box).some(([x,z])=>!insideOrOutline(x,z)))continue;
+    const at=u=>({...f,x:s.x+tx*u+nx*p.d/2,z:s.z+tz*u+nz*p.d/2,rot:s.rot});
+    const blocked=c=>corners(acBox(c)).some(([x,z])=>!insideOrOutline(x,z))||acWallHits(c).length>0;
+    let candidate=at(along);
+    // Into a corner: slide along the face to where it just clears the wall (or the outline), as a
+    // drag stops at contact. A rack in a tight corner may have under a millimetre of play.
+    if(clamp&&blocked(candidate)){
+      let found=null;
+      for(const end of [-limit,limit]){
+        if(blocked(at(end)))continue;let lo=along,hi=end;
+        for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(blocked(at(mid)))lo=mid;else hi=mid;}
+        if(!found||Math.abs(hi-along)<Math.abs(found-along))found=hi;
+      }
+      if(found!==null)candidate=at(found);
+    }
+    if(corners(acBox(candidate)).some(([x,z])=>!insideOrOutline(x,z)))continue;
     // Prefer a supported face only on a near tie; if the nearest face cannot fit keep a
     // visible draft, exactly like other furniture. Never shrink the unit.
     const valid=acSupported(candidate,items)&&!acWallHits(candidate).length;
@@ -86,11 +100,11 @@ export function mountAirConditioner(f,items,{clamp=true,face=null}={}){
   return best?.item||f;
 }
 export function acOnSurface(f,surface,items){
-  if(!surface||Math.abs(surface.normal.y)>.1)return null;
+  if(!surface||surface.action||Math.abs(surface.normal.y)>.1)return null;
   const host=surface.id&&items.find(o=>o.id===surface.id);
   if(surface.id&&!(host?.type==='beam'&&f.acKind!=='outdoor'))return null;
   const {point,normal}=surface,box=acBox(f),rot=Math.atan2(normal.x,normal.z)*180/Math.PI;
   const next={...f,x:point.x+normal.x*box.d/2,z:point.z+normal.z*box.d/2,rot,elevation:Math.max(.031,Math.min(HEIGHT-box.h-.001,point.y-box.h/2))};
   // A railing's bars stand in the middle of its wall line; the rack's back goes on the wall face.
-  return f.acKind==='outdoor'?mountAirConditioner(next,items):next;
+  return f.acKind==='outdoor'?mountAirConditioner(next,items,{facing:rot}):next;
 }

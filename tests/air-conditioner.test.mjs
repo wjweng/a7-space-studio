@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as T from 'three';
 import {validateFurniture,issues,HEIGHT} from '../dist/model.js';
 import {AC_UNITS,acSize,acBox,acSupported,acWallHits,mountAirConditioner,acOnSurface} from '../dist/air-conditioner.js';
-import {guardedAirConditioner,fitSize,turnAboutCentre,blocksCamera} from '../dist/spatial.js';
+import {guardedAirConditioner,fitSize,turnAboutCentre,blocksCamera,nearestClearHeight} from '../dist/spatial.js';
 import {furnitureInterference} from '../dist/geometry.js';
 import {SpaceScene} from '../dist/scene.js';
 import {encodeShare,decodeShare} from '../dist/share.js';
@@ -149,4 +149,29 @@ test('walk view can point at the balcony railing above its top rail, so racks ca
  const placed=acOnSurface(ac('outdoor'),hit,[]);assert(acSupported(placed,[]));assert.deepEqual(warnings(placed),[]);
  const near={point:new T.Vector3(7.5,1.7,5.8),normal:new T.Vector3(-1,0,0),id:'x'};assert.equal(scene.railingSurface(near),near,'something nearer wins');
  aim([7,1.6,4.7],[8.4,1.6,4.7]);assert.equal(scene.railingSurface(null),null,'beside the opening there is no railing');
+});
+test('walk view drops a unit into the gap of a stack, which the pointer height alone almost never hits',()=>{
+ // issue/A7-空間配置_10.json: three racks stacked on the balcony column, each stopped at contact.
+ const unit=(id,elevation)=>ac('outdoor',{id,name:id,w:.8,x:7.9,z:6.75,rot:-90,elevation});
+ const low=unit('low',.031),top=unit('top',1.555),mid={...unit('mid',.793),...mountAirConditioner({...unit('mid',.793),x:7.4,z:7.05},[])},items=[low,mid,top];
+ assert.notEqual(mid.rot,-90,'moved onto the south wall');assert.deepEqual(warnings(mid,[low,top]),[]);
+ let hits=0;
+ for(let k=0;k<=60;k++){const y=.9+k/100;
+  const spot=acOnSurface(mid,{point:{x:8.1,y,z:6.75},normal:{x:-1,y:0,z:0},id:null},items);
+  assert(warnings(spot,[low,top]).length,'the raw pointer height clashes');
+  const snapped=nearestClearHeight(mid,spot,items),r=guardedAirConditioner(mid,snapped,items);
+  if(!r.reason&&r.item.rot===-90&&!warnings(r.item,[low,top]).length)hits++;
+ }
+ assert.equal(hits,61,'every pointer height within the stack lands in the gap');
+ const fresh=ac('outdoor',{id:'new',w:.8,x:0,z:0}),spot=acOnSurface(fresh,{point:{x:8.1,y:1.2,z:6.75},normal:{x:-1,y:0,z:0},id:null},[low,top]);
+ assert.equal(nearestClearHeight(fresh,spot,[low,top],{strict:true}).rot,-90);
+});
+test('pointing at a face near a corner slides the rack along that face to clear the wall, never onto the other wall',()=>{
+ // _10.json: the column face (85 cm) meets the south wall; an 88 cm rack has under 1 mm of play there.
+ const f=ac('outdoor',{id:'m',w:.8,x:7.4,z:6.984,rot:180,elevation:.793});
+ for(const z of [6.6,6.8,6.95,7.1]){
+  const placed=acOnSurface(f,{point:{x:8.1,y:1.17,z},normal:{x:-1,y:0,z:0},id:null},[]);
+  assert.equal(placed.rot,-90,`pointer at z ${z} stays on the column face`);assert.deepEqual(warnings(placed),[],`pointer at z ${z}`);
+ }
+ assert.equal(acOnSurface(f,{point:{x:8.1,y:1.17,z:6.9},normal:{x:-1,y:0,z:0},id:null,action:'door-5'},[]),null,'a door leaf is no mounting surface');
 });

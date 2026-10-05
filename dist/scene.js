@@ -731,10 +731,11 @@ stepLightFade(dt){if(!this.fading?.size)return false;for(const light of this.fad
   const r=this.host.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);if(document.pointerLockElement===this.renderer.domElement)this.pointer.set(0,0);
   this.ray.setFromCamera(this.pointer,this.activeCamera);
   for(const hit of this.ray.intersectObjects([this.furniture,this.building],true)){
-   if(!shown(hit.object)||!hit.face)continue;let p=hit.object,id=null;while(p){if(p.userData.furniture){id=p.userData.furniture;break;}p=p.parent;}
+   if(!shown(hit.object)||!hit.face)continue;let p=hit.object,id=null,action=null;while(p){if(p.userData.furniture){id=p.userData.furniture;break;}if(p.userData.action)action??=p.userData.action;p=p.parent;}
    if(skip&&id===skip)continue;
    const normal=hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
-   return{point:hit.point.clone(),normal,id};
+   // `action`: a door leaf or other moving part, which nothing can be mounted on.
+   return{point:hit.point.clone(),normal,id,action};
   }
   return null;
  }
@@ -796,6 +797,13 @@ stepLightFade(dt){if(!this.fading?.size)return false;for(const light of this.fad
    best={point,normal,id:null};far=distance;
   }
   return best;
+ }
+ // Where the pointer ray meets the wall behind an AC (its mounting face), facing out, so pointing
+ // at a stacked unit means pointing at the wall it hangs on.
+ acWallSurface(o){
+  const box=acBox(o),a=o.rot*Math.PI/180,normal=new T.Vector3(Math.sin(a),0,Math.cos(a));
+  const point=this.ray.ray.intersectPlane(new T.Plane().setFromNormalAndCoplanarPoint(normal,new T.Vector3(o.x-normal.x*box.d/2,0,o.z-normal.z*box.d/2)),new T.Vector3);
+  return point&&{point,normal,id:null};
  }
  mountPlanePoint(f){const a=f.rot*Math.PI/180,flat=f.type==='outlet'&&flatMount(f),normal=flat?new T.Vector3(0,1,0):new T.Vector3(Math.sin(a),0,Math.cos(a));return this.ray.ray.intersectPlane(new T.Plane().setFromNormalAndCoplanarPoint(normal,new T.Vector3(f.x,f.elevation||0,f.z)),new T.Vector3);}
  ground(e){const r=this.host.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.pointer,this.activeCamera);return this.ray.ray.intersectPlane(this.plane,new T.Vector3);}

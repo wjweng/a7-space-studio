@@ -344,18 +344,46 @@ export function guardedSocket(f,next,items,{hop=true}={}){
 }
 // How far an AC sinks into another item: the smaller of the plan and the height overlap, the
 // shortest way out. Others are taken as their footprint over their own height band.
-function acDepth(f,o){
- const a=acBox(f),b=isAirConditioner(o)?acBox(o):o;
+// An item's footprint over its own height band, as seen by an AC.
+function acSpan(o){
+ const b=isAirConditioner(o)?acBox(o):o;
  const lift=['television','hangingCabinet','panel','cove'].includes(b.type)||isAirConditioner(o)?b.elevation||0:['beam','light'].includes(b.type)?HEIGHT-b.h:0;
- const plan=-signedDistance(a,b),high=Math.min(a.elevation+a.h,lift+b.h)-Math.max(a.elevation,lift);
+ return {box:b,bottom:lift,top:lift+b.h};
+}
+function acDepth(f,o){
+ const a=acBox(f),{box:b,bottom,top}=acSpan(o);
+ const plan=-signedDistance(a,b),high=Math.min(a.elevation+a.h,top)-Math.max(a.elevation,bottom);
  return Math.max(0,Math.min(plan,high));
+}
+function acCheck(f,items){
+ const added=problemCheck(f,items),before=issues(f,items,{doorSweeps:false}),sunk=items.filter(o=>o.id!==f.id&&before.includes(`與${o.name}重疊`)).map(o=>({o,depth:acDepth(f,o)}));
+ const deeper=p=>sunk.find(({o,depth})=>acDepth(p,o)>depth+1e-6);
+ return p=>added(p)||(deeper(p)?`與${deeper(p).o.name}重疊`:'');
+}
+// Walk view places a unit at the pointer's height, so a gap between stacked units (a few mm
+// taller than the unit) was almost impossible to hit. When the spot under the pointer is blocked,
+// try the heights just above and just below each thing in that column, nearest the pointer first,
+// within half a metre. Returns `next` itself when it is clear, null when nothing nearby is.
+// `strict` (a new unit, not yet in `items`) accepts only a spot with no problem at all.
+export function nearestClearHeight(f,next,items,{range=.5,strict=false}={}){
+ const others=items.filter(o=>o.id!==f.id),check=strict?p=>issues(p,[...others,p],{doorSweeps:false})[0]||'':acCheck(f,items);if(!check(next))return next;
+ const box=acBox(next),start=next.elevation||0,gap=.002+1e-7,heights=[],spans=[];
+ for(const o of items){
+  if(o.id===f.id||['rug','outlet'].includes(o.type))continue;const {box:b,bottom,top}=acSpan(o);
+  if(clashes(box,b))spans.push([bottom,top]);
+ }
+ // Resting on or hanging under each one, or centred in a gap that is only just tall enough (a
+ // unit stopped at contact leaves about 2 mm a side, which the rack clearance needs exactly).
+ for(const [bottom,top] of spans){heights.push(top+gap,bottom-box.h-gap);for(const [above] of spans)if(above-top>=box.h)heights.push((top+above-box.h)/2);}
+ heights.push(HEIGHT-.001-box.h,.031);
+ for(const elevation of heights.filter(e=>Math.abs(e-start)<=range).sort((a,b)=>Math.abs(a-start)-Math.abs(b-start))){const p={...next,elevation};if(!check(p))return p;}
+ return null;
 }
 // Shared wall-plane slide, with along/up contact and no tunnelling in walk view. A clash the
 // unit already has never locks it in place, but it may not sink any deeper into that item
 // (placed overlapping a beam, a walk-view drag once carried it up into the beam).
 export function guardedAirConditioner(f,next,items,{hop=true}={}){
- const added=problemCheck(f,items),before=issues(f,items,{doorSweeps:false}),sunk=items.filter(o=>o.id!==f.id&&before.includes(`與${o.name}重疊`)).map(o=>({o,depth:acDepth(f,o)}));
- const deeper=p=>sunk.find(({o,depth})=>acDepth(p,o)>depth+1e-6),check=p=>added(p)||(deeper(p)?`與${deeper(p).o.name}重疊`:'');
+ const check=acCheck(f,items);
  if((f.spin||0)!==(next.spin||0))return{item:next,reason:''};
  // A move to another face starts by turning in place; when that turn is already blocked the
  // slide used to stop there, turned into the wall or out past the railing. Stay put instead.

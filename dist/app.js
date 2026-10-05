@@ -1,5 +1,5 @@
 import {isAirConditioner,AC_UNITS,acBox,mountAirConditioner,acOnSurface} from './air-conditioner.js';
-import {guardedAirConditioner} from './spatial.js';
+import {guardedAirConditioner,nearestClearHeight} from './spatial.js';
 import {SpaceScene} from './scene.js';
 import {VERSION,LAYOUT_REVISION,migrateLayout,HEIGHT,outline,walls,initialFurniture,palettes,rooms,doors,curtains,clone,issues,overlaps,wallRects,validateFurniture,normalizeSinkBasin,normalizeKitchenParts,normalizeLight,lightKinds,lightShapes,lightColorTemperatures,corners,inside,insideShell} from './model.js';
 import {outletKinds,outletMounts,outletSize,TROUGH,troughCapacity,flatMount,normalizeSpin,turnedSize,minimumsFor,linearLightDefaults,wetRooms,normalizeFloors,fabricTypes,fabricColors,mountedOn,mountDrop,ceilingTypes,cabinetTypes,hangingElevation} from './model.js';
@@ -451,7 +451,7 @@ scene.onSocketDrag=(id,surface,planePoint)=>{if(isAirConditioner(items.find(f=>f
  if(flatMount(f)&&(!result||result.reason)){const point=planePoint(f);if(point)result={item:placeOutlet({...f,x:point.x,z:point.z},items,{fromPoint:true}),reason:''};}
  const n=result?.item;if(!n||n===f)return;for(const key of Object.keys(f))if(!(key in n))delete f[key];Object.assign(f,n);scene.resizeItem(f);renderProps();};
 scene.onSocketDragEnd=id=>{const f=items.find(item=>item.id===id);if(f)openSocketCell(f);if(beforeDrag){history.push(beforeDrag);future=[];beforeDrag=null;persist();renderList();updateUndo();}};
-scene.onPlaceSurface=surface=>{if(isAirConditioner(placementCandidate)){if(placementCandidate.acKind==='outdoor')surface=scene.railingSurface(surface);const n=acOnSurface(placementCandidate,surface,items);if(!n)return notify('請點選可安裝冷氣的牆面或樑側面。');finishAirPlacement(n);return;}if(placementCandidate?.type!=='outlet')return;const n=socketAt(placementCandidate,surface);if(!n)return notify(placementCandidate.trough?'線槽要裝在桌面或櫃子頂面上，請點桌子或櫃子的頂面。':'請點牆面、櫃子或桌面的表面。');remember();items.push(n);placementCandidate=null;scene.cancelPlacement(false);$('placementHint').hidden=true;scene.buildFurniture(items);openSocketCell(n);select(n.id);render();persist();notify(n.trough?'線槽已加入，縫朝向靠牆那一側；可以沿檯面或層板拖動，用「旋轉角度」轉方向。':'插座已加入；可以直接拖到牆面、櫃子上或櫃格內。');};
+scene.onPlaceSurface=surface=>{if(isAirConditioner(placementCandidate)){surface=airSurface(placementCandidate,surface);const n=airTarget(placementCandidate,acOnSurface(placementCandidate,surface,items));if(!n)return notify('請點選可安裝冷氣的牆面或樑側面。');finishAirPlacement(n);return;}if(placementCandidate?.type!=='outlet')return;const n=socketAt(placementCandidate,surface);if(!n)return notify(placementCandidate.trough?'線槽要裝在桌面或櫃子頂面上，請點桌子或櫃子的頂面。':'請點牆面、櫃子或桌面的表面。');remember();items.push(n);placementCandidate=null;scene.cancelPlacement(false);$('placementHint').hidden=true;scene.buildFurniture(items);openSocketCell(n);select(n.id);render();persist();notify(n.trough?'線槽已加入，縫朝向靠牆那一側；可以沿檯面或層板拖動，用「旋轉角度」轉方向。':'插座已加入；可以直接拖到牆面、櫃子上或櫃格內。');};
 // Top view: a socket goes onto the top under the pointer (a table, desk or cabinet), else the nearest wall.
 function socketInTopView(f,point){const candidate=socketFromTopView(f,point,items);let n;try{n=validateFurniture([candidate])[0];}catch{return f;}return placeOutlet(n,items,{fromPoint:true});}
 // Top view: show (see-through) or hide the beams, hanging cabinets and lights.
@@ -482,10 +482,18 @@ const renderWithAirConditioner=renderProps;
 renderProps=()=>{renderWithAirConditioner();const f=items.find(o=>o.id===selected);acControls.hidden=!isAirConditioner(f);if(!isAirConditioner(f))return;const outdoor=f.acKind==='outdoor';$('propType').textContent=outdoor?'冷氣機・室外機':'冷氣機・室內機';$('acElevationLabel').textContent=outdoor?'鐵架底部離地（cm）':'機身底部離地（cm）';$('acElevation').max=Math.floor((HEIGHT-acBox(f).h-.001)*1000)/10;if(document.activeElement!==$('acElevation'))$('acElevation').value=Math.round(f.elevation*1000)/10;$('acHint').textContent=outdoor?'尺寸為機身寬／深／高；鐵架另外占空間，與室外機一起移動。可調整高度上下排列，整組須固定在牆上。':'整個背面需貼在牆或樑的側面。可沿安裝面拖動、調整高度；碰到上下方家具會停住。';};
 $('acElevation').onchange=()=>{const f=items.find(o=>o.id===selected);if(isAirConditioner(f))commitFurniture(f,{...f,elevation:Number($('acElevation').value)/100});};
 function finishAirPlacement(n){remember();n=validateFurniture([n])[0];n.draft=issues(n,items).length>0;items.push(n);placementCandidate=null;scene.cancelPlacement(false);$('placementHint').hidden=true;scene.buildFurniture(items);select(n.id);render();persist();notify(n.draft?'冷氣機已加入，安裝位置有干涉，已標紅。':'冷氣機已加入，可沿安裝面拖動與調整高度。');}
+// Walk view: pointing at another AC means its wall; outdoor racks may also point at the railing.
+function airSurface(f,surface){
+ const host=surface?.id&&items.find(o=>o.id===surface.id);
+ if(isAirConditioner(host))surface=scene.acWallSurface(host)||surface;
+ return f.acKind==='outdoor'?scene.railingSurface(surface):surface;
+}
+// The spot under the pointer, or the nearest clear height on that wall (a gap in a stack).
+const airTarget=(f,n)=>n&&(nearestClearHeight(f,n,items,{strict:!items.includes(f)})||n);
 function dragAirConditioner(id,surface,planePoint){
  const f=items.find(o=>o.id===id);if(!f)return;if(!beforeDrag)beforeDrag=snapshot();
- if(f.acKind==='outdoor')surface=scene.railingSurface(surface);
- const candidate=acOnSurface(f,surface,items);let result=candidate&&guardedAirConditioner(f,candidate,items);
+ surface=airSurface(f,surface);
+ const candidate=airTarget(f,acOnSurface(f,surface,items));let result=candidate&&guardedAirConditioner(f,candidate,items);
  if(!result||result.reason){const point=planePoint(f);if(point){const box=acBox(f),a=f.rot*Math.PI/180,tx=Math.cos(a),tz=-Math.sin(a),along=(point.x-f.x)*tx+(point.z-f.z)*tz;result=guardedAirConditioner(f,{...f,x:f.x+tx*along,z:f.z+tz*along,elevation:point.y-box.h/2},items,{hop:false});}}
  if(!result)return;Object.assign(f,result.item);f.draft=issues(f,items).length>0;scene.resizeItem(f);renderProps();
 }
