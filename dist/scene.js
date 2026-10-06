@@ -272,6 +272,23 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
    g.matrixAutoUpdate=false;g.matrix.premultiply(move);g.matrixWorldNeedsUpdate=true;
   }
  }
+ // Inside a closed cell is dark in reality, but the scene's fill light reaches it like any other
+ // surface, so a slot or gap showed it as bright as the door. Its back panel and shelf take a darker
+ // copy of their material while the cell is closed (`shadeCells`, rechecked every frame). Only
+ // meshes still showing one of the two are switched, so top view's see-through copies stand.
+ shadedMaterial(lit){
+  if(!this.shadeCache)this.shadeCache=new Map;
+  let dark=this.shadeCache.get(lit);
+  if(!dark){dark=lit.clone();dark.color.multiplyScalar(.3);this.shadeCache.set(lit,dark);}
+  return dark;
+ }
+ shadeCells(a){
+  for(const shade of a.shades||[]){
+   const want=a.item.openCells?.[shade.cell]?shade.lit:shade.dark;
+   if(want===shade.dark&&shade.dark.map!==shade.lit.map){shade.dark.map=shade.lit.map;shade.dark.needsUpdate=true;}
+   if(shade.mesh.material!==want&&(shade.mesh.material===shade.lit||shade.mesh.material===shade.dark))shade.mesh.material=want;
+  }
+ }
  downlight(g,x,y,color){const spot=new T.SpotLight(color,0,6,1.25,.6,2);spot.position.set(x,y,0);spot.target.position.set(x,0,0);spot.userData.baseY=y;lampShadow(spot,512);g.add(spot,spot.target);return spot;}
  // Neighbouring towers, street, sky and the lift lobby. Shown only in walk view, where they
  // are seen through windows and the front door; they neither cast nor receive shadows.
@@ -503,7 +520,7 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   if(parts.length)this.actions.set(f.id,{type:'modularCabinet',item:f,parts,amount:0});
  }
  makeModularCabinet(g,f,box){
-  const t=.018,d=f.d,parts=[];
+  const t=.018,d=f.d,parts=[],shades=[];
   // Sides, top and each column's lowest board pass 'wood', which box()
   // resolves to the cabinet's finish or the palette; see cabinetFinishSlots.
   const finish=(code,fallback='wood')=>code&&this.finishMaterial(code)||fallback;
@@ -547,10 +564,10 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   for(const cell of structure.cells){
    const{x,y,w,h,bottom,front,id,last,insetL,insetR}=cell,frontW=w-FRONT_GAP,frontH=h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cellFinish(f,cell,'door'));
    const innerW=w-insetL-insetR,cx=x+(insetL-insetR)/2;
-   box(innerW,h,t,cx,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));
+   const back=box(innerW,h,t,cx,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));if(front!=='open')shades.push({cell:id,mesh:back});
    const lowest=cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom;
    const shelfBack=shelfSetback(x-w/2,x+w/2,bottom);
-   if(!cell.noBase)box(innerW,t,d-t-shelfBack,cx,bottom+t/2,t/2-shelfBack/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
+   if(!cell.noBase){const shelf=box(innerW,t,d-t-shelfBack,cx,bottom+t/2,t/2-shelfBack/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));if(front!=='open')shades.push({cell:id,mesh:shelf});}
    if(last)box(innerW,t,d-t,cx,bottom+h-t/2,t/2);
    // Hinged doors, and sliding doors shared by several cells, are drawn per front panel below.
    if(front==='open'||hingedFronts.includes(front)||slidingFronts.includes(front)&&doorGroupOf(f.cabinetDesign,id))continue;
@@ -604,7 +621,9 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   // Start each part at its current open state, so a rebuild (a new finish,
   // a resize) does not replay the opening animation.
   for(const part of parts){part.amount=f.openCells?.[part.id]?1:0;if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+slideTravel(part,f.openCells?.[part.id]);}
-  if(parts.length)this.actions.set(f.id,{type:'modularCabinet',item:f,parts,amount:0});
+  for(const shade of shades){shade.lit=shade.mesh.material;shade.dark=this.shadedMaterial(shade.lit);}
+  if(parts.length)this.actions.set(f.id,{type:'modularCabinet',item:f,parts,shades,amount:0});
+  this.shadeCells({item:f,shades});
  }
  makeFurnitureParts(g,f){let{w,d,h,type}=f;const box=(ww,hh,dd,x,y,z,m='wood',r=0)=>this.box(g,ww,hh,dd,x,y,z,m,r);const legs=(height,offset=.07)=>{for(let x of[-w/2+offset,w/2-offset])for(let z of[-d/2+offset,d/2-offset])box(.045,height,.045,x,height/2,z,'wood',.008);};
  if(type==='airConditioner'){makeAirConditioner(this,g,f);return;}
@@ -985,7 +1004,7 @@ const ceilingItem=ceilingKinds.includes(f.type)&&!cabinetLight(f),hideCeiling=ce
  requestRender(ms=0){this.renderUntil=Math.max(this.renderUntil||0,performance.now()+ms);}
  cameraChanged(){const c=this.activeCamera;if(!c)return true;c.updateMatrixWorld();const key=c.matrixWorld.elements.join()+c.projectionMatrix.elements.join();if(key===this.lastCameraKey)return false;this.lastCameraKey=key;return true;}
  frame(){let dt=Math.min(this.clock.getDelta(),.04);let controlsMoved=false;if(this.mode==='orbit')controlsMoved=this.controls.update();if(this.mode==='walk'){this.ensureSafeCamera();this.followTour(dt);const sx=this.stick?.x||0,sy=this.stick?.y||0,forward=T.MathUtils.clamp((this.keys.has('KeyW')||this.keys.has('ArrowUp')?1:0)-(this.keys.has('KeyS')||this.keys.has('ArrowDown')?1:0)+sy,-1,1),side=(this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0),norm=Math.max(1,Math.hypot(forward,side)),speed=dt*1.5/norm;this.walkYaw+=T.MathUtils.clamp((this.keys.has('ArrowLeft')?1:0)-(this.keys.has('ArrowRight')?1:0)-sx,-1,1)*dt*1.3;let dx=(-Math.sin(this.walkYaw)*forward+Math.cos(this.walkYaw)*side)*speed,dz=(-Math.cos(this.walkYaw)*forward-Math.sin(this.walkYaw)*side)*speed;let p=this.camera.position;if(this.canWalk(p.x+dx,p.z))p.x+=dx;if(this.canWalk(p.x,p.z+dz))p.z+=dz;p.y=this.eye;this.camera.rotation.order='YXZ';this.camera.rotation.set(this.walkPitch,this.walkYaw,0);}
- let moving=false;for(const [id,a]of this.actions){let target=a.item?a.item.open||0:this.openStates[id]||0;if(Math.abs(a.amount-target)>1e-4)moving=true;a.amount=T.MathUtils.damp(a.amount,target,7,dt);if(a.type==='door')a.pivot.rotation.y=a.def.swing*a.amount*(a.def.maxAngle??89)*Math.PI/180;if(a.type==='shower')a.pivot.rotation.y=a.base+a.swing*a.amount*Math.PI/2;if(a.type==='washer')a.pivot.rotation.y=-a.amount*Math.PI*.5;if(a.type==='trough'){a.pivot.rotation.x=-a.amount*1.5;a.inside.visible=target>0&&a.amount>.6;}if(a.type==='cabinet'){a.pivots.forEach(p=>p.rotation.y=(p.userData.swing??-1)*a.amount*Math.PI*.5);a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);a.slides.forEach(p=>p.position.x=p.userData.baseX+p.userData.travelX*a.amount);}if(a.type==='modularCabinet')for(const part of a.parts){if(part.kind==='slide'){const goal=part.base+slideTravel(part,a.item.openCells?.[part.id]),x=part.pivot.position.x;if(Math.abs(x-goal)>1e-5)moving=true;part.pivot.position.x=T.MathUtils.damp(x,goal,7,dt);continue;}const goal=a.item.openCells?.[part.id]?1:0;const amount=part.amount||0;if(Math.abs(amount-goal)>1e-4)moving=true;part.amount=T.MathUtils.damp(amount,goal,7,dt);if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+part.amount*part.travel;}if(a.type==='cabdrawer')a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);if(a.type==='drawer')a.pivot.position.z=a.base+a.amount*a.travel;if(a.type==='curtain')for(const p of a.panels){let factor=1-.8*a.amount;p.g.scale.x=factor;p.g.position.x=p.sign<0?-a.width/2:a.width/2-a.width/2*factor;}}
+ let moving=false;for(const [id,a]of this.actions){let target=a.item?a.item.open||0:this.openStates[id]||0;if(Math.abs(a.amount-target)>1e-4)moving=true;a.amount=T.MathUtils.damp(a.amount,target,7,dt);if(a.type==='door')a.pivot.rotation.y=a.def.swing*a.amount*(a.def.maxAngle??89)*Math.PI/180;if(a.type==='shower')a.pivot.rotation.y=a.base+a.swing*a.amount*Math.PI/2;if(a.type==='washer')a.pivot.rotation.y=-a.amount*Math.PI*.5;if(a.type==='trough'){a.pivot.rotation.x=-a.amount*1.5;a.inside.visible=target>0&&a.amount>.6;}if(a.type==='cabinet'){a.pivots.forEach(p=>p.rotation.y=(p.userData.swing??-1)*a.amount*Math.PI*.5);a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);a.slides.forEach(p=>p.position.x=p.userData.baseX+p.userData.travelX*a.amount);}if(a.type==='modularCabinet')this.shadeCells(a);if(a.type==='modularCabinet')for(const part of a.parts){if(part.kind==='slide'){const goal=part.base+slideTravel(part,a.item.openCells?.[part.id]),x=part.pivot.position.x;if(Math.abs(x-goal)>1e-5)moving=true;part.pivot.position.x=T.MathUtils.damp(x,goal,7,dt);continue;}const goal=a.item.openCells?.[part.id]?1:0;const amount=part.amount||0;if(Math.abs(amount-goal)>1e-4)moving=true;part.amount=T.MathUtils.damp(amount,goal,7,dt);if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+part.amount*part.travel;}if(a.type==='cabdrawer')a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);if(a.type==='drawer')a.pivot.position.z=a.base+a.amount*a.travel;if(a.type==='curtain')for(const p of a.panels){let factor=1-.8*a.amount;p.g.scale.x=factor;p.g.position.x=p.sign<0?-a.width/2:a.width/2-a.width/2*factor;}}
  this.syncFrontLights();
  if(this.surroundings){this.surroundings.visible=this.mode==='walk';if(this.sky)this.sky.position.copy(this.camera.position);}
  const focus=this.viewFocus?.();this.fadeLights=true;if(focus&&(!this.shadowFocus||Math.hypot(focus.x-this.shadowFocus.x,focus.z-this.shadowFocus.z)>.5))this.assignLampShadows();

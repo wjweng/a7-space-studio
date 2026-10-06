@@ -281,7 +281,7 @@ test('split layers keep their widths through resizes and validate their parts',(
   const bad=structuredClone(f.cabinetDesign);bad.columns[0].cells[0].parts[1].width=.5;
   assert.throws(()=>validateCabinetDesign(f,bad),/總和/);
   const narrow=structuredClone(f.cabinetDesign);narrow.columns[0].cells[0].parts[0].front='sliding';
-  assert.throws(()=>validateCabinetDesign(f,narrow),/寬度不足/);
+  assert.doesNotThrow(()=>validateCabinetDesign(f,narrow),'sliding doors take any width');
 });
 
 test('a part can be split into rows of its own, and those into parts, to any depth',()=>{

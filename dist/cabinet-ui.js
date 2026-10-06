@@ -329,7 +329,7 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     for(const kind of fridge?fridgeFronts:cabinetFronts)front.add(new Option(labels[kind],kind));
     front.value=selectedLeaf.front;front.onchange=()=>{
       if(front.value!=='open'&&blockedByTv(members,'加上門面')){front.value=selectedLeaf.front;return;}
-      const least={sliding:50}[front.value];if(group&&least&&boundsOf(cabinetCells({...f,cabinetDesign:design}).filter(c=>members.includes(c.id))).w<least/100-1e-9){dialog.querySelector('.cabinetError').textContent=`${labels[front.value]}寬度至少要 ${least} cm`;front.value=selectedLeaf.front;return;}
+      
       if(group&&front.value!=='open'&&!groupFronts.includes(front.value)){dialog.querySelector('.cabinetError').textContent='抽屜只能用在單一格，請先拆開門板';front.value=selectedLeaf.front;return;}
       setAll(leaf=>{leaf.front=front.value;if(front.value==='open'||handleless.includes(front.value))delete leaf.handle;});
     };

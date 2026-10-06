@@ -219,7 +219,8 @@ test('cabinet finishes resolve cell, then cabinet-wide, then the cabinet finish'
  assert.equal(leaf(drawer),s.finishMaterial(doors),'a drawer front is a door');
  assert.equal(leaf(door),s.finishMaterial(own),'a cell finish overrides all doors');
  assert.equal(drawer.pivot.children[2].material,s.finishMaterial(whole),'an unset drawer box follows the cabinet finish');
- const meshes=g.children.filter(m=>m.isMesh),size=m=>m.geometry.parameters;
+ // Inside a closed cell the back and shelf show a darkened copy of their finish.
+ const meshes=g.children.filter(m=>m.isMesh).map(m=>({geometry:m.geometry,position:m.position,material:[...(s.shadeCache||new Map)].find(([,dark])=>dark===m.material)?.[0]??m.material})),size=m=>m.geometry.parameters;
  const backsFound=meshes.filter(m=>Math.abs(size(m).depth-.018)<1e-9&&m.position.z<0);
  assert.equal(backsFound.length,2,'one back panel per cell');
  assert.ok(backsFound.every(m=>m.material===s.finishMaterial(backs)));
@@ -385,4 +386,14 @@ test('a grooved pair cuts a finger slot into the right leaf at the middle and dr
  assert.equal(ray(slot,at((GROOVE.bottom+GROOVE.top)/2)),-1,'the slot is open right through at mid height');
  assert(near(ray(slot,at(GROOVE.top+.05)),face)&&near(ray(slot,at(GROOVE.bottom/3)),face),'board above and below the slot');
  assert(near(ray(.1,at(.3)),face),'the rest of the leaf is whole');
+});
+
+test('the inside of a closed cell is shaded, and lit again while it is open',()=>{
+ const s=fixture(),g=new THREE.Group;
+ const f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'shade',x:0,z:0,w:.8,d:.5,h:2,rot:0,openCells:{},cabinetDesign:{template:'custom',columns:[{id:'c',width:.8,bottom:0,cells:[{id:'shut',height:1,front:'left'},{id:'shelf',height:1,front:'open'}]}]}};
+ s.makeFurniture(g,f);const a=s.actions.get('shade');
+ assert.equal(a.shades.length,2,'the closed cell\'s back panel and shelf');
+ assert(a.shades.every(x=>x.mesh.material===x.dark&&x.dark.color.r<x.lit.color.r),'darker while closed');
+ f.openCells={shut:1};s.shadeCells(a);assert(a.shades.every(x=>x.mesh.material===x.lit),'lit while open');
+ const openBack=g.children.find(m=>m.isMesh&&Math.abs(m.position.y-1.5)<1e-6&&m.position.z<-.2);assert(openBack&&!a.shades.some(x=>x.mesh===openBack),'an open cell is never shaded');
 });
