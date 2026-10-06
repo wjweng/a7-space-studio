@@ -289,6 +289,8 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
    if(shade.mesh.material!==want&&(shade.mesh.material===shade.lit||shade.mesh.material===shade.dark))shade.mesh.material=want;
   }
  }
+ // Where the pointer ray of the last surfaceAt meets a plane (`point`, `normal`: plain {x,y,z}).
+ rayPlane(point,normal){const n=new T.Vector3(normal.x,normal.y,normal.z),plane=new T.Plane().setFromNormalAndCoplanarPoint(n,new T.Vector3(point.x,point.y,point.z));return this.ray.ray.intersectPlane(plane,new T.Vector3());}
  downlight(g,x,y,color){const spot=new T.SpotLight(color,0,6,1.25,.6,2);spot.position.set(x,y,0);spot.target.position.set(x,0,0);spot.userData.baseY=y;lampShadow(spot,512);g.add(spot,spot.target);return spot;}
  // Neighbouring towers, street, sky and the lift lobby. Shown only in walk view, where they
  // are seen through windows and the front door; they neither cast nor receive shadows.

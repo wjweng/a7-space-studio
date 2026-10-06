@@ -6,6 +6,8 @@ import {cabinetLight,cabinetLightOnSurface,placeCabinetLight,stripPose} from '..
 import {SpaceScene} from '../dist/scene.js';
 
 const near=(a,b,eps=1e-6)=>Math.abs(a-b)<eps;
+// The right leaf of the 1 m double door starts just right of the middle gap.
+const FRONT_LEFT=.0015;
 // A 1 m wardrobe facing +z (rot 0) at the origin: an open cell from the floor to 1 m, a door above.
 const wardrobe=(over={})=>validateFurniture([{...initialFurniture.find(f=>f.type==='wardrobe'),id:'w',x:0,z:0,w:1,d:.6,h:2.2,rot:0,openCells:{},cabinetDesign:{template:'custom',columns:[{id:'c',width:1,bottom:0,cells:[{id:'low',height:1,front:'open'},{id:'high',height:1.2,front:'double'}]}]},...over}])[0];
 const strip={id:'s',type:'light',name:'線燈',x:3,z:3,rot:0,lightKind:'linear',...linearLightDefaults,w:.6};
@@ -17,7 +19,9 @@ test('a linear light goes onto the cabinet face under the pointer',()=>{
  assert.equal(on(items,[0,2.2,0],[0,1,0]).lightMount,'top');
  assert.equal(on(items,[-.5,1.5,0],[-1,0,0]).lightMount,'left');
  assert.equal(on(items,[.5,1.5,0],[1,0,0]).lightMount,'right');
- assert.equal(on(items,[0,1.5,.318],[0,0,1]).lightMount,'front','a door face is the front');
+ const door=on(items,[.25,1.5,.318],[0,0,1]);assert.equal(door.lightMount,'front','a door face is the front');assert.equal(door.supportCell,'high:1','on the right leaf');
+ assert.equal(on(items,[0,1.5,.318],[0,0,1]),null,'not in the gap between the two leaves');
+ assert.equal(on(items,[.25,.5,.3],[0,0,1]),null,'not on the front edge of an open cell');
  const back=on(items,[0,.5,-.282],[0,0,1]);assert.equal(back.lightMount,'cell');assert.equal(back.supportCell,'low');
  const under=on(items,[0,1,0],[0,-1,0]);assert.equal(under.lightMount,'under');assert.equal(under.supportCell,'low','the board above the open cell');
  assert.equal(on(items,[0,1.018,0],[0,1,0]).supportCell,'high','a shelf top gives the back panel of the cell it carries');
@@ -100,4 +104,25 @@ test('a light on a door moves with the door as it opens',()=>{
  const door=s.frontPart(f).part;door.pivot.rotation.y=-door.sign*Math.PI/2;
  s.syncFrontLights();const open=centre();
  assert(open.z>closed.z+.1,`swung out with the right leaf (${open.x.toFixed(3)}, ${open.z.toFixed(3)})`);
+});
+
+test('a strip on a leaf stays within that leaf, and the pointer just past its edge keeps it there',async()=>{
+ const {stayOnFace,fitNewCabinetLight}=await import('../dist/cabinet-light.js');
+ const items=[wardrobe()],f=fitNewCabinetLight({...on(items,[.25,1.5,.318],[0,0,1]),w:.3},items);
+ assert(f.offsetU-f.w/2>=FRONT_LEFT-1e-6&&f.offsetU+f.w/2<=.5-.0015+1e-6,'inside the right leaf');
+ const edge=stayOnFace(f,{x:.53,y:1.5,z:.318},items);assert(edge&&near(edge.offsetU+edge.w/2,.5-.0015,1e-6),'2 cm past the edge: stopped at it');
+ assert.equal(stayOnFace(f,{x:.7,y:1.5,z:.318},items),null,'well past it: free to go elsewhere');
+});
+
+test('the ceiling seen from below takes a light though its face normal points up; spin carries over',()=>{
+ const items=[wardrobe()],f={...on(items,[.25,1.5,.318],[0,0,1]),spin:90};
+ const up=cabinetLightOnSurface(f,surface([2,3,2],[0,1,0],null),items);assert(up&&!cabinetLight(up)&&near(up.x,2));
+ assert.equal(cabinetLightOnSurface(f,surface([2,0,2],[0,1,0],null),items),null,'not the floor');
+ assert.equal(validateFurniture([cabinetLightOnSurface(f,surface([-.5,1.5,0],[-1,0,0]),items)])[0].spin,90,'a new face keeps the turn');
+});
+
+test('a new strip on a face too small for it takes the longest length that fits',async()=>{
+ const {fitNewCabinetLight}=await import('../dist/cabinet-light.js');
+ const items=[wardrobe()],f=fitNewCabinetLight(validateFurniture([cabinetLightOnSurface({...strip,w:1.2},surface([-.5,1.5,0],[-1,0,0]),items)])[0],items);
+ assert(near(f.w,.6,1e-3)&&!issues(f,[...items,f]).length,`length ${f.w}`);
 });
