@@ -78,3 +78,26 @@ test('on a sliding-door cabinet the leaves are the front, and the strip lies on 
  const f=on(items,[0,1.5,.294],[0,0,1]);assert.equal(f.lightMount,'front','a leaf 6 mm inside the carcass is still the front');
  assert(near(stripPose(f,items[0]).centre[2],.3-.006+f.h/2));
 });
+
+test('a typed size stops at the edge of the face, shifted inside it as far as it needs',async()=>{
+ const {fitCabinetLight}=await import('../dist/cabinet-light.js');
+ const items=[wardrobe()],f=on(items,[.3,.5,-.282],[0,0,1]);
+ const fit=fitCabinetLight(f,{...f,w:2},items);
+ assert(fit.stopped);assert(near(fit.item.w,1-2*.018,1e-3),`width ${fit.item.w}`);assert.deepEqual(issues(fit.item,[...items,fit.item]),[]);
+ const side=on(items,[-.5,1.5,0],[-1,0,0]),wide=fitCabinetLight(side,{...side,w:1.2},items);
+ assert(wide.item.w<=.6+1e-9,'on a 60 cm deep side a lying strip stops at 60 cm');assert.deepEqual(issues(wide.item,[...items,wide.item]),[]);
+ const fine=fitCabinetLight(f,{...f,w:.7},items);assert(!fine.stopped);assert.equal(fine.item.w,.7);
+});
+
+test('a light on a door moves with the door as it opens',()=>{
+ const s=Object.create(SpaceScene.prototype);
+ s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow','lightWhite','lightNatural','lightWarm'].map(k=>[k,new THREE.MeshStandardMaterial()]));
+ const host=wardrobe(),items=[host],f=on(items,[.25,1.6,.318],[0,0,1]);
+ Object.assign(s,{actions:new Map,items:[host,f],lightObjects:[],groups:new Map});
+ const hg=new THREE.Group,lg=new THREE.Group;s.makeFurniture(hg,host);s.makeFurniture(lg,f);lg.position.set(f.x,0,f.z);s.groups.set(host.id,hg).set(f.id,lg);
+ const centre=()=>{lg.updateMatrixWorld(true);return new THREE.Box3().setFromObject(lg.children[0]).getCenter(new THREE.Vector3());};
+ s.syncFrontLights();const closed=centre();assert(near(closed.x,f.x,1e-3)&&closed.x>0&&closed.z>.3,'closed: on the right leaf');
+ const door=s.frontPart(f).part;door.pivot.rotation.y=-door.sign*Math.PI/2;
+ s.syncFrontLights();const open=centre();
+ assert(open.z>closed.z+.1,`swung out with the right leaf (${open.x.toFixed(3)}, ${open.z.toFixed(3)})`);
+});

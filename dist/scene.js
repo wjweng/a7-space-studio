@@ -247,6 +247,31 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
    this.lightObjects.push({f,lens,point:spot,share:1/count,span:f.w/count});
   }
  }
+ // A light on a cabinet's front rides on the door, drawer front or sliding leaf under its centre:
+ // each frame its group takes that part's move away from its closed place. A part's closed place
+ // is its pivot without the turn (doors), the travel (drawers) or the slide (leaves).
+ frontPart(f){
+  const host=this.items?.find(item=>item.id===f.supportId),a=this.actions.get(f.supportId),pose=host&&a?.parts&&stripPose(f,host);if(!pose)return null;
+  const lift=host.type==='hangingCabinet'?host.elevation||0:0,x=pose.centre[0],y=pose.centre[1]-lift;let best=null;
+  for(const part of a.parts){
+   const mesh=part.pivot.children.find(o=>o.isMesh);if(!mesh)continue;mesh.geometry.computeBoundingBox();
+   const box=mesh.geometry.boundingBox.clone().translate(mesh.position),p=part.pivot.position,ox=part.kind==='slide'?part.base:p.x,oz=part.kind==='drawer'?part.base:p.z;
+   if(x<ox+box.min.x-1e-3||x>ox+box.max.x+1e-3||y<p.y+box.min.y-1e-3||y>p.y+box.max.y+1e-3)continue;
+   const front=oz+box.max.z;if(!best||front>best.front)best={part,front,rest:new T.Matrix4().makeTranslation(ox,p.y,oz)};
+  }
+  return best;
+ }
+ syncFrontLights(){
+  for(const f of this.items||[]){
+   if(f.lightMount!=='front'||!cabinetLight(f))continue;
+   const g=this.groups.get(f.id),host=this.groups.get(f.supportId);if(!g||!host)continue;
+   const link=this.frontPart(f);g.updateMatrix();
+   if(!link){g.matrixAutoUpdate=true;continue;}
+   const pivot=link.part.pivot;pivot.updateMatrix();host.updateMatrixWorld();
+   const move=host.matrixWorld.clone().multiply(pivot.matrix).multiply(link.rest.clone().invert()).multiply(host.matrixWorld.clone().invert());
+   g.matrixAutoUpdate=false;g.matrix.premultiply(move);g.matrixWorldNeedsUpdate=true;
+  }
+ }
  downlight(g,x,y,color){const spot=new T.SpotLight(color,0,6,1.25,.6,2);spot.position.set(x,y,0);spot.target.position.set(x,0,0);spot.userData.baseY=y;lampShadow(spot,512);g.add(spot,spot.target);return spot;}
  // Neighbouring towers, street, sky and the lift lobby. Shown only in walk view, where they
  // are seen through windows and the front door; they neither cast nor receive shadows.
@@ -565,9 +590,6 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
      this.box(pivot,width-gw,frontH,FRONT_T,sign*(width-gw)/2,0,0,face,.003);
      this.box(pivot,gw,frontH/2-y2,FRONT_T,edge,(y2+frontH/2)/2,0,face);
      this.box(pivot,gw,y1+frontH/2,FRONT_T,edge,(y1-frontH/2)/2,0,face);
-     // Through the slot one sees into the unlit cabinet; the carcass inside is lit like the door,
-     // so a thin dark lining behind the slot keeps it reading as a hollow, as in the photo.
-     this.box(pivot,gw+.01,y2-y1,.002,sign*(width-gw/2-.005),(y1+y2)/2,-FRONT_T/2-.002,'dark');
     }else this.box(pivot,width,frontH,FRONT_T,sign*width/2,0,0,face,.003);
     if(panel.handle)this.box(pivot,.013,.09,.022,sign*(width-.045),0,.02,'metal',.003);
     parts.push({id:panel.id,kind:'door',pivot,sign});
@@ -964,6 +986,7 @@ const ceilingItem=ceilingKinds.includes(f.type)&&!cabinetLight(f),hideCeiling=ce
  cameraChanged(){const c=this.activeCamera;if(!c)return true;c.updateMatrixWorld();const key=c.matrixWorld.elements.join()+c.projectionMatrix.elements.join();if(key===this.lastCameraKey)return false;this.lastCameraKey=key;return true;}
  frame(){let dt=Math.min(this.clock.getDelta(),.04);let controlsMoved=false;if(this.mode==='orbit')controlsMoved=this.controls.update();if(this.mode==='walk'){this.ensureSafeCamera();this.followTour(dt);const sx=this.stick?.x||0,sy=this.stick?.y||0,forward=T.MathUtils.clamp((this.keys.has('KeyW')||this.keys.has('ArrowUp')?1:0)-(this.keys.has('KeyS')||this.keys.has('ArrowDown')?1:0)+sy,-1,1),side=(this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0),norm=Math.max(1,Math.hypot(forward,side)),speed=dt*1.5/norm;this.walkYaw+=T.MathUtils.clamp((this.keys.has('ArrowLeft')?1:0)-(this.keys.has('ArrowRight')?1:0)-sx,-1,1)*dt*1.3;let dx=(-Math.sin(this.walkYaw)*forward+Math.cos(this.walkYaw)*side)*speed,dz=(-Math.cos(this.walkYaw)*forward-Math.sin(this.walkYaw)*side)*speed;let p=this.camera.position;if(this.canWalk(p.x+dx,p.z))p.x+=dx;if(this.canWalk(p.x,p.z+dz))p.z+=dz;p.y=this.eye;this.camera.rotation.order='YXZ';this.camera.rotation.set(this.walkPitch,this.walkYaw,0);}
  let moving=false;for(const [id,a]of this.actions){let target=a.item?a.item.open||0:this.openStates[id]||0;if(Math.abs(a.amount-target)>1e-4)moving=true;a.amount=T.MathUtils.damp(a.amount,target,7,dt);if(a.type==='door')a.pivot.rotation.y=a.def.swing*a.amount*(a.def.maxAngle??89)*Math.PI/180;if(a.type==='shower')a.pivot.rotation.y=a.base+a.swing*a.amount*Math.PI/2;if(a.type==='washer')a.pivot.rotation.y=-a.amount*Math.PI*.5;if(a.type==='trough'){a.pivot.rotation.x=-a.amount*1.5;a.inside.visible=target>0&&a.amount>.6;}if(a.type==='cabinet'){a.pivots.forEach(p=>p.rotation.y=(p.userData.swing??-1)*a.amount*Math.PI*.5);a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);a.slides.forEach(p=>p.position.x=p.userData.baseX+p.userData.travelX*a.amount);}if(a.type==='modularCabinet')for(const part of a.parts){if(part.kind==='slide'){const goal=part.base+slideTravel(part,a.item.openCells?.[part.id]),x=part.pivot.position.x;if(Math.abs(x-goal)>1e-5)moving=true;part.pivot.position.x=T.MathUtils.damp(x,goal,7,dt);continue;}const goal=a.item.openCells?.[part.id]?1:0;const amount=part.amount||0;if(Math.abs(amount-goal)>1e-4)moving=true;part.amount=T.MathUtils.damp(amount,goal,7,dt);if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+part.amount*part.travel;}if(a.type==='cabdrawer')a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);if(a.type==='drawer')a.pivot.position.z=a.base+a.amount*a.travel;if(a.type==='curtain')for(const p of a.panels){let factor=1-.8*a.amount;p.g.scale.x=factor;p.g.position.x=p.sign<0?-a.width/2:a.width/2-a.width/2*factor;}}
+ this.syncFrontLights();
  if(this.surroundings){this.surroundings.visible=this.mode==='walk';if(this.sky)this.sky.position.copy(this.camera.position);}
  const focus=this.viewFocus?.();this.fadeLights=true;if(focus&&(!this.shadowFocus||Math.hypot(focus.x-this.shadowFocus.x,focus.z-this.shadowFocus.z)>.5))this.assignLampShadows();
  if(this.bounce&&this.lightRoom()!==this.litRoom){this.assignLampShadows();this.updateRoomLight();}this.fadeLights=false;

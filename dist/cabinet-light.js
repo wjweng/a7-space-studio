@@ -101,3 +101,17 @@ export function normalizeCabinetLight(f,lightKind){
   const spin=((Math.round(Number(f.spin)||0)%360)+360)%360;if(spin)out.spin=spin;
   return out;
 }
+// A typed size on a cabinet light stops like furniture: at the largest size between the old and
+// the requested one that still fits its face (whole millimetres), shifted inside the face as far
+// as it needs. A strip that already ran past (after a turn) keeps the requested size, flagged.
+export function fitCabinetLight(before,next,items){
+  const host=items.find(item=>item.id===next.supportId),face=host&&lightFace(host,next.lightMount,next.supportCell);
+  if(!face)return{item:next,stopped:false};
+  const fits=f=>{const[eu,ev]=extents(f);return 2*eu<=face.u2-face.u1+1e-9&&2*ev<=face.v2-face.v1+1e-9;};
+  if(fits(next))return{item:placeCabinetLight(next,items,{stop:true}),stopped:false};
+  if(!fits({...next,w:before.w,d:before.d}))return{item:next,stopped:false};
+  let lo=0,hi=1;
+  for(let i=0;i<40;i++){const k=(lo+hi)/2;if(fits({...next,w:before.w+(next.w-before.w)*k,d:before.d+(next.d-before.d)*k}))lo=k;else hi=k;}
+  const size=key=>next[key]>before[key]?Math.floor((before[key]+(next[key]-before[key])*lo)*1000+1e-6)/1000:next[key];
+  return{item:placeCabinetLight({...next,w:size('w'),d:size('d')},items,{stop:true}),stopped:true};
+}

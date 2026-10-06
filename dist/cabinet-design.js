@@ -11,7 +11,7 @@ export const handleless=['grooved','sliding4'];
 // height, cut into the right leaf's edge at the middle.
 export const GROOVE={w:.03,bottom:.015,top:.614};
 // Minimum widths by front.
-const minWidth={double:.4,grooved:.4,sliding:.5,sliding4:1,drawers:.25};
+const minWidth={double:.4,grooved:.4,sliding:.5,drawers:.25};
 export const cabinetTemplates={
   closed:{label:'全封閉收納櫃',columns:[{share:1,bottom:0,front:'double'}]},
   niche:{label:'中央開放收納櫃',columns:[{share:.3,bottom:0,front:'left'},{share:.4,bottom:0,front:'open'},{share:.3,bottom:0,front:'open'}]},
@@ -214,7 +214,7 @@ export function mergeDoorCells(f,ids){
   if(cells.length<2)throw Error('請至少選兩格');
   if(!isRectangle(cells))throw Error('選到的格子要剛好拼成一個矩形，門板才能對齊格子');
   const width=boundsOf(cells).w,chosen=ids.map(id=>cells.find(c=>c.id===id)).find(c=>c&&groupFronts.includes(c.front));
-  let front=chosen?.front||'double';if(front==='sliding4'&&width<1)front='sliding';if(front==='sliding'&&width<.5||['double','grooved'].includes(front)&&width<.4)front='left';
+  let front=chosen?.front||'double';if(front==='sliding'&&width<.5||['double','grooved'].includes(front)&&width<.4)front='left';
   const lead=chosen||cells.find(c=>c.id===ids[0])||cells[0],handle=cells.some(c=>c.handle)&&!handleless.includes(front),door=lead.finishes?.door;
   for(const cell of cells){
     const leaf=findLeaf(design,cell.id);leaf.front=front;
