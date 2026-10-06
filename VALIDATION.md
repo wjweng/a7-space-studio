@@ -1,5 +1,17 @@
 # Validation and work history
 
+## Share links, export and scheme copies — 2026-10-05
+
+From the owner's export `issue/A7-空間配置_12.json` (Dropbox) and a share link of it that would not open, in commits `98e941a` and `2f295a7`. At the end all **290 automated tests passed** (share 11, schemes 7), and the live site served both commits.
+
+| Report | Finding / change | How it was checked |
+| --- | --- | --- |
+| Does the shared link match the exported file? | The pasted link was exactly 10,000 characters and its deflate stream ended mid-furniture; the 27,770 characters it did decode matched the file exactly. Truncated in transit, not by the app | Python decode of the link against the file |
+| Links grow too long | Random UUIDs barely compress and were about half of a deflated link. Format `v:2` packs them into `~<base36>` tokens and drops the four furniture flags `validateFurniture` restores; the 88-piece layout went from 12,851 to 6,974 characters. Old links still open | Unit tests (round trip by structure and references, same ids on every open, tilde escaping, old format); the real layout and its 30 saved schemes round-trip; browser opens the new link with 88 pieces, palette and floors equal to the file |
+| "Damaged" notice went unnoticed | A failed link opens `shareErrorDialog` with the reason, the received length and the truncation cause, instead of a 3-second toast | Browser, the owner's truncated link at desktop and 390 px widths, on load and on `hashchange` |
+| Import multiplied the scheme list | 匯出 now writes only the current layout; 備份全部方案 writes all schemes. Import adds only layouts not already listed and never pushes existing schemes out (it used to append and keep the last 30) | Unit tests on `mergeSchemes`; browser, importing the 30-scheme file twice adds nothing and says so |
+| Duplicate checks never fired | `stateKey` was unstable: stored cabinets without a design get random ids on each validation. `canonicalIds` renames ids by first appearance. A one-time cleanup collapsed the copies | Unit test (raw keys differ, canonical keys match); browser with the file's 30 schemes (2 layouts) leaves 2 and reports 28 merged; reopening a share link adds no copy |
+
 ## Air conditioner owner fixes — 2026-10-05
 
 From the owner's use with their own layouts (Dropbox `issue/A7-空間配置_8.json` to `_11.json`, `issue_40`-`44`), in commits `6c54b5e`, `64724b5`, `571b7d6`, `c1fdc49`, `fcff99c` and `7caa095`. At the end all **277 automated tests passed**, 26 of them air-conditioner tests (9 added by these fixes). The owner then confirmed that units place correctly, and the live site's AC, spatial, app and scene modules were checked byte-identical to `7caa095`.
