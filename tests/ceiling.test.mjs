@@ -44,3 +44,17 @@ test('a beam clashes with floor furniture that reaches up into it, both ways',as
   assert.deepEqual(issues(low,[low,beam]).filter(m=>m.includes('樑')),[],'a cabinet ending at the beam underside fits');
   assert.deepEqual(issues(beam,[low,beam]),[]);
 });
+
+test('a light may span beams of one height meeting end to end, not beams of two heights',async()=>{
+ const {issues,mountDrop}=await import('../dist/model.js');
+ const beam=(id,z,w,h)=>({id,type:'beam',name:id,x:.26,z,w,d:.39,h,rot:90});
+ const light={id:'l',type:'light',name:'線燈',x:.3,z:1.6,w:1.2,d:.1,h:.01,rot:270,lightKind:'linear'};
+ const level=[beam('a',1.095,1.11,.5),beam('b',4.15,5,.5)];
+ assert.deepEqual(issues(light,[...level,light]).filter(m=>m.includes('樑')),[]);
+ assert.equal(mountDrop(light,[...level,light]),.5);
+ const stepped=[beam('a',1.095,1.11,.5),beam('b',4.15,5,.3)];
+ assert(issues(light,[...stepped,light]).some(m=>m.includes('與b重疊')||m.includes('與a重疊')),'hosts at two levels stay a clash');
+ // A gap between the beams leaves part of the light under bare ceiling.
+ const gap=[beam('a',1.0,1.0,.5),beam('b',4.15,5,.5)];
+ assert(issues(light,[...gap,light]).some(m=>m.startsWith('與')),'a gap between beams is no mount');
+});
