@@ -93,15 +93,32 @@ export function cabinetLightIssues(f,items){
 // from the scene): the ceiling or a beam's or hanging cabinet's underside makes it a ceiling light
 // at that spot; a cabinet's top, side or front, a cell's back panel or the underside of the board
 // above a cell mounts it there. Anything else (a wall, the floor, a drawer) gives null.
+// Which way a linear light runs in plan, in degrees like a ceiling light's `rot` (its length along
+// (cos, -sin)): a ceiling light's own turn, or a cabinet light's length seen from above (one
+// standing upright on a side or front runs along that face). A light moved between the ceiling
+// and a cabinet keeps this direction rather than going back to 0.
+function planTurn(f,items){
+  if(!cabinetLight(f))return f.rot||0;
+  const host=items.find(item=>item.id===f.supportId),pose=host&&stripPose(f,host);if(!pose)return f.rot||0;
+  const dir=Math.hypot(pose.along[0],pose.along[2])>.3?pose.along:pose.face.u,a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+  const x=dir[0]*c+dir[2]*s,z=-dir[0]*s+dir[2]*c;
+  return ((Math.round(Math.atan2(-z,x)*180/Math.PI)%360)+360)%360;
+}
+// The turn in a level face (a top, under a board) that runs a ceiling light the same way.
+function faceTurn(turn,host,mount){
+  if(!['top','under'].includes(mount))return undefined;
+  const r=turn*Math.PI/180,dx=Math.cos(r),dz=-Math.sin(r),a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+  return ((Math.round(Math.atan2(dx*s+dz*c,dx*c-dz*s)*180/Math.PI)%360)+360)%360;
+}
 export function cabinetLightOnSurface(f,{point,normal,id},items){
   const base={...f};for(const key of['lightMount','supportId','supportCell','offsetU','offsetV'])delete base[key];
   const host=id&&items.find(item=>item.id===id);
   // The ceiling is one double-sided plane whose face normal points up, so from below it reads as
   // facing up: any upright-normal building face high above the floor is the ceiling.
-  if(!id&&Math.abs(normal.y)>.7&&point.y>1.5||normal.y<-.7&&(host?.type==='beam'||host?.type==='hangingCabinet'&&point.y<lift(host)+.005))return{...base,x:point.x,z:point.z};
+  if(!id&&Math.abs(normal.y)>.7&&point.y>1.5||normal.y<-.7&&(host?.type==='beam'||host?.type==='hangingCabinet'&&point.y<lift(host)+.005)){const out={...base,x:point.x,z:point.z,rot:planTurn(f,items)};delete out.spin;return out;}
   if(!host||!cabinetLightHosts.includes(host.type))return null;
   const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=point.x-host.x,dz=point.z-host.z,x=dx*c-dz*s,y=point.y-lift(host),z=dx*s+dz*c;
-  const nx=normal.x*c-normal.z*s,nz=normal.x*s+normal.z*c,mount=(lightMount,supportCell)=>placeCabinetLight({...base,lightMount,supportId:host.id,...(supportCell?{supportCell}:{}),spin:f.spin},items,{point});
+  const nx=normal.x*c-normal.z*s,nz=normal.x*s+normal.z*c,mount=(lightMount,supportCell)=>placeCabinetLight({...base,lightMount,supportId:host.id,...(supportCell?{supportCell}:{}),spin:cabinetLight(f)?f.spin:faceTurn(f.rot||0,host,lightMount)},items,{point});
   const cells=host.cabinetDesign?cabinetCells(host).filter(cell=>cell.front!=='drawers'&&x>=cell.x-cell.w/2-1e-6&&x<=cell.x+cell.w/2+1e-6):[];
   if(normal.y>.7){
     if(y>host.h-.005)return mount('top');

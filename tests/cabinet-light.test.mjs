@@ -126,3 +126,15 @@ test('a new strip on a face too small for it takes the longest length that fits'
  const items=[wardrobe()],f=fitNewCabinetLight(validateFurniture([cabinetLightOnSurface({...strip,w:1.2},surface([-.5,1.5,0],[-1,0,0]),items)])[0],items);
  assert(near(f.w,.6,1e-3)&&!issues(f,[...items,f]).length,`length ${f.w}`);
 });
+
+test('a light moved between a cabinet and the ceiling keeps the way it runs',()=>{
+ const items=[validateFurniture([{...initialFurniture.find(f=>f.type==='wardrobe'),id:'w',x:0,z:0,w:1,d:.6,h:2.2,rot:90,openCells:{},cabinetDesign:{template:'custom',columns:[{id:'c',width:1,bottom:0,cells:[{id:'low',height:1,front:'open'},{id:'high',height:1.2,front:'double'}]}]}}])[0]];
+ // Under the board, turned 90° in that face: it runs front to back, along world x for a cabinet turned 90°.
+ const under=validateFurniture([{...cabinetLightOnSurface({...strip,w:.3},surface([0,1,0],[0,-1,0]),items),spin:90}])[0];
+ const up=validateFurniture([cabinetLightOnSurface(under,surface([3,3,3],[0,1,0],null),items)])[0];
+ assert(!cabinetLight(up));assert([0,180].includes(up.rot),`rot ${up.rot}`);
+ const back=validateFurniture([cabinetLightOnSurface({...up,rot:0},surface([0,2.2,0],[0,1,0]),items)])[0];
+ assert.equal(back.lightMount,'top');assert([90,270].includes(back.spin),`spin ${back.spin}`);
+ const along=validateFurniture([cabinetLightOnSurface({...up,rot:90},surface([0,2.2,0],[0,1,0]),items)])[0];
+ assert.equal(along.spin??0,0,'a ceiling light at 90° runs along this cabinet\'s width');
+});
