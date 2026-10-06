@@ -284,7 +284,9 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
  }
  shadeCells(a){
   for(const shade of a.shades||[]){
-   const want=a.item.openCells?.[shade.cell]?shade.lit:shade.dark;
+   // Lit as soon as the cell opens; dark again only once its door, drawer or leaves are nearly shut.
+   const moving=(a.parts||[]).some(p=>p.id===shade.panel&&(p.kind==='slide'?Math.abs(p.pivot.position.x-p.base)>.01:(p.amount||0)>.05));
+   const want=a.item.openCells?.[shade.cell]||moving?shade.lit:shade.dark;
    if(want===shade.dark&&shade.dark.map!==shade.lit.map){shade.dark.map=shade.lit.map;shade.dark.needsUpdate=true;}
    if(shade.mesh.material!==want&&(shade.mesh.material===shade.lit||shade.mesh.material===shade.dark))shade.mesh.material=want;
   }
@@ -623,7 +625,8 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   // Start each part at its current open state, so a rebuild (a new finish,
   // a resize) does not replay the opening animation.
   for(const part of parts){part.amount=f.openCells?.[part.id]?1:0;if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+slideTravel(part,f.openCells?.[part.id]);}
-  for(const shade of shades){shade.lit=shade.mesh.material;shade.dark=this.shadedMaterial(shade.lit);}
+  const panelOf=new Map(frontPanels(f).flatMap(panel=>panel.ids.map(id=>[id,panel.id])));
+  for(const shade of shades){shade.lit=shade.mesh.material;shade.dark=this.shadedMaterial(shade.lit);shade.panel=panelOf.get(shade.cell);}
   if(parts.length)this.actions.set(f.id,{type:'modularCabinet',item:f,parts,shades,amount:0});
   this.shadeCells({item:f,shades});
  }
