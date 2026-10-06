@@ -1,7 +1,7 @@
 import {fridgeColors} from './model.js';
-import {fridgeFronts,fridgeLayouts,fridgeDesign,CARCASS_T,doorGroupOf,mergeDoorCells,splitDoorGroup,groupFronts,boundsOf,cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,designFromDoorStyle,designLeaves,findLeaf,fitDesign,splitCabinetCell,removeCabinetNode,moveCabinetLine,locateCell,leafIdsUnder,cabinetStructure} from './cabinet-design.js';
+import {handleless,fridgeFronts,fridgeLayouts,fridgeDesign,CARCASS_T,doorGroupOf,mergeDoorCells,splitDoorGroup,groupFronts,boundsOf,cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,designFromDoorStyle,designLeaves,findLeaf,fitDesign,splitCabinetCell,removeCabinetNode,moveCabinetLine,locateCell,leafIdsUnder,cabinetStructure} from './cabinet-design.js';
 
-const labels={open:'開放',left:'左開門',right:'右開門',double:'對開門',sliding:'滑門',drawers:'抽屜'};
+const labels={open:'開放',left:'左開門',right:'右開門',double:'對開門',grooved:'對開門（溝槽）',sliding:'滑門',sliding4:'四扇滑門',drawers:'抽屜'};
 const cm=n=>Math.round(n*1000)/10;
 const id=()=>crypto.randomUUID();
 const elt=(tag,className,text)=>{const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;};
@@ -329,13 +329,13 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
     for(const kind of fridge?fridgeFronts:cabinetFronts)front.add(new Option(labels[kind],kind));
     front.value=selectedLeaf.front;front.onchange=()=>{
       if(front.value!=='open'&&blockedByTv(members,'加上門面')){front.value=selectedLeaf.front;return;}
-      if(group&&front.value==='sliding'&&boundsOf(cabinetCells({...f,cabinetDesign:design}).filter(c=>members.includes(c.id))).w<.5){dialog.querySelector('.cabinetError').textContent='滑門寬度至少要 50 cm';front.value=selectedLeaf.front;return;}
+      const least={sliding:50,sliding4:100}[front.value];if(group&&least&&boundsOf(cabinetCells({...f,cabinetDesign:design}).filter(c=>members.includes(c.id))).w<least/100-1e-9){dialog.querySelector('.cabinetError').textContent=`${labels[front.value]}寬度至少要 ${least} cm`;front.value=selectedLeaf.front;return;}
       if(group&&front.value!=='open'&&!groupFronts.includes(front.value)){dialog.querySelector('.cabinetError').textContent='抽屜只能用在單一格，請先拆開門板';front.value=selectedLeaf.front;return;}
-      setAll(leaf=>{leaf.front=front.value;if(front.value==='open')delete leaf.handle;});
+      setAll(leaf=>{leaf.front=front.value;if(front.value==='open'||handleless.includes(front.value))delete leaf.handle;});
     };
     frontLabel.append(front);fields.append(frontLabel);
     if(selectedLeaf.front!=='open'){
-      if(!fridge){const handleLabel=elt('label','cabinetField checkline'),handle=elt('input');handle.type='checkbox';handle.checked=!!selectedLeaf.handle;
+      if(!fridge&&!handleless.includes(selectedLeaf.front)){const handleLabel=elt('label','cabinetField checkline'),handle=elt('input');handle.type='checkbox';handle.checked=!!selectedLeaf.handle;
       handle.onchange=()=>setAll(leaf=>{if(handle.checked)leaf.handle=true;else delete leaf.handle;});
       handleLabel.append(document.createTextNode('畫出手把'),handle);fields.append(handleLabel);}
       fields.append(button(f.openCells?.[members[0]]?'關閉門板':'打開門板',()=>{toggleCell(f,members);render();}));

@@ -11,7 +11,7 @@ import {requestTexture,texturePixelsNow,texturesAsync} from './texture-cache.js'
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,TROUGH,flatMount,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeCove,CORNER_BOARD,normalizeFabric,lightMountDrop,hangingElevation,mountDrop,cabinetTypes,fridgeColors,normalizeFridgeColor,turnedSize} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle,washerDoor,deskDrawer} from './spatial.js';
-import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,frontPanels,groupFronts,hingedFronts,doorGroupOf,FRONT_GAP,FRONT_T,FRONT_Z,SLIDE_SETBACK} from './cabinet-design.js';
+import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,frontPanels,groupFronts,hingedFronts,slidingFronts,GROOVE,doorGroupOf,FRONT_GAP,FRONT_T,FRONT_Z,SLIDE_SETBACK} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
 // A flush fitting sends all of its light downward and glows like a panel, so straight below
 // it is several times brighter than under a bare bulb of the same output.
@@ -163,6 +163,9 @@ export function roomFloorGeometry(room,step=.02){
 const shown=o=>{for(;o;o=o.parent)if(!o.visible)return false;return true;};
 // Items that hang from the ceiling, drawn see-through (or hidden) in top view.
 const ceilingKinds=['beam','hangingCabinet','light'];
+// How far a sliding leaf has moved for an openCells value: 2 is the second way of opening, any
+// other truthy value (older layouts saved 1 or true) the first.
+const slideTravel=(part,open)=>open?part.travels[open===2?2:1]:0;
 export class SpaceScene{
  constructor(host,onSelect,onDrag,onDragEnd,onOperate,setup={}){this.host=host;this.onSelect=onSelect;this.onDrag=onDrag;this.onDragEnd=onDragEnd;this.onOperate=onOperate;this.collisionWalls=wallRects();this.mode='orbit';this.palette='oak';this.items=[];this.groups=new Map;this.invalidHelpers=new Map;this.invalidMarkers=new Map;this.foregroundDraft=null;this.actions=new Map;this.lightObjects=[];this.resizeHandles=new T.Group;this.openStates={};this.keys=new Set;this.night=false;this.lightsOn=true;this.eye=1.6;this.cutaway=true;this.selected=null;this.viewStates={};this.avoidFurniture=true;this.placing=false;doors.forEach(d=>d.maxAngle=fixedDoorLimit(d));this.route=[];
  this.renderer=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});this.renderer.setPixelRatio(Math.min(devicePixelRatio,2));this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=T.PCFSoftShadowMap;this.renderer.shadowMap.autoUpdate=false;this.shadowsDirty=true;this.renderer.outputColorSpace=T.SRGBColorSpace;this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.15;host.append(this.renderer.domElement);
@@ -465,10 +468,30 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   // A sliding door shared by several cells runs on tracks inside the carcass, so every board
   // inside its rectangle (shelves, dividers, side panels between columns) stops short of the
   // front by SLIDE_SETBACK; the boards around its edges stay full depth and carry the tracks.
-  const slideDoors=frontPanels(f).filter(p=>p.front==='sliding'&&p.ids.length>1).map(p=>{const m=structure.cells.filter(c=>p.ids.includes(c.id));return{...p,members:m,x1:Math.min(...m.map(c=>c.x-c.w/2)),x2:Math.max(...m.map(c=>c.x+c.w/2)),y1:Math.min(...m.map(c=>c.bottom)),y2:Math.max(...m.map(c=>c.bottom+c.h))};});
+  const slideDoors=frontPanels(f).filter(p=>slidingFronts.includes(p.front)&&p.ids.length>1).map(p=>{const m=structure.cells.filter(c=>p.ids.includes(c.id));return{...p,members:m,x1:Math.min(...m.map(c=>c.x-c.w/2)),x2:Math.max(...m.map(c=>c.x+c.w/2)),y1:Math.min(...m.map(c=>c.bottom)),y2:Math.max(...m.map(c=>c.bottom+c.h))};});
   const shelfSetback=(x1,x2,y)=>slideDoors.some(s=>y>s.y1+E&&y<s.y2-E&&x1>=s.x1-E&&x2<=s.x2+E)?SLIDE_SETBACK:0;
   // A vertical board from y1 to y2 at x, split where it passes through a sliding door.
   const upright=(x,y1,y2,depth,z)=>{let cuts=[y1,y2];const inside=[];for(const s of slideDoors)if(x>s.x1+t+E&&x<s.x2-t-E&&s.y2>y1+E&&s.y1<y2-E){const a=Math.max(y1,s.y1),b=Math.min(y2,s.y2);cuts.push(a,b);inside.push([a,b]);}cuts=[...new Set(cuts)].sort((a,b)=>a-b);for(let i=1;i<cuts.length;i++){const a=cuts[i-1],b=cuts[i];if(b-a<E)continue;const back=inside.some(([p,q])=>a>=p-E&&b<=q+E)?SLIDE_SETBACK:0;box(t,b-a,depth-back,x,(a+b)/2,z-back/2);}};
+  // Sliding leaves between x1 and x2 inside the carcass, on two tracks just behind the front
+  // edge. Two leaves overlap 2 cm, the left one on the rear track; four put the middle pair on
+  // the rear track and the outer pair in front, each overlapping its neighbour by 2 cm. A leaf
+  // has a travel for each way of opening (the openCells value): 1 opens the left half, or both
+  // sides of four; 2 the right half, or the middle of four.
+  const slideLeaves=(id,count,x1,x2,openBottom,openTop,handle,face)=>{
+   const innerW=x2-x1,cx=(x1+x2)/2,lap=.02,track=.008,leafH=openTop-openBottom-2*track-.004,frontZ=d/2-.006-FRONT_T/2,backZ=frontZ-FRONT_T-.004;
+   for(const ty of[openBottom+track/2,openTop-track/2])box(innerW,track,FRONT_T*2+.012,cx,ty,(frontZ+backZ)/2,'metal');
+   const leafW=count===4?(innerW+2*lap)/4:(innerW+lap)/2,run=leafW-lap;
+   const leaves=count===4?[[x1+leafW/2,frontZ,{1:run,2:0}],[cx-leafW/2,backZ,{1:0,2:-run}],[cx+leafW/2,backZ,{1:0,2:run}],[x2-leafW/2,frontZ,{1:-run,2:0}]]
+    :[[x1+leafW/2,backZ,{1:run,2:0},-1],[x2-leafW/2,frontZ,{1:0,2:-run},1]];
+   for(const [lx,lz,travels,sign]of leaves){
+    const pivot=new T.Group;
+    pivot.position.set(lx,(openBottom+openTop)/2,lz);
+    g.add(pivot);
+    this.box(pivot,leafW,leafH,FRONT_T,0,0,0,face,.003);
+    if(handle&&sign)this.box(pivot,.012,.14,.004,sign*(leafW/2-.03),0,FRONT_T/2+.002,'dark',.002);
+    parts.push({id,kind:'slide',pivot,base:lx,travel:travels[1],travels});
+   }
+  };
   for(const column of cabinetColumns(f)){
    // Sides extended to the floor stand the raised column on them, leaving the gap open.
    const{width,bottom,x}=column,foot=column.sidesToFloor?0:bottom,sideHeight=f.h-foot-(column.top||0);
@@ -487,7 +510,7 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
    if(!cell.noBase)box(innerW,t,d-t-shelfBack,cx,bottom+t/2,t/2-shelfBack/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));
    if(last)box(innerW,t,d-t,cx,bottom+h-t/2,t/2);
    // Hinged doors, and sliding doors shared by several cells, are drawn per front panel below.
-   if(front==='open'||hingedFronts.includes(front)||front==='sliding'&&doorGroupOf(f.cabinetDesign,id))continue;
+   if(front==='open'||hingedFronts.includes(front)||slidingFronts.includes(front)&&doorGroupOf(f.cabinetDesign,id))continue;
    // Clear opening between the side panels, above this cell's bottom board
    // and below the top board when the cell reaches the top.
    const openBottom=bottom+(cell.noBase?0:t),openTop=bottom+h-(last?t:0),openH=openTop-openBottom;
@@ -500,61 +523,47 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
     this.drawerBox(pivot,innerW-.026,Math.min(openH-.03,Math.max(.1,openH*.6)),d-t-.02,openBottom+.01-y,-FRONT_T/2,finish(cellFinish(f,cell,'drawerBox')));
     parts.push({id,kind:'drawer',pivot,base:pivot.position.z,travel:d*.55});
    }
-   if(front==='sliding'){
-    // Sliding leaves run inside the carcass on two tracks just behind the
-    // front edge, overlapping 2 cm; opening slides the rear leaf behind the front one.
-    const track=.008,leafH=openH-2*track-.004,leafW=innerW/2+.01,frontZ=d/2-.006-FRONT_T/2,backZ=frontZ-FRONT_T-.004;
-    for(const ty of[openBottom+track/2,openTop-track/2])box(innerW,track,FRONT_T*2+.012,cx,ty,(frontZ+backZ)/2,'metal');
-    for(const sign of[-1,1]){
-     const pivot=new T.Group;
-     pivot.position.set(cx+sign*(innerW/2-leafW/2),(openBottom+openTop)/2,sign>0?frontZ:backZ);
-     g.add(pivot);
-     this.box(pivot,leafW,leafH,FRONT_T,0,0,0,face,.003);
-     if(cell.handle)this.box(pivot,.012,.14,.004,sign*(leafW/2-.03),0,FRONT_T/2+.002,'dark',.002);
-     parts.push({id,kind:'slide',pivot,base:pivot.position.x,travel:sign>0?0:innerW-leafW});
-    }
-   }
+   if(slidingFronts.includes(front))slideLeaves(id,front==='sliding4'?4:2,cx-innerW/2,cx+innerW/2,openBottom,openTop,cell.handle,face);
   }
   // Hinged doors, one per front panel: a door group is a single door over
   // its cells, finished like its first cell. Handles only when asked for.
   for(const panel of frontPanels(f)){
-   if(!groupFronts.includes(panel.front)||panel.front==='sliding'&&panel.ids.length<2)continue;
+   if(!groupFronts.includes(panel.front)||slidingFronts.includes(panel.front)&&panel.ids.length<2)continue;
    const frontW=panel.w-FRONT_GAP,frontH=panel.h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cellFinish(f,panel.cell,'door'));
-   if(panel.front==='sliding'){
-    // A sliding door over several cells: leaves inside the carcass across the whole door,
-    // on the same two tracks as a single cell's, overlapping 2 cm.
+   if(slidingFronts.includes(panel.front)){
+    // A sliding door over several cells: leaves inside the carcass across the whole door.
     const door=slideDoors.find(s=>s.id===panel.id),m=door.members,left=m.reduce((a,c)=>c.x-c.w/2<a.x-a.w/2?c:a),right=m.reduce((a,c)=>c.x+c.w/2>a.x+a.w/2?c:a),low=m.reduce((a,c)=>c.bottom<a.bottom?c:a),high=m.reduce((a,c)=>c.bottom+c.h>a.bottom+a.h?c:a);
-    const x1=door.x1+left.insetL,x2=door.x2-right.insetR,innerW=x2-x1,cx=(x1+x2)/2,openBottom=door.y1+(low.noBase?0:t),openTop=door.y2-(high.last?t:0);
-    const track=.008,leafH=openTop-openBottom-2*track-.004,leafW=innerW/2+.01,frontZ=d/2-.006-FRONT_T/2,backZ=frontZ-FRONT_T-.004;
-    for(const ty of[openBottom+track/2,openTop-track/2])box(innerW,track,FRONT_T*2+.012,cx,ty,(frontZ+backZ)/2,'metal');
-    for(const sign of[-1,1]){
-     const pivot=new T.Group;
-     pivot.position.set(cx+sign*(innerW/2-leafW/2),(openBottom+openTop)/2,sign>0?frontZ:backZ);
-     g.add(pivot);
-     this.box(pivot,leafW,leafH,FRONT_T,0,0,0,face,.003);
-     if(panel.handle)this.box(pivot,.012,.14,.004,sign*(leafW/2-.03),0,FRONT_T/2+.002,'dark',.002);
-     parts.push({id:panel.id,kind:'slide',pivot,base:pivot.position.x,travel:sign>0?0:innerW-leafW});
-    }
+    slideLeaves(panel.id,panel.front==='sliding4'?4:2,door.x1+left.insetL,door.x2-right.insetR,door.y1+(low.noBase?0:t),door.y2-(high.last?t:0),panel.handle,face);
     continue;
    }
-   const addDoor=(hinge,sign,width)=>{
+   const addDoor=(hinge,sign,width,groove=false)=>{
     const pivot=new T.Group;
     pivot.position.set(hinge,panel.y,z);
     g.add(pivot);
-    this.box(pivot,width,frontH,FRONT_T,sign*width/2,0,0,face,.003);
+    if(groove){
+     // The finger slot is cut into the free edge: the leaf is drawn as its full-height part
+     // and the edge strip above and below the slot.
+     const gw=Math.min(GROOVE.w,width*.15),edge=sign*(width-gw/2),y1=-frontH/2+frontH*GROOVE.bottom,y2=-frontH/2+frontH*GROOVE.top;
+     this.box(pivot,width-gw,frontH,FRONT_T,sign*(width-gw)/2,0,0,face,.003);
+     this.box(pivot,gw,frontH/2-y2,FRONT_T,edge,(y2+frontH/2)/2,0,face);
+     this.box(pivot,gw,y1+frontH/2,FRONT_T,edge,(y1-frontH/2)/2,0,face);
+     // Through the slot one sees into the unlit cabinet; the carcass inside is lit like the door,
+     // so a thin dark lining behind the slot keeps it reading as a hollow, as in the photo.
+     this.box(pivot,gw+.01,y2-y1,.002,sign*(width-gw/2-.005),(y1+y2)/2,-FRONT_T/2-.002,'dark');
+    }else this.box(pivot,width,frontH,FRONT_T,sign*width/2,0,0,face,.003);
     if(panel.handle)this.box(pivot,.013,.09,.022,sign*(width-.045),0,.02,'metal',.003);
     parts.push({id:panel.id,kind:'door',pivot,sign});
    };
    if(panel.front==='left')addDoor(panel.x-frontW/2,1,frontW);
    if(panel.front==='right')addDoor(panel.x+frontW/2,-1,frontW);
-   if(panel.front==='double'){
+   if(panel.front==='double'||panel.front==='grooved'){
     addDoor(panel.x-frontW/2,1,(frontW-FRONT_GAP)/2);
-    addDoor(panel.x+frontW/2,-1,(frontW-FRONT_GAP)/2);
+    addDoor(panel.x+frontW/2,-1,(frontW-FRONT_GAP)/2,panel.front==='grooved');
    }
   }
   // Start each part at its current open state, so a rebuild (a new finish,
   // a resize) does not replay the opening animation.
-  for(const part of parts){part.amount=f.openCells?.[part.id]?1:0;if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+part.amount*part.travel;}
+  for(const part of parts){part.amount=f.openCells?.[part.id]?1:0;if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+slideTravel(part,f.openCells?.[part.id]);}
   if(parts.length)this.actions.set(f.id,{type:'modularCabinet',item:f,parts,amount:0});
  }
  makeFurnitureParts(g,f){let{w,d,h,type}=f;const box=(ww,hh,dd,x,y,z,m='wood',r=0)=>this.box(g,ww,hh,dd,x,y,z,m,r);const legs=(height,offset=.07)=>{for(let x of[-w/2+offset,w/2-offset])for(let z of[-d/2+offset,d/2-offset])box(.045,height,.045,x,height/2,z,'wood',.008);};
@@ -936,7 +945,7 @@ const hideCeiling=ceilingKinds.includes(f.type)&&this.mode==='top'&&this.showCei
  requestRender(ms=0){this.renderUntil=Math.max(this.renderUntil||0,performance.now()+ms);}
  cameraChanged(){const c=this.activeCamera;if(!c)return true;c.updateMatrixWorld();const key=c.matrixWorld.elements.join()+c.projectionMatrix.elements.join();if(key===this.lastCameraKey)return false;this.lastCameraKey=key;return true;}
  frame(){let dt=Math.min(this.clock.getDelta(),.04);let controlsMoved=false;if(this.mode==='orbit')controlsMoved=this.controls.update();if(this.mode==='walk'){this.ensureSafeCamera();this.followTour(dt);const sx=this.stick?.x||0,sy=this.stick?.y||0,forward=T.MathUtils.clamp((this.keys.has('KeyW')||this.keys.has('ArrowUp')?1:0)-(this.keys.has('KeyS')||this.keys.has('ArrowDown')?1:0)+sy,-1,1),side=(this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0),norm=Math.max(1,Math.hypot(forward,side)),speed=dt*1.5/norm;this.walkYaw+=T.MathUtils.clamp((this.keys.has('ArrowLeft')?1:0)-(this.keys.has('ArrowRight')?1:0)-sx,-1,1)*dt*1.3;let dx=(-Math.sin(this.walkYaw)*forward+Math.cos(this.walkYaw)*side)*speed,dz=(-Math.cos(this.walkYaw)*forward-Math.sin(this.walkYaw)*side)*speed;let p=this.camera.position;if(this.canWalk(p.x+dx,p.z))p.x+=dx;if(this.canWalk(p.x,p.z+dz))p.z+=dz;p.y=this.eye;this.camera.rotation.order='YXZ';this.camera.rotation.set(this.walkPitch,this.walkYaw,0);}
- let moving=false;for(const [id,a]of this.actions){let target=a.item?a.item.open||0:this.openStates[id]||0;if(Math.abs(a.amount-target)>1e-4)moving=true;a.amount=T.MathUtils.damp(a.amount,target,7,dt);if(a.type==='door')a.pivot.rotation.y=a.def.swing*a.amount*(a.def.maxAngle??89)*Math.PI/180;if(a.type==='shower')a.pivot.rotation.y=a.base+a.swing*a.amount*Math.PI/2;if(a.type==='washer')a.pivot.rotation.y=-a.amount*Math.PI*.5;if(a.type==='trough'){a.pivot.rotation.x=-a.amount*1.5;a.inside.visible=target>0&&a.amount>.6;}if(a.type==='cabinet'){a.pivots.forEach(p=>p.rotation.y=(p.userData.swing??-1)*a.amount*Math.PI*.5);a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);a.slides.forEach(p=>p.position.x=p.userData.baseX+p.userData.travelX*a.amount);}if(a.type==='modularCabinet')for(const part of a.parts){const goal=a.item.openCells?.[part.id]?1:0;const amount=part.amount||0;if(Math.abs(amount-goal)>1e-4)moving=true;part.amount=T.MathUtils.damp(amount,goal,7,dt);if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+part.amount*part.travel;}if(a.type==='cabdrawer')a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);if(a.type==='drawer')a.pivot.position.z=a.base+a.amount*a.travel;if(a.type==='curtain')for(const p of a.panels){let factor=1-.8*a.amount;p.g.scale.x=factor;p.g.position.x=p.sign<0?-a.width/2:a.width/2-a.width/2*factor;}}
+ let moving=false;for(const [id,a]of this.actions){let target=a.item?a.item.open||0:this.openStates[id]||0;if(Math.abs(a.amount-target)>1e-4)moving=true;a.amount=T.MathUtils.damp(a.amount,target,7,dt);if(a.type==='door')a.pivot.rotation.y=a.def.swing*a.amount*(a.def.maxAngle??89)*Math.PI/180;if(a.type==='shower')a.pivot.rotation.y=a.base+a.swing*a.amount*Math.PI/2;if(a.type==='washer')a.pivot.rotation.y=-a.amount*Math.PI*.5;if(a.type==='trough'){a.pivot.rotation.x=-a.amount*1.5;a.inside.visible=target>0&&a.amount>.6;}if(a.type==='cabinet'){a.pivots.forEach(p=>p.rotation.y=(p.userData.swing??-1)*a.amount*Math.PI*.5);a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);a.slides.forEach(p=>p.position.x=p.userData.baseX+p.userData.travelX*a.amount);}if(a.type==='modularCabinet')for(const part of a.parts){if(part.kind==='slide'){const goal=part.base+slideTravel(part,a.item.openCells?.[part.id]),x=part.pivot.position.x;if(Math.abs(x-goal)>1e-5)moving=true;part.pivot.position.x=T.MathUtils.damp(x,goal,7,dt);continue;}const goal=a.item.openCells?.[part.id]?1:0;const amount=part.amount||0;if(Math.abs(amount-goal)>1e-4)moving=true;part.amount=T.MathUtils.damp(amount,goal,7,dt);if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+part.amount*part.travel;}if(a.type==='cabdrawer')a.drawers.forEach(p=>p.position.z=a.base+a.amount*a.travel);if(a.type==='drawer')a.pivot.position.z=a.base+a.amount*a.travel;if(a.type==='curtain')for(const p of a.panels){let factor=1-.8*a.amount;p.g.scale.x=factor;p.g.position.x=p.sign<0?-a.width/2:a.width/2-a.width/2*factor;}}
  if(this.surroundings){this.surroundings.visible=this.mode==='walk';if(this.sky)this.sky.position.copy(this.camera.position);}
  const focus=this.viewFocus?.();this.fadeLights=true;if(focus&&(!this.shadowFocus||Math.hypot(focus.x-this.shadowFocus.x,focus.z-this.shadowFocus.z)>.5))this.assignLampShadows();
  if(this.bounce&&this.lightRoom()!==this.litRoom){this.assignLampShadows();this.updateRoomLight();}this.fadeLights=false;

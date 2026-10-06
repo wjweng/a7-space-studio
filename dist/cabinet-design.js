@@ -2,7 +2,16 @@ import {finishByCode} from './finishes.js';
 
 // Cabinet dimensions are metres. Each column can start at a different height,
 // which permits a floating column; the templates all start on the floor.
-export const cabinetFronts=['open','left','right','double','sliding','drawers'];
+export const cabinetFronts=['open','left','right','double','grooved','sliding','sliding4','drawers'];
+// A grooved pair is a double door whose right leaf has a finger slot cut into its edge at the
+// middle, and four-leaf sliding doors run the middle two on the inner track and the outer two
+// on the outer one. Neither takes a handle.
+export const handleless=['grooved','sliding4'];
+// The slot as measured on the owner's photo: 3 cm wide, from 1.5 % to 61.4 % of the door's
+// height, cut into the right leaf's edge at the middle.
+export const GROOVE={w:.03,bottom:.015,top:.614};
+// Minimum widths by front.
+const minWidth={double:.4,grooved:.4,sliding:.5,sliding4:1,drawers:.25};
 export const cabinetTemplates={
   closed:{label:'全封閉收納櫃',columns:[{share:1,bottom:0,front:'double'}]},
   niche:{label:'中央開放收納櫃',columns:[{share:.3,bottom:0,front:'left'},{share:.4,bottom:0,front:'open'},{share:.3,bottom:0,front:'open'}]},
@@ -37,7 +46,7 @@ export function makeCabinetDesign(f,template=f.type==='console'?'low':'niche'){
 }
 const isFinish=code=>!!finishByCode(code);
 const ownFinishes=cell=>{const finishes={};for(const [slot]of cabinetFinishSlots)if(isFinish(cell.finishes?.[slot]))finishes[slot]=cell.finishes[slot];return finishes;};
-const checkFront=(front,width)=>{if(front==='double'&&width<.4||front==='sliding'&&width<.5||front==='drawers'&&width<.25)throw Error('此格寬度不足以使用所選門面');};
+const checkFront=(front,width)=>{if(width<(minWidth[front]||0))throw Error('此格寬度不足以使用所選門面');};
 // A column holds a stack of rows; a row may be split side by side into
 // parts, and a part may again hold a stack of rows, to any depth. The rows
 // and parts without children are the cells that carry fronts and finishes.
@@ -70,7 +79,7 @@ function leafFields(cell,width){
   checkFront(cell.front,width);
   const finishes=ownFinishes(cell);
   if(!finishes.door&&isFinish(cell.finish))finishes.door=cell.finish; // before 2026-09-25 a cell had one front finish
-  return{front:cell.front,...(cell.handle&&cell.front!=='open'?{handle:true}:{}),...(cell.noBase?{noBase:true}:{}),...(Object.keys(finishes).length?{finishes}:{})};
+  return{front:cell.front,...(cell.handle&&cell.front!=='open'&&!handleless.includes(cell.front)?{handle:true}:{}),...(cell.noBase?{noBase:true}:{}),...(Object.keys(finishes).length?{finishes}:{})};
 }
 // Only a column's lowest cells may leave out their bottom board (`noBase`);
 // a flag left on a cell that a split or line move lifted is dropped.
@@ -149,7 +158,7 @@ export function validateCabinetDesign(f,design){
 // leaves run inside the carcass like a single cell's; the shelves, dividers and side panels
 // inside the door stop SLIDE_SETBACK short of the front to clear the tracks (see scene.js).
 // Drawers never span cells: their boxes would hit inner boards.
-export const hingedFronts=['left','right','double'],groupFronts=[...hingedFronts,'sliding'];
+export const hingedFronts=['left','right','double','grooved'],slidingFronts=['sliding','sliding4'],groupFronts=[...hingedFronts,...slidingFronts];
 export function boundsOf(cells){
   const l=Math.min(...cells.map(c=>c.x-c.w/2)),r=Math.max(...cells.map(c=>c.x+c.w/2)),b=Math.min(...cells.map(c=>c.bottom)),t=Math.max(...cells.map(c=>c.bottom+c.h));
   return{x:(l+r)/2,w:r-l,bottom:b,h:t-b,y:(b+t)/2};
@@ -187,11 +196,11 @@ export function frontPanels(f){
   for(const cell of cells){
     if(cell.front==='open')continue;
     const group=doorGroupOf(f.cabinetDesign,cell.id);
-    if(!group){out.push({id:cell.id,ids:[cell.id],front:cell.front,handle:!!cell.handle,cell,x:cell.x,y:cell.y,w:cell.w,h:cell.h,bottom:cell.bottom});continue;}
+    if(!group){out.push({id:cell.id,ids:[cell.id],front:cell.front,handle:!!cell.handle&&!handleless.includes(cell.front),cell,x:cell.x,y:cell.y,w:cell.w,h:cell.h,bottom:cell.bottom});continue;}
     if(seen.has(group.id))continue;
     seen.add(group.id);
     const members=cells.filter(c=>group.cells.includes(c.id)),lead=members.find(c=>c.id===group.cells[0]);
-    out.push({id:lead.id,ids:[...group.cells],front:lead.front,handle:!!lead.handle,cell:lead,...boundsOf(members)});
+    out.push({id:lead.id,ids:[...group.cells],front:lead.front,handle:!!lead.handle&&!handleless.includes(lead.front),cell:lead,...boundsOf(members)});
   }
   return out;
 }
@@ -205,8 +214,8 @@ export function mergeDoorCells(f,ids){
   if(cells.length<2)throw Error('請至少選兩格');
   if(!isRectangle(cells))throw Error('選到的格子要剛好拼成一個矩形，門板才能對齊格子');
   const width=boundsOf(cells).w,chosen=ids.map(id=>cells.find(c=>c.id===id)).find(c=>c&&groupFronts.includes(c.front));
-  let front=chosen?.front||'double';if(front==='double'&&width<.4)front='left';
-  const lead=chosen||cells.find(c=>c.id===ids[0])||cells[0],handle=cells.some(c=>c.handle),door=lead.finishes?.door;
+  let front=chosen?.front||'double';if(front==='sliding4'&&width<1)front='sliding';if(front==='sliding'&&width<.5||['double','grooved'].includes(front)&&width<.4)front='left';
+  const lead=chosen||cells.find(c=>c.id===ids[0])||cells[0],handle=cells.some(c=>c.handle)&&!handleless.includes(front),door=lead.finishes?.door;
   for(const cell of cells){
     const leaf=findLeaf(design,cell.id);leaf.front=front;
     if(handle)leaf.handle=true;else delete leaf.handle;
@@ -322,7 +331,7 @@ export function modularCabinetRects(f,amounts={}){
     const left=panel.x-width/2,right=panel.x+width/2;
     if(panel.front==='left')door(left,1,width);
     if(panel.front==='right')door(right,-1,width);
-    if(panel.front==='double'){door(left,1,(width-FRONT_GAP)/2);door(right,-1,(width-FRONT_GAP)/2);}
+    if(panel.front==='double'||panel.front==='grooved'){door(left,1,(width-FRONT_GAP)/2);door(right,-1,(width-FRONT_GAP)/2);}
     if(panel.front==='drawers'){
       const travel=amount*f.d*.55,p=world(panel.x,z+travel/2);
       result.push({...p,w:width,d:travel,rot:f.rot,yMin:base+panel.bottom,yMax:base+panel.bottom+panel.h,cellId:panel.id});

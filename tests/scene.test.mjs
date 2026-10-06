@@ -338,3 +338,52 @@ test('top view: a click inside a socket ring picks it, and a socket has no resiz
   const table={id:'t',type:'table',name:'桌',x:1,z:1,w:1,d:.6,h:.75,rot:0};
   Object.assign(s,{selected:'t',items:[table],ground:()=>({x:1.5,z:1})});assert.equal(s.resizeAtPointer({})?.kind,'resize','other items still resize');
 });
+
+test('four sliding leaves: the middle pair on the rear track opens outward, the outer pair inward',async()=>{
+ const {validateFurniture}=await import('../dist/model.js');
+ const s=fixture(),eps=1e-6,t=.018;
+ const make=openCells=>{const g=new THREE.Group,f=validateFurniture([{...initialFurniture.find(f=>f.type==='wardrobe'),id:'four',x:0,z:0,w:1.6,d:.6,h:2.2,rot:0,openCells,cabinetDesign:{template:'custom',columns:[{id:'c',width:1.6,bottom:0,cells:[{id:'cell',height:2.2,front:'sliding4',handle:true}]}]}}])[0];s.actions=new Map;s.makeFurniture(g,f);g.updateMatrixWorld(true);return{f,leaves:s.actions.get('four').parts.filter(p=>p.kind==='slide').sort((a,b)=>a.base-b.base)};};
+ const {f,leaves}=make({});
+ assert.equal(f.cabinetDesign.columns[0].cells[0].handle,undefined,'four-leaf sliding doors take no handle');
+ assert.equal(leaves.length,4);
+ const z=leaves.map(p=>p.pivot.position.z);
+ assert(z[0]>z[1]+eps&&z[3]>z[2]+eps&&Math.abs(z[1]-z[2])<eps,'outer pair in front, middle pair behind');
+ for(const p of leaves)assert.equal(p.pivot.children.length,1,'no handle drawn');
+ const span=p=>{const b=new THREE.Box3().setFromObject(p.pivot);return[b.min.x,b.max.x];};
+ const closed=leaves.map(span);
+ assert(Math.abs(closed[0][0]+.8-t)<eps&&Math.abs(closed[3][1]-.8+t)<eps,'the leaves fill the opening between the sides');
+ const middle=make({cell:2}).leaves.map(p=>p.pivot.position.x),sides=make({cell:1}).leaves.map(p=>p.pivot.position.x);
+ assert(Math.abs(middle[1]-leaves[0].base)<eps&&Math.abs(middle[2]-leaves[3].base)<eps,'opening the middle slides it behind the outer leaves');
+ assert(Math.abs(middle[0]-leaves[0].base)<eps&&Math.abs(middle[3]-leaves[3].base)<eps,'the outer leaves stay put');
+ assert(Math.abs(sides[0]-leaves[1].base)<eps&&Math.abs(sides[3]-leaves[2].base)<eps,'opening the sides slides them in front of the middle pair');
+ assert.throws(()=>validateFurniture([{...f,w:.9,cabinetDesign:{template:'custom',columns:[{id:'c',width:.9,bottom:0,cells:[{id:'cell',height:2.2,front:'sliding4'}]}]}}]),'four leaves need 1 m');
+});
+
+test('two sliding leaves open either way: 2 slides the front (right) leaf left, 1 the rear leaf right',()=>{
+ const s=fixture(),eps=1e-6;
+ const leaves=openCells=>{const g=new THREE.Group,f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'two',x:0,z:0,w:.8,d:.5,h:2,rot:0,openCells,cabinetDesign:{template:'custom',columns:[{id:'c',width:.8,bottom:0,cells:[{id:'cell',height:2,front:'sliding'}]}]}};s.actions=new Map;s.makeFurniture(g,f);return s.actions.get('two').parts.filter(p=>p.kind==='slide').sort((a,b)=>a.base-b.base);};
+ const [left,right]=leaves({});
+ const second=leaves({cell:2}),first=leaves({cell:1}),legacy=leaves({cell:true});
+ assert(Math.abs(second[1].pivot.position.x-left.base)<eps&&Math.abs(second[0].pivot.position.x-left.base)<eps,'right open: the front leaf sits over the rear one');
+ assert(second[1].pivot.position.z>second[0].pivot.position.z,'the right leaf is the front one');
+ assert(Math.abs(first[0].pivot.position.x-right.base)<eps,'left open: the rear leaf goes behind the front one');
+ assert(Math.abs(legacy[0].pivot.position.x-right.base)<eps,'an older saved open state opens the left as before');
+});
+
+test('a grooved pair cuts a finger slot into the right leaf at the middle and draws no handle',async()=>{
+ const {validateFurniture}=await import('../dist/model.js');
+ const {GROOVE}=await import('../dist/cabinet-design.js');
+ const s=fixture(),g=new THREE.Group,h=2.4;
+ const f=validateFurniture([{...initialFurniture.find(f=>f.type==='wardrobe'),id:'groove',x:0,z:0,w:.9,d:.6,h,rot:0,cabinetDesign:{template:'custom',columns:[{id:'c',width:.9,bottom:0,cells:[{id:'cell',height:h,front:'grooved',handle:true}]}]}}])[0];
+ assert.equal(f.cabinetDesign.columns[0].cells[0].handle,undefined);
+ s.actions=new Map;s.makeFurniture(g,f);g.updateMatrixWorld(true);
+ const doors=s.actions.get('groove').parts.filter(p=>p.kind==='door').sort((a,b)=>a.pivot.position.x-b.pivot.position.x);
+ assert.equal(doors.length,2);assert.equal(doors[0].pivot.children.length,1,'the left leaf is plain');assert.equal(doors[1].pivot.children.length,4,'the right leaf is cut around its slot, lined dark behind');
+ // The first surface a ray from the front meets: the door face, or the lining behind the slot.
+ const face=doors[1].pivot.position.z+.009,ray=(x,y)=>new THREE.Raycaster(new THREE.Vector3(x,y,1),new THREE.Vector3(0,0,-1)).intersectObject(doors[1].pivot,true)[0]?.point.z??-1;
+ const slot=.0015+.015+.003,frontH=h-.003,at=r=>-frontH/2+frontH*r+h/2,near=(a,b)=>Math.abs(a-b)<1e-6;
+ const inside=ray(slot,at((GROOVE.bottom+GROOVE.top)/2));
+ assert(inside<face-.018&&inside>face-.03,'the slot is open at mid height, lined dark just behind the door');
+ assert(near(ray(slot,at(GROOVE.top+.05)),face)&&near(ray(slot,at(GROOVE.bottom/3)),face),'board above and below the slot');
+ assert(near(ray(.1,at(.3)),face),'the rest of the leaf is whole');
+});
