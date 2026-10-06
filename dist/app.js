@@ -490,6 +490,14 @@ function lightAt(f,surface){const candidate=surface&&cabinetLightOnSurface(f,sur
 function dragLight(f,surface){let n=lightAt(f,surface);
  // Just past the edge of its face (or off any surface) a cabinet light stays on its face, stopped at the edge.
  if(cabinetLight(f)&&(!n||n.lightMount!==f.lightMount||n.supportId!==f.supportId||n.supportCell!==f.supportCell)){const plane=facePlane(f,items),kept=plane&&stayOnFace(f,scene.rayPlane(plane.point,plane.normal),items);if(kept)n=kept;}
+ // A ceiling light over something it cannot go on (a beam's side, a wall) follows the pointer on its
+ // own level, the ceiling or the underside it hangs from, and stays on it: pointing at a beam's side
+ // from the ceiling next to it lands behind that side, which would carry it under the beam, so it
+ // only slides along (each axis on its own, as far as it goes without changing level).
+ if(!n&&!cabinetLight(f)){const drop=mountDrop(f,items),p=scene.rayPlane({x:f.x,y:HEIGHT-drop,z:f.z},{x:0,y:1,z:0});if(!p||Math.hypot(p.x-f.x,p.z-f.z)>20)return;
+  const level=item=>Math.abs(mountDrop(item,items.map(o=>o.id===f.id?item:o))-drop)<1e-6,tries=[{x:p.x,z:p.z},{x:p.x,z:f.z},{x:f.x,z:p.z}].map(t=>guardedMove(f,t,items).item).filter(level);
+  const best=tries.sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];if(!best)return;
+  for(const key of Object.keys(f))if(!(key in best))delete f[key];Object.assign(f,best);f.draft=issues(f,items).length>0;scene.resizeItem(f);scene.refreshValidity();renderProps();return;}
  if(!n)return;if(!cabinetLight(n)&&!cabinetLight(f)){const move=guardedMove(f,{x:n.x,z:n.z},items);n={...f,x:move.item.x,z:move.item.z};}for(const key of Object.keys(f))if(!(key in n))delete f[key];Object.assign(f,n);f.draft=issues(f,items).length>0;scene.resizeItem(f);scene.refreshValidity();renderProps();}
 scene.onSocketDrag=(id,surface,planePoint)=>{if(isAirConditioner(items.find(f=>f.id===id))){dragAirConditioner(id,surface,planePoint);return;}if(items.find(f=>f.id===id)?.type==='light'){if(!beforeDrag)beforeDrag=snapshot();dragLight(items.find(f=>f.id===id),surface);return;}if(!beforeDrag)beforeDrag=snapshot();const f=items.find(item=>item.id===id);if(!f)return;const candidate=surface&&socketAt(f,surface);let result=candidate&&guardedSocket(f,candidate,items);
  if(f.outletMount==='wall'&&(!result||result.reason)){const along=socketAlongWall(f,planePoint(f));if(along)result=guardedSocket(f,along,items,{hop:false});}
