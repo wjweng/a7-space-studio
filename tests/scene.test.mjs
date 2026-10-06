@@ -390,12 +390,21 @@ test('a grooved pair cuts a finger slot into the right leaf at the middle and dr
 
 test('the inside of a closed cell is shaded, and lit again while it is open',()=>{
  const s=fixture(),g=new THREE.Group;
- const f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'shade',x:0,z:0,w:.8,d:.5,h:2,rot:0,openCells:{},cabinetDesign:{template:'custom',columns:[{id:'c',width:.8,bottom:0,cells:[{id:'shut',height:1,front:'left'},{id:'shelf',height:1,front:'open'}]}]}};
+ const f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'shade',x:0,z:0,w:.8,d:.5,h:2,rot:0,openCells:{},cabinetDesign:{template:'custom',columns:[{id:'c',width:.8,bottom:0,cells:[{id:'shelf',height:1,front:'open'},{id:'shut',height:1,front:'left'}]}]}};
  s.makeFurniture(g,f);const a=s.actions.get('shade');
  assert.equal(a.shades.length,2,'the closed cell\'s back panel and shelf');
  assert(a.shades.every(x=>x.mesh.material===x.dark&&x.dark.color.r<x.lit.color.r),'darker while closed');
  f.openCells={shut:1};s.shadeCells(a);assert(a.shades.every(x=>x.mesh.material===x.lit),'lit while open');
  const door=a.parts.find(p=>p.id==='shut');door.amount=.5;f.openCells={};s.shadeCells(a);assert(a.shades.every(x=>x.mesh.material===x.lit),'still lit while the door is closing');
  door.amount=.02;s.shadeCells(a);assert(a.shades.every(x=>x.mesh.material===x.dark),'dark once it is nearly shut');
- const openBack=g.children.find(m=>m.isMesh&&Math.abs(m.position.y-1.5)<1e-6&&m.position.z<-.2);assert(openBack&&!a.shades.some(x=>x.mesh===openBack),'an open cell is never shaded');
+ const openBack=g.children.find(m=>m.isMesh&&Math.abs(m.position.y-.5)<1e-6&&m.position.z<-.2);assert(openBack&&!a.shades.some(x=>x.mesh===openBack),'an open cell is never shaded');
+});
+
+test('the bottom board stays lit and sliding tracks are matte, so the strip under the leaves never changes colour',()=>{
+ const s=fixture();s.m.track=new THREE.MeshStandardMaterial();const g=new THREE.Group;
+ const f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'low',x:0,z:0,w:1.2,d:.4,h:2,rot:0,openCells:{},cabinetDesign:{template:'custom',columns:[{id:'c',width:1.2,bottom:0,cells:[{id:'all',height:2,front:'sliding4'}]}]}};
+ s.makeFurniture(g,f);
+ assert.equal(s.actions.get('low').shades.length,1,'only the back panel of a bottom cell is shaded');
+ const tracks=g.children.filter(m=>m.isMesh&&Math.abs(m.geometry.parameters.height-.008)<1e-9);
+ assert.equal(tracks.length,2);assert(tracks.every(m=>m.material===s.m.track));
 });
