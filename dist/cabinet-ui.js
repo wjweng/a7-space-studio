@@ -1,5 +1,5 @@
 import {fridgeColors} from './model.js';
-import {handleless,fridgeFronts,fridgeLayouts,fridgeDesign,CARCASS_T,doorGroupOf,mergeDoorCells,splitDoorGroup,groupFronts,boundsOf,cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,designFromDoorStyle,designLeaves,findLeaf,fitDesign,splitCabinetCell,removeCabinetNode,moveCabinetLine,locateCell,leafIdsUnder,cabinetStructure} from './cabinet-design.js';
+import {glassFronts,glassKinds,frameColors,frameColour,DEFAULT_GLASS,handleless,fridgeFronts,fridgeLayouts,fridgeDesign,CARCASS_T,doorGroupOf,mergeDoorCells,splitDoorGroup,groupFronts,boundsOf,cabinetCells,cabinetColumns,cabinetFronts,cabinetTemplates,cabinetFinishSlots,cellFinishSlots,makeCabinetDesign,validateCabinetDesign,resizeCabinetEdge,removeCabinetCell,removeCabinetColumn,designFromDoorStyle,designLeaves,findLeaf,fitDesign,splitCabinetCell,removeCabinetNode,moveCabinetLine,locateCell,leafIdsUnder,cabinetStructure} from './cabinet-design.js';
 
 const labels={open:'開放',left:'左開門',right:'右開門',double:'對開門',grooved:'對開門（溝槽）',sliding:'滑門',sliding4:'四扇滑門',drawers:'抽屜'};
 const cm=n=>Math.round(n*1000)/10;
@@ -331,13 +331,29 @@ export function createCabinetEditor({getItem,commit,toggleCell,onConvert,placeTv
       if(front.value!=='open'&&blockedByTv(members,'加上門面')){front.value=selectedLeaf.front;return;}
       
       if(group&&front.value!=='open'&&!groupFronts.includes(front.value)){dialog.querySelector('.cabinetError').textContent='抽屜只能用在單一格，請先拆開門板';front.value=selectedLeaf.front;return;}
-      setAll(leaf=>{leaf.front=front.value;if(front.value==='open'||handleless.includes(front.value))delete leaf.handle;});
+      setAll(leaf=>{leaf.front=front.value;if(front.value==='open'||handleless.includes(front.value))delete leaf.handle;if(!glassFronts.includes(front.value))delete leaf.glass;});
     };
     frontLabel.append(front);fields.append(frontLabel);
     if(selectedLeaf.front!=='open'){
       if(!fridge&&!handleless.includes(selectedLeaf.front)){const handleLabel=elt('label','cabinetField checkline'),handle=elt('input');handle.type='checkbox';handle.checked=!!selectedLeaf.handle;
       handle.onchange=()=>setAll(leaf=>{if(handle.checked)leaf.handle=true;else delete leaf.handle;});
       handleLabel.append(document.createTextNode('畫出手把'),handle);fields.append(handleLabel);}
+      // A glass leaf in an aluminium frame: the glass kind and the frame colour (presets or any colour).
+      if(!fridge&&glassFronts.includes(selectedLeaf.front)){
+        const glass=selectedLeaf.glass,glassLabel=elt('label','cabinetField checkline'),toggle=elt('input');toggle.type='checkbox';toggle.checked=!!glass;
+        toggle.onchange=()=>setAll(leaf=>{if(toggle.checked)leaf.glass={...DEFAULT_GLASS};else delete leaf.glass;});
+        glassLabel.append(document.createTextNode('玻璃門（鋁框）'),toggle);fields.append(glassLabel);
+        if(glass){
+          const kindLabel=elt('label','cabinetField','玻璃種類'),kind=elt('select');
+          for(const [key,label]of glassKinds)kind.add(new Option(label,key));
+          kind.value=glass.kind;kind.onchange=()=>setAll(leaf=>{leaf.glass={...leaf.glass,kind:kind.value};});
+          kindLabel.append(kind);fields.append(kindLabel);
+          const row=elt('div','cabinetFridgeRow cabinetFrameRow');row.append(elt('span','','鋁框顏色'));
+          for(const [key,label,colour]of frameColors){const b=button(label,()=>setAll(leaf=>{leaf.glass={...leaf.glass,frame:key};}));b.style.borderLeft=`14px solid ${colour}`;b.setAttribute('aria-pressed',String(glass.frame===key));if(glass.frame===key)b.classList.add('active');row.append(b);}
+          const pick=elt('label','cabinetField checkline','自選顏色'),input=elt('input');input.type='color';input.value=/^#/.test(glass.frame)?glass.frame:frameColour(glass.frame);input.onchange=()=>setAll(leaf=>{leaf.glass={...leaf.glass,frame:input.value};});pick.append(input);row.append(pick);
+          fields.append(row);
+        }
+      }
       fields.append(button(f.openCells?.[members[0]]?'關閉門板':'打開門板',()=>{toggleCell(f,members);render();}));
       if(group)fields.append(button('拆開門板',()=>save(splitDoorGroup(design,leafId))));
     }

@@ -12,7 +12,7 @@ import {requestTexture,texturePixelsNow,texturesAsync} from './texture-cache.js'
 import {SITE,towers,paintFacade,paintMarble,corridor,eastFacade,northFacade,facadeRelief,eastPlatforms,facadeRecess,ringSideLayout} from './surroundings.js';
 import {HEIGHT,WALL_THICKNESS,TROUGH,flatMount,outline,rooms,walls,doors,curtains,palettes,inside,wallRects,overlaps,wallJoints,structuralSolids,normalizeKitchenParts,normalizeSinkBasin,normalizeLight,normalizeCove,CORNER_BOARD,normalizeFabric,lightMountDrop,hangingElevation,mountDrop,cabinetTypes,fridgeColors,normalizeFridgeColor,turnedSize} from './model.js';
 import {doorRects,doorLeaf,JAMB_WIDTH,fixedDoorLimit,pointClear,findRoute,roomAt,blocksCamera,cabinetLayout,cabinetRects,showerDoorLayout,resizeAtHandle,washerDoor,deskDrawer} from './spatial.js';
-import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,frontPanels,groupFronts,hingedFronts,slidingFronts,GROOVE,doorGroupOf,FRONT_GAP,FRONT_T,FRONT_Z,SLIDE_SETBACK} from './cabinet-design.js';
+import {cabinetStructure,cabinetColumns,cellFinish,cellOpening,frontPanels,groupFronts,hingedFronts,slidingFronts,GROOVE,doorGroupOf,frameColour,FRONT_GAP,FRONT_T,FRONT_Z,SLIDE_SETBACK} from './cabinet-design.js';
 const BEAM_FLUSH_SNAP=.005;
 // A flush fitting sends all of its light downward and glows like a panel, so straight below
 // it is several times brighter than under a bare bulb of the same output.
@@ -506,6 +506,32 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
  // An open-topped drawer box behind a drawer front: bottom, two sides and a
  // back, so a pulled-out drawer shows its body. `y` is the box's underside and
  // `z` the back face of the front, both in the drawer's local frame.
+ // Glass door panes, cached per kind (2026-10-07). Tints and opacities are by eye from glass
+ // samples: tinted glass reads dark, frosted and fabric-laminated glass hide the cell behind,
+ // and reeded glass draws its vertical flutes from a 1-D luminance ramp repeated every 1.5 cm
+ // (glassLeaf scales the pane's UVs). Panes never write depth, so the cell behind still draws.
+ glassMaterial(kind){
+  const cache=this.glassMaterials??={};if(cache[kind])return cache[kind];
+  const spec={clear:['#dcebea',.16,.05],lowIron:['#f5fafa',.1,.05],grey:['#3f4647',.35,.08],bronze:['#5e4027',.35,.08],frosted:['#eef2f1',.74,.85],reeded:['#e9f1f0',.4,.2],fabric:['#efe7d8',.86,.9]}[kind]||['#dcebea',.16,.05];
+  const extra={};
+  if(kind==='reeded'){const n=16,data=new Uint8Array(n*4);for(let i=0;i<n;i++){const v=Math.round(205+50*Math.cos(i/n*2*Math.PI));data.set([v,v,v,255],i*4);}const map=new T.DataTexture(data,n,1);map.wrapS=T.RepeatWrapping;map.magFilter=T.LinearFilter;map.colorSpace=T.SRGBColorSpace;map.needsUpdate=true;extra.map=map;}
+  return cache[kind]=new T.MeshStandardMaterial({color:spec[0],roughness:spec[2],metalness:0,transparent:true,opacity:spec[1],depthWrite:false,...extra});
+ }
+ // Aluminium frames are matte paint, not metal: metalness renders near black without an environment map.
+ frameMaterial(frame){
+  const colour=frameColour(frame),cache=this.frameMaterials??={};
+  return cache[colour]||=new T.MeshStandardMaterial({color:colour,roughness:.45,metalness:0});
+ }
+ // A glass leaf w × h centred at (x, y) in its pivot: a 2.2 cm aluminium frame as deep as a
+ // board front, and a 5 mm pane set into it that casts no shadow, so light reaches the cell.
+ glassLeaf(parent,w,h,x,y,glass){
+  const frame=this.frameMaterial(glass.frame),F=Math.min(.022,w*.2,h*.2);
+  for(const side of[-1,1]){this.box(parent,w,F,FRONT_T,x,y+side*(h-F)/2,0,frame);this.box(parent,F,h-2*F,FRONT_T,x+side*(w-F)/2,y,0,frame);}
+  const pw=w-2*F+.004,ph=h-2*F+.004,pane=this.box(parent,pw,ph,.005,x,y,0,this.glassMaterial(glass.kind));
+  pane.castShadow=pane.receiveShadow=false;
+  if(glass.kind==='reeded'){const uv=pane.geometry.attributes.uv;for(let i=0;i<uv.count;i++)uv.setX(i,uv.getX(i)*pw/.015);uv.needsUpdate=true;}
+  return pane;
+ }
  drawerBox(p,width,height,depth,y,z,mat='wood'){
   const b=.012;
   this.box(p,width,b,depth,0,y+b/2,z-depth/2,mat);
@@ -585,7 +611,7 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   // the rear track and the outer pair in front, each overlapping its neighbour by 2 cm. A leaf
   // has a travel for each way of opening (the openCells value): 1 opens the left half, or both
   // sides of four; 2 the right half, or the middle of four.
-  const slideLeaves=(id,count,x1,x2,openBottom,openTop,handle,face)=>{
+  const slideLeaves=(id,count,x1,x2,openBottom,openTop,handle,face,glass)=>{
    const innerW=x2-x1,cx=(x1+x2)/2,lap=.02,track=.008,leafH=openTop-openBottom-2*track-.004,frontZ=d/2-.006-FRONT_T/2,backZ=frontZ-FRONT_T-.004;
    // Each track is two aluminium rails, one per row of leaves, with a dark gap between them and a
    // dark wheel groove along each; the face the leaves run on is up at the bottom, down at the top.
@@ -600,7 +626,7 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
     const pivot=new T.Group;
     pivot.position.set(lx,(openBottom+openTop)/2,lz);
     g.add(pivot);
-    this.box(pivot,leafW,leafH,FRONT_T,0,0,0,face,.003);
+    if(glass)this.glassLeaf(pivot,leafW,leafH,0,0,glass);else this.box(pivot,leafW,leafH,FRONT_T,0,0,0,face,.003);
     if(handle&&sign)this.box(pivot,.012,.14,.004,sign*(leafW/2-.03),0,FRONT_T/2+.002,'dark',.002);
     parts.push({id,kind:'slide',pivot,base:lx,travel:travels[1],travels});
    }
@@ -617,10 +643,12 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   for(const cell of structure.cells){
    const{x,y,w,h,bottom,front,id,last,insetL,insetR}=cell,frontW=w-FRONT_GAP,frontH=h-FRONT_GAP,z=d/2+FRONT_Z,face=finish(cellFinish(f,cell,'door'));
    const innerW=w-insetL-insetR,cx=x+(insetL-insetR)/2;
-   const back=box(innerW,h,t,cx,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));if(front!=='open')shades.push({cell:id,mesh:back});
+   const back=box(innerW,h,t,cx,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));
+   // A cell behind glass is lit like an open one.
+   const closed=front!=='open'&&!cell.glass;if(closed)shades.push({cell:id,mesh:back});
    const lowest=cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom;
    const shelfBack=shelfSetback(x-w/2,x+w/2,bottom);
-   if(!cell.noBase){const shelf=box(innerW,t,d-t-shelfBack,cx,bottom+t/2,t/2-shelfBack/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));if(front!=='open'&&!(lowest&&slidingFronts.includes(front)))shades.push({cell:id,mesh:shelf,topOnly:lowest});}
+   if(!cell.noBase){const shelf=box(innerW,t,d-t-shelfBack,cx,bottom+t/2,t/2-shelfBack/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));if(closed&&!(lowest&&slidingFronts.includes(front)))shades.push({cell:id,mesh:shelf,topOnly:lowest});}
    if(last)box(innerW,t,d-t,cx,bottom+h-t/2,t/2);
    // Hinged doors, and sliding doors shared by several cells, are drawn per front panel below.
    if(front==='open'||hingedFronts.includes(front)||slidingFronts.includes(front)&&doorGroupOf(f.cabinetDesign,id))continue;
@@ -636,7 +664,7 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
     this.drawerBox(pivot,innerW-.026,Math.min(openH-.03,Math.max(.1,openH*.6)),d-t-.02,openBottom+.01-y,-FRONT_T/2,finish(cellFinish(f,cell,'drawerBox')));
     parts.push({id,kind:'drawer',pivot,base:pivot.position.z,travel:d*.55});
    }
-   if(slidingFronts.includes(front))slideLeaves(id,front==='sliding4'?4:2,cx-innerW/2,cx+innerW/2,openBottom,openTop,cell.handle,face);
+   if(slidingFronts.includes(front))slideLeaves(id,front==='sliding4'?4:2,cx-innerW/2,cx+innerW/2,openBottom,openTop,cell.handle,face,cell.glass);
   }
   // Hinged doors, one per front panel: a door group is a single door over
   // its cells, finished like its first cell. Handles only when asked for.
@@ -646,7 +674,7 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
    if(slidingFronts.includes(panel.front)){
     // A sliding door over several cells: leaves inside the carcass across the whole door.
     const door=slideDoors.find(s=>s.id===panel.id),m=door.members,left=m.reduce((a,c)=>c.x-c.w/2<a.x-a.w/2?c:a),right=m.reduce((a,c)=>c.x+c.w/2>a.x+a.w/2?c:a),low=m.reduce((a,c)=>c.bottom<a.bottom?c:a),high=m.reduce((a,c)=>c.bottom+c.h>a.bottom+a.h?c:a);
-    slideLeaves(panel.id,panel.front==='sliding4'?4:2,door.x1+left.insetL,door.x2-right.insetR,door.y1+(low.noBase?0:t),door.y2-(high.last?t:0),panel.handle,face);
+    slideLeaves(panel.id,panel.front==='sliding4'?4:2,door.x1+left.insetL,door.x2-right.insetR,door.y1+(low.noBase?0:t),door.y2-(high.last?t:0),panel.handle,face,panel.cell.glass);
     continue;
    }
    const addDoor=(hinge,sign,width,groove=false)=>{
@@ -660,7 +688,8 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
      this.box(pivot,width-gw,frontH,FRONT_T,sign*(width-gw)/2,0,0,face,.003);
      this.box(pivot,gw,frontH/2-y2,FRONT_T,edge,(y2+frontH/2)/2,0,face);
      this.box(pivot,gw,y1+frontH/2,FRONT_T,edge,(y1-frontH/2)/2,0,face);
-    }else this.box(pivot,width,frontH,FRONT_T,sign*width/2,0,0,face,.003);
+    }else if(panel.cell.glass)this.glassLeaf(pivot,width,frontH,sign*width/2,0,panel.cell.glass);
+    else this.box(pivot,width,frontH,FRONT_T,sign*width/2,0,0,face,.003);
     if(panel.handle)this.box(pivot,.013,.09,.022,sign*(width-.045),0,.02,'metal',.003);
     parts.push({id:panel.id,kind:'door',pivot,sign});
    };

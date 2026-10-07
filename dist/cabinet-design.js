@@ -10,6 +10,21 @@ export const handleless=['grooved','sliding4'];
 // The slot as measured on the owner's photo: 3 cm wide, from 1.5 % to 61.4 % of the door's
 // height, cut into the right leaf's edge at the middle.
 export const GROOVE={w:.03,bottom:.015,top:.614};
+// Glass doors (2026-10-07): a hinged or sliding leaf may be a glass pane in an aluminium frame,
+// `glass:{kind,frame}` on the cell, mirrored across a door group like `handle`. The frame is a
+// preset key or any #rrggbb colour. A grooved leaf's slot is cut into the board and a drawer
+// front carries a box, so neither takes glass.
+export const glassFronts=['left','right','double','sliding','sliding4'];
+export const glassKinds=[['clear','清玻'],['lowIron','超白玻'],['grey','灰玻'],['bronze','茶玻'],['frosted','霧玻（噴砂）'],['reeded','長虹玻璃'],['fabric','夾紗玻璃']];
+export const frameColors=[['black','黑','#1d1f21'],['titanium','鈦灰','#5d6266'],['silver','銀','#c3c6c8'],['champagne','香檳金','#bba67e'],['bronze','咖啡','#4b3a2e'],['white','白','#ecebe7']];
+export const DEFAULT_GLASS={kind:'clear',frame:'black'};
+export function normalizeGlass(glass){
+  if(!glass||typeof glass!=='object')return null;
+  const kind=glassKinds.some(([k])=>k===glass.kind)?glass.kind:'clear';
+  const frame=frameColors.some(([k])=>k===glass.frame)||/^#[0-9a-f]{6}$/i.test(glass.frame||'')?glass.frame:'black';
+  return{kind,frame};
+}
+export const frameColour=frame=>frameColors.find(([k])=>k===frame)?.[2]||frame;
 // Minimum widths by front.
 const minWidth={double:.4,grooved:.4,drawers:.25};
 export const cabinetTemplates={
@@ -79,7 +94,8 @@ function leafFields(cell,width){
   checkFront(cell.front,width);
   const finishes=ownFinishes(cell);
   if(!finishes.door&&isFinish(cell.finish))finishes.door=cell.finish; // before 2026-09-25 a cell had one front finish
-  return{front:cell.front,...(cell.handle&&cell.front!=='open'&&!handleless.includes(cell.front)?{handle:true}:{}),...(cell.noBase?{noBase:true}:{}),...(Object.keys(finishes).length?{finishes}:{})};
+  const glass=glassFronts.includes(cell.front)&&normalizeGlass(cell.glass);
+  return{front:cell.front,...(cell.handle&&cell.front!=='open'&&!handleless.includes(cell.front)?{handle:true}:{}),...(glass?{glass}:{}),...(cell.noBase?{noBase:true}:{}),...(Object.keys(finishes).length?{finishes}:{})};
 }
 // Only a column's lowest cells may leave out their bottom board (`noBase`);
 // a flag left on a cell that a split or line move lifted is dropped.
@@ -179,6 +195,7 @@ function checkDoorGroups(f,columns,list){
     for(const id of ids.slice(1)){
       const leaf=findLeaf({columns},id);
       if(lead.handle)leaf.handle=true;else delete leaf.handle;
+      if(lead.glass)leaf.glass={...lead.glass};else delete leaf.glass;
       const door=lead.finishes?.door;
       if(door)leaf.finishes={...(leaf.finishes||{}),door};
       else if(leaf.finishes){delete leaf.finishes.door;if(!Object.keys(leaf.finishes).length)delete leaf.finishes;}
@@ -215,10 +232,11 @@ export function mergeDoorCells(f,ids){
   if(!isRectangle(cells))throw Error('選到的格子要剛好拼成一個矩形，門板才能對齊格子');
   const width=boundsOf(cells).w,chosen=ids.map(id=>cells.find(c=>c.id===id)).find(c=>c&&groupFronts.includes(c.front));
   let front=chosen?.front||'double';if(['double','grooved'].includes(front)&&width<.4)front='left';
-  const lead=chosen||cells.find(c=>c.id===ids[0])||cells[0],handle=cells.some(c=>c.handle)&&!handleless.includes(front),door=lead.finishes?.door;
+  const lead=chosen||cells.find(c=>c.id===ids[0])||cells[0],handle=cells.some(c=>c.handle)&&!handleless.includes(front),door=lead.finishes?.door,glass=glassFronts.includes(front)&&lead.glass;
   for(const cell of cells){
     const leaf=findLeaf(design,cell.id);leaf.front=front;
     if(handle)leaf.handle=true;else delete leaf.handle;
+    if(glass)leaf.glass={...glass};else delete leaf.glass;
     if(door)leaf.finishes={...(leaf.finishes||{}),door};
     else if(leaf.finishes){delete leaf.finishes.door;if(!Object.keys(leaf.finishes).length)delete leaf.finishes;}
   }
@@ -403,7 +421,7 @@ export const hostsNicheTv=(host,tv)=>tv?.type==='television'&&tvInCell(tv)&&tv.s
 // lowest cell (that board is body), a drawer box only behind drawers.
 export function cellFinishSlots(f,cell){
   const column=f.cabinetDesign.columns.find(c=>c.id===cell.columnId);
-  return cabinetFinishSlots.filter(([slot])=>slot==='door'?cell.front!=='open':slot==='shelf'?cell.bottom>column.bottom+1e-6:slot==='drawerBox'?cell.front==='drawers':true);
+  return cabinetFinishSlots.filter(([slot])=>slot==='door'?cell.front!=='open'&&!cell.glass:slot==='shelf'?cell.bottom>column.bottom+1e-6:slot==='drawerBox'?cell.front==='drawers':true);
 }
 const isLeaf=node=>!node.parts&&!node.cells;
 const children=node=>node.parts||node.cells||[];
@@ -462,7 +480,7 @@ export function splitCabinetCell(design,leafId,makePartId=makeId,direction='side
   const here=path.at(-1),node=here.node,side=direction==='side';
   const size=side?here.width:here.height,half=round(size/2);
   if(size<(side?.4:.3))return null;
-  const keep={id:node.id,front:node.front,...(node.noBase?{noBase:true}:{}),...(node.finishes?{finishes:node.finishes}:{})};
+  const keep={id:node.id,front:node.front,...(node.glass?{glass:node.glass}:{}),...(node.noBase?{noBase:true}:{}),...(node.finishes?{finishes:node.finishes}:{})};
   const fresh=extra=>({id:makePartId(),front:'open',...extra});
   if(side===(here.kind==='parts')){
     // Same direction as its list: add a sibling after it.
@@ -472,7 +490,7 @@ export function splitCabinetCell(design,leafId,makePartId=makeId,direction='side
   }else{
     // Across its list: the cell becomes a container of two.
     const key=side?'width':'height';
-    node.id=makePartId();delete node.front;delete node.finishes;delete node.noBase;
+    node.id=makePartId();delete node.front;delete node.glass;delete node.finishes;delete node.noBase;
     node[side?'parts':'cells']=[{...keep,[key]:half},fresh({[key]:round(size-half)})];
   }
   next.template='custom';
