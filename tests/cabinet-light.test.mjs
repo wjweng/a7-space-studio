@@ -58,14 +58,19 @@ test('validation keeps the mount only for a linear light',()=>{
  assert.deepEqual(issues(items[0],[...items,f]).filter(m=>m.includes('線燈')),[],'the cabinet does not clash with its light');
 });
 
-test('a cabinet strip draws a lens on its face and spot lights shining out of it',()=>{
+test('a cabinet strip has no lamp: its light is painted on its face and on the board below it',()=>{
  const s=Object.create(SpaceScene.prototype);
  s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow','lightWhite','lightNatural','lightWarm'].map(k=>[k,new THREE.MeshStandardMaterial()]));
  const items=[wardrobe()],f=on(items,[0,1,0],[0,-1,0]);
  Object.assign(s,{actions:new Map,items:[...items,f],lightObjects:[]});
  const g=new THREE.Group;g.position.set(f.x,0,f.z);g.rotation.y=f.rot*Math.PI/180;s.makeFurniture(g,f);g.updateMatrixWorld(true);
- const spots=s.lightObjects.filter(o=>o.f===f).map(o=>o.point);assert(spots.length>0);
- for(const spot of spots){const p=spot.getWorldPosition(new THREE.Vector3()),t=spot.target.getWorldPosition(new THREE.Vector3());assert(t.y<p.y-.9,'under a board it shines down');assert(p.y<1&&p.y>.98,'just below the board');}
+ const mine=s.lightObjects.filter(o=>o.f===f);
+ assert.equal(mine.length,1);assert.ok(!mine[0].point,'no spot light');assert.equal(mine[0].glows.length,2,'a glow on its own face and a pool on the board below');
+ assert.equal(g.children.filter(o=>o.isLight).length,0);
+ const glows=g.children.filter(o=>o.isMesh&&mine[0].glows.includes(o.material)),box=new THREE.Box3();
+ const levels=glows.map(m=>box.setFromObject(m).getCenter(new THREE.Vector3()).y).sort((a,b)=>a-b);
+ assert.ok(Math.abs(levels[0]-(.018+.002))<.003,`pool on the board below at ${levels[0]}`);assert.ok(Math.abs(levels[1]-(1-.002))<.003,`glow under the board at ${levels[1]}`);
+ for(const m of glows){box.setFromObject(m);assert.ok(box.min.x>=-.5+.018-1e-6&&box.max.x<=.5-.018+1e-6,'clipped to the cell between its side panels');}
 });
 
 test('a share link keeps where a cabinet light is mounted, its cabinet and cell renamed together',async()=>{

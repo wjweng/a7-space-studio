@@ -34,6 +34,17 @@ function fixtureLens(base,color){const lens=base.clone();lens.userData.fixtureLe
 // v runs away from the LED strip.
 const COVE_REACH=.9,COVE_OVERHANG=.3;
 const coveRamps={};
+// A strip light's glow: full over the strip's footprint (half extents a, b), fading to nothing over
+// `reach` around it (smooth, eased), as an alpha-free colour ramp for additive blending. Cached by
+// size in centimetres.
+const stripGlows=new Map;
+function stripGlow(a,b,reach){
+ const key=[a,b,reach].map(v=>Math.round(v*100)).join(':');if(stripGlows.has(key))return stripGlows.get(key);
+ const W=Math.max(16,Math.min(256,Math.round((a+reach)*2/.01))),H=Math.max(16,Math.min(128,Math.round((b+reach)*2/.01))),data=new Uint8Array(W*H*4);
+ for(let j=0;j<H;j++)for(let i=0;i<W;i++){const x=Math.abs(((i+.5)/W-.5)*2*(a+reach)),y=Math.abs(((j+.5)/H-.5)*2*(b+reach)),dx=Math.max(0,x-a),dy=Math.max(0,y-b),k=Math.max(0,1-Math.hypot(dx,dy)/reach),v=Math.round(255*k*k*(3-2*k)),o=(j*W+i)*4;data[o]=data[o+1]=data[o+2]=v;data[o+3]=255;}
+ const texture=new T.DataTexture(data,W,H,T.RGBAFormat);Object.assign(texture,{magFilter:T.LinearFilter,minFilter:T.LinearFilter,needsUpdate:true});
+ stripGlows.set(key,texture);return texture;
+}
 function coveRamp(kind){
  if(coveRamps[kind])return coveRamps[kind];
  const size=64,data=new Uint8Array(size*size*4);
@@ -246,13 +257,35 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   const strip=this.box(g,f.w,f.h,f.d,0,y,0,lens);strip.quaternion.copy(turn);
   const hitMaterial=new T.MeshBasicMaterial();hitMaterial.colorWrite=false;hitMaterial.depthWrite=false;
   const hit=new T.Mesh(new T.BoxGeometry(f.w,f.h+.01,Math.max(f.d,.04)),hitMaterial);hit.position.set(0,y,0);hit.quaternion.copy(turn);hit.castShadow=hit.receiveShadow=false;g.add(hit);
-  if(!this.lightObjects)this.lightObjects=[];
-  const count=linearLightCount(f.w);
-  for(let i=0;i<count;i++){
-   const at=new T.Vector3(0,y,0).addScaledVector(along,-f.w/2+f.w*(i+.5)/count).addScaledVector(n,f.h/2+.005);
-   const spot=new T.SpotLight(color,0,4,1.25,.6,2);spot.position.copy(at);spot.target.position.copy(at.clone().add(n));lampShadow(spot,512);g.add(spot,spot.target);
-   this.lightObjects.push({f,lens,point:spot,share:1/count,span:f.w/count});
+  // Painted light, as a cove's: no lamp (spot lights a few centimetres from a board painted a row of
+  // round hot spots, and each one cost every material a shader rebuild). A glow lies around the
+  // strip on its own face, and a pool on the surface it shines at: the board below a strip under a
+  // board, the ceiling above one on a cabinet top. Both are clipped to the surface they lie on.
+  const lift=host.type==='hangingCabinet'?host.elevation||0:0,face=pose.face,centreLocal=[pose.centre[0],pose.centre[1]-lift,pose.centre[2]];
+  // Strip centre in face coordinates, and the strip's half extents along the face's u and v.
+  const rel=[0,1,2].map(i=>centreLocal[i]-face.o[i]),cu=rel[0]*face.u[0]+rel[1]*face.u[1]+rel[2]*face.u[2],cv=rel[0]*face.v[0]+rel[1]*face.v[1]+rel[2]*face.v[2];
+  const t=(f.spin||0)*Math.PI/180,eu=Math.abs(Math.cos(t))*f.w/2+Math.abs(Math.sin(t))*f.d/2,ev=Math.abs(Math.sin(t))*f.w/2+Math.abs(Math.cos(t))*f.d/2;
+  const glows=[];
+  // A rectangle of glow in a plane through `origin` (host axes) with axes u, v and normal nn: the
+  // strip's footprint (half extents a, b around cu, cv) fading out over `reach`, clipped to bounds.
+  const paint=(origin,u,v,nn,a,b,reach,bounds,strength)=>{
+   const u1=Math.max(bounds[0],cu-a-reach),u2=Math.min(bounds[1],cu+a+reach),v1=Math.max(bounds[2],cv-b-reach),v2=Math.min(bounds[3],cv+b+reach);if(u2-u1<.005||v2-v1<.005)return;
+   const material=new T.MeshBasicMaterial({map:stripGlow(a,b,reach),color,transparent:true,opacity:0,blending:T.AdditiveBlending,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-8});material.userData.fixtureLens=true;material.userData.strength=strength;
+   const geo=new T.BufferGeometry(),corners=[[u1,v1],[u2,v1],[u2,v2],[u1,v2]],pos=[],uv=[];
+   for(const [pu,pv]of corners){const p=[0,1,2].map(i=>origin[i]+u[i]*pu+v[i]*pv+nn[i]*.002);pos.push(p[0]-pose.centre[0],p[1]+lift,p[2]-pose.centre[2]);uv.push((pu-(cu-a-reach))/(2*(a+reach)),(pv-(cv-b-reach))/(2*(b+reach)));}
+   geo.setAttribute('position',new T.Float32BufferAttribute(pos,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex([0,1,2,0,2,3]);
+   const mesh=new T.Mesh(geo,material);mesh.material.side=T.DoubleSide;mesh.castShadow=mesh.receiveShadow=false;mesh.renderOrder=2;mesh.raycast=()=>{};
+   // The group sits at the strip's plan centre turned like the cabinet, so host axes are its axes.
+   g.add(mesh);glows.push(material);
+  };
+  paint(face.o,face.u,face.v,face.n,eu,ev,.14,[face.u1,face.u2,face.v1,face.v2],1);
+  if(f.lightMount==='under'){
+   const opening=cellOpening(host,f.supportCell);
+   if(opening){const drop=face.o[1]-opening.bottom,reach=Math.min(.45,Math.max(.12,drop*.7));paint([0,opening.bottom,0],face.u,face.v,[0,1,0],eu,ev,reach,[face.u1,face.u2,face.v1,face.v2],.7);}
   }
+  if(f.lightMount==='top'){const drop=HEIGHT-lift-host.h,reach=Math.min(.6,Math.max(.15,drop*.7));if(drop>.02)paint([0,HEIGHT-lift,0],face.u,face.v,[0,-1,0],eu,ev,reach,[-9,9,-9,9],.5);}
+  if(!this.lightObjects)this.lightObjects=[];
+  this.lightObjects.push({f,lens,strip:true,glows});
  }
  // A light on a cabinet's front rides on the door, drawer front or sliding leaf under its centre:
  // each frame its group takes that part's move away from its closed place. A part's closed place
@@ -766,7 +799,7 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
  setFloors(floors){this.floors=floors;this.buildHouse();this.buildFurniture(this.items);}
  setCutaway(v){this.cutaway=v;const cut=v&&this.mode!=='walk';for(const {mesh,h,y}of this.wallMeshes){let nh=Math.max(0,Math.min(y+h,.85)-y);mesh.visible=!cut||nh>0;mesh.scale.y=cut?nh/h:1;mesh.position.y=y+(cut?nh:h)/2;}this.ceiling.visible=this.mode==='walk';for(const c of this.curtains)c.visible=this.mode!=='top';this.updateBeamVisibility();}
  updateBeamVisibility(){const hidden=this.mode==='orbit'&&this.cutaway;for(const f of this.items||[]){if(f.type!=='beam')continue;const g=this.groups?.get(f.id);if(g)g.visible=!hidden&&!(this.mode==='top'&&this.showCeiling===false);}const selected=this.items?.find(f=>f.id===this.selected);if(this.selection&&selected?.type==='beam')this.selection.visible=!hidden;}
- updateLight(){this.fading?.clear();this.updateOutdoor?.();this.hemi.intensity=this.night?.28:2.2;if(this.fill)this.fill.intensity=this.night?.1:1.05;this.sun.intensity=this.night?.08:.6;this.scene.background.set(this.night?'#77818a':'#dce4e2');for(const {f,point,lens,cove,glows,share=1,span=Math.max(f.w,f.d)}of this.lightObjects||[]){if(cove){const light=normalizeCove(f),on=this.lightsOn&&light.on,level=on?light.lumens/1000*light.dimming/100:0,color={white:'#eef6ff',natural:'#fff0cf',warm:'#ffc26f'}[light.colorTemperature];for(const glow of glows){glow.color.set(color);glow.opacity=Math.min(1,level*(this.night?.9:.3));glow.visible=glow.opacity>0;}setFixtureLens(lens,level);continue;}const light=normalizeLight(f),spread=light.lightKind==='linear'?1:Math.max(.75,Math.min(1.6,Math.sqrt(Math.max(.01,f.w*f.d)/.0576))),base=(light.lumens/1200)*spread*share,color={white:'#eef6ff',natural:'#fff0cf',warm:'#ffc26f'}[light.colorTemperature];point.color?.set(color);point.distance=Math.max(2.8,5.5+span*2);const intensity=this.lightsOn&&light.on?(base*(light.dimming/100))*(this.night?1.2:.32):0;point.intensity=intensity*(point.isSpotLight?DOWNLIGHT_GAIN:1);if(point.userData)point.userData.fullIntensity=point.intensity;point.visible=intensity>0;setFixtureLens(lens,this.lightsOn&&light.on?light.lumens/1200*light.dimming/100:0);}this.assignLampShadows();this.updateRoomLight();}
+ updateLight(){this.fading?.clear();this.updateOutdoor?.();this.hemi.intensity=this.night?.28:2.2;if(this.fill)this.fill.intensity=this.night?.1:1.05;this.sun.intensity=this.night?.08:.6;this.scene.background.set(this.night?'#77818a':'#dce4e2');for(const {f,point,lens,cove,strip,glows,share=1,span=Math.max(f.w,f.d)}of this.lightObjects||[]){if(strip){const light=normalizeLight(f),level=this.lightsOn&&light.on?light.lumens/1200*light.dimming/100:0,color={white:'#eef6ff',natural:'#fff0cf',warm:'#ffc26f'}[light.colorTemperature];for(const glow of glows){glow.color.set(color);glow.opacity=Math.min(1,level*(glow.userData.strength??1)*(this.night?.9:.35));glow.visible=glow.opacity>0;}setFixtureLens(lens,level);continue;}if(cove){const light=normalizeCove(f),on=this.lightsOn&&light.on,level=on?light.lumens/1000*light.dimming/100:0,color={white:'#eef6ff',natural:'#fff0cf',warm:'#ffc26f'}[light.colorTemperature];for(const glow of glows){glow.color.set(color);glow.opacity=Math.min(1,level*(this.night?.9:.3));glow.visible=glow.opacity>0;}setFixtureLens(lens,level);continue;}const light=normalizeLight(f),spread=light.lightKind==='linear'?1:Math.max(.75,Math.min(1.6,Math.sqrt(Math.max(.01,f.w*f.d)/.0576))),base=(light.lumens/1200)*spread*share,color={white:'#eef6ff',natural:'#fff0cf',warm:'#ffc26f'}[light.colorTemperature];point.color?.set(color);point.distance=Math.max(2.8,5.5+span*2);const intensity=this.lightsOn&&light.on?(base*(light.dimming/100))*(this.night?1.2:.32):0;point.intensity=intensity*(point.isSpotLight?DOWNLIGHT_GAIN:1);if(point.userData)point.userData.fullIntensity=point.intensity;point.visible=intensity>0;setFixtureLens(lens,this.lightsOn&&light.on?light.lumens/1200*light.dimming/100:0);}this.assignLampShadows();this.updateRoomLight();}
 // Light that stands in for bounce off walls and ceilings is one light for the
 // whole scene, so in walk view it counts only the lamps and coves in the room
 // the camera is in: a dark room must not glow because the kitchen is lit.
