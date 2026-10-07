@@ -220,7 +220,8 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
 
  this.setCutaway(this.cutaway);this.updateLight();}
  buildFurniture(items){this.stopTour();this.items=items;for(const h of this.invalidHelpers.values()){this.scene.remove(h);h.geometry.dispose();h.material.dispose();}this.invalidHelpers.clear();for(const marker of this.invalidMarkers.values()){this.scene.remove(marker);marker.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}this.invalidMarkers.clear();this.clearGroup(this.furniture);this.groups.clear();for(const [id,a]of this.actions)if(a.item)this.actions.delete(id);for(const f of items){let g=new T.Group;g.position.set(f.x,0,f.z);g.rotation.y=f.rot*Math.PI/180;g.userData.furniture=f.id;this.furniture.add(g);this.groups.set(f.id,g);this.makeFurniture(g,f);}this.updateLight();this.highlight(this.selected);this.refreshValidity();this.ensureSafeCamera();}
- resizeItem(f){const old=this.groups.get(f.id);if(!old)return this.buildFurniture(this.items);old.traverse(o=>{o.geometry?.dispose();if(o.material?.userData?.fixtureLens)o.material.dispose()});this.furniture.remove(old);this.groups.delete(f.id);if(this.actions.get(f.id)?.item)this.actions.delete(f.id);this.lightObjects=(this.lightObjects||[]).filter(light=>light.f.id!==f.id);const marker=this.invalidMarkers.get(f.id);if(marker){this.scene.remove(marker);marker.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});this.invalidMarkers.delete(f.id);}const g=new T.Group;g.position.set(f.x,0,f.z);g.rotation.y=f.rot*Math.PI/180;g.userData.furniture=f.id;this.furniture.add(g);this.groups.set(f.id,g);this.makeFurniture(g,f);this.updateLight();this.highlight(this.selected);this.refreshValidity();}
+ addItem(f,items){this.items=items;this.resizeItem(f,{add:true});}
+ resizeItem(f,{add=false}={}){const old=this.groups.get(f.id);if(!old&&!add)return this.buildFurniture(this.items);if(old){old.traverse(o=>{o.geometry?.dispose();if(o.material?.userData?.fixtureLens)o.material.dispose()});this.furniture.remove(old);this.groups.delete(f.id);}if(this.actions.get(f.id)?.item)this.actions.delete(f.id);this.lightObjects=(this.lightObjects||[]).filter(light=>light.f.id!==f.id);const marker=this.invalidMarkers.get(f.id);if(marker){this.scene.remove(marker);marker.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});this.invalidMarkers.delete(f.id);}const g=new T.Group;g.position.set(f.x,0,f.z);g.rotation.y=f.rot*Math.PI/180;g.userData.furniture=f.id;this.furniture.add(g);this.groups.set(f.id,g);this.makeFurniture(g,f);this.updateLight();this.highlight(this.selected);this.refreshValidity();}
  // Every light source costs shading work on every pixel, so flush and linear lights use cheap
  // spot lights aimed at the floor: nothing lights the ceiling around the fitting, and a
  // switched-off lamp (intensity 0) is hidden so it drops out of shading entirely.
@@ -546,7 +547,12 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   // sides of four; 2 the right half, or the middle of four.
   const slideLeaves=(id,count,x1,x2,openBottom,openTop,handle,face)=>{
    const innerW=x2-x1,cx=(x1+x2)/2,lap=.02,track=.008,leafH=openTop-openBottom-2*track-.004,frontZ=d/2-.006-FRONT_T/2,backZ=frontZ-FRONT_T-.004;
-   for(const ty of[openBottom+track/2,openTop-track/2])box(innerW,track,FRONT_T*2+.012,cx,ty,(frontZ+backZ)/2,'track');
+   // Each track is two aluminium rails, one per row of leaves, with a dark gap between them and a
+   // dark wheel groove along each; the face the leaves run on is up at the bottom, down at the top.
+   for(const [face,dir]of[[openBottom+track,1],[openTop-track,-1]]){
+    for(const z of[frontZ,backZ]){box(innerW,track,FRONT_T+.001,cx,face-dir*track/2,z,'track');box(innerW,.001,.004,cx,face+dir*.0005,z,'dark');}
+    box(innerW,track*.5,.003,cx,face-dir*track*.75,(frontZ+backZ)/2,'dark');
+   }
    const leafW=count===4?(innerW+2*lap)/4:(innerW+lap)/2,run=leafW-lap;
    const leaves=count===4?[[x1+leafW/2,frontZ,{1:run,2:0}],[cx-leafW/2,backZ,{1:0,2:-run}],[cx+leafW/2,backZ,{1:0,2:run}],[x2-leafW/2,frontZ,{1:-run,2:0}]]
     :[[x1+leafW/2,backZ,{1:run,2:0},-1],[x2-leafW/2,frontZ,{1:0,2:-run},1]];

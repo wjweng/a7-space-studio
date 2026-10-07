@@ -240,6 +240,23 @@ export function mountHosts(item,items,depth=0){
   for(let i=0;i<=nu;i++)for(let j=0;j<=nv;j++){const u=(i/nu-.5)*item.w,v=(j/nv-.5)*item.d,x=item.x+u*c+v*s,z=item.z-u*s+v*c;if(!touching.some(host=>within(host,x,z)))return[];}
   return touching;
 }
+// A new linear light clicked onto a beam's or hanging cabinet's underside goes under it whole: it
+// keeps its turn when it fits that way, else turns along or across the host, whichever fits longer,
+// and is shortened to the longest length that fits, its centre moving just far enough to stay
+// inside. A partial overlap would be a clash, drawn at the ceiling inside the beam.
+export function fitUnderHost(f,items){
+  const hosts=items.filter(h=>h.id!==f.id&&!h.draft&&['beam','hangingCabinet'].includes(h.type)&&within(h,f.x,f.z));
+  if(!hosts.length)return f;
+  const host=hosts.sort((a,b)=>mountDrop(b,items)+b.h-(mountDrop(a,items)+a.h))[0];
+  const a=host.rot*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=f.x-host.x,dz=f.z-host.z,u=c*dx-s*dz,v=s*dx+c*dz,turn=(((f.rot-host.rot)%180)+180)%180;
+  // [rot, length limit, width limit, whether the length runs along the host's x]
+  const ways=[[host.rot,host.w,host.d,true],[host.rot+90,host.d,host.w,false]].filter(([, ,width])=>f.d<=width+1e-9).map(([rot,len,width,alongX])=>({rot,alongX,len:Math.min(f.w,Math.floor(len*1000+1e-6)/1000),width}));
+  if(!ways.length)return f;
+  const off=t=>{const d=Math.abs(turn-t)%180;return Math.min(d,180-d);},kept=ways.find(w=>off(w.alongX?0:90)<1e-6);
+  const way=kept&&kept.len>=f.w-1e-9?kept:ways.sort((p,q)=>q.len-p.len)[0];
+  const clamp=(x,limit)=>Math.max(-limit,Math.min(limit,x)),[eu,ev]=way.alongX?[way.len/2,f.d/2]:[f.d/2,way.len/2],cu=clamp(u,host.w/2-eu),cv=clamp(v,host.d/2-ev);
+  return{...f,w:way.len,rot:((Math.round(way.rot)%360)+360)%360,x:host.x+c*cu+s*cv,z:host.z-s*cu+c*cv};
+}
 export const hangsFrom=(item,host,items)=>mountHosts(item,items).some(h=>h.id===host.id);
 export const lightMountDrop=(light,items)=>light?.type==='light'?mountDrop(light,items):0;
 // A hanging cabinet's underside height above the floor.

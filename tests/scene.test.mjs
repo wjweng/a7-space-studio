@@ -406,5 +406,6 @@ test('the bottom board stays lit and sliding tracks are matte, so the strip unde
  s.makeFurniture(g,f);
  assert.equal(s.actions.get('low').shades.length,1,'only the back panel of a bottom cell is shaded');
  const tracks=g.children.filter(m=>m.isMesh&&Math.abs(m.geometry.parameters.height-.008)<1e-9);
- assert.equal(tracks.length,2);assert(tracks.every(m=>m.material===s.m.track));
+ assert.equal(tracks.length,4,'two rails at the bottom, two at the top');assert(tracks.every(m=>m.material===s.m.track));
+ const grooves=g.children.filter(m=>m.isMesh&&Math.abs(m.geometry.parameters.height-.001)<1e-9);assert.equal(grooves.length,4,'a wheel groove along each rail');assert(grooves.every(m=>m.material===s.m.dark));
 });
