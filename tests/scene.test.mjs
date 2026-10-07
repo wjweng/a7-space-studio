@@ -401,12 +401,12 @@ test('the inside of a closed cell is shaded, and lit again while it is open',()=
 });
 
 test('the bottom board stays lit and sliding tracks are matte, so the strip under the leaves never changes colour',()=>{
- const s=fixture();s.m.track=new THREE.MeshStandardMaterial();const g=new THREE.Group;
+ const s=fixture();s.m.track=new THREE.MeshStandardMaterial();s.m.trackGroove=new THREE.MeshStandardMaterial();const g=new THREE.Group;
  const f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'low',x:0,z:0,w:1.2,d:.4,h:2,rot:0,openCells:{},cabinetDesign:{template:'custom',columns:[{id:'c',width:1.2,bottom:0,cells:[{id:'all',height:2,front:'sliding4'}]}]}};
  s.makeFurniture(g,f);
  const shades=s.actions.get('low').shades;assert.equal(shades.length,2,'the back panel and the floor board');
  const floor=shades.find(x=>x.topOnly);assert.ok(floor&&Array.isArray(floor.dark)&&floor.dark.filter(m=>m===floor.shaded).length===1&&floor.dark[2]===floor.shaded,'only the floor board\'s top face (+y) is shaded, its front edge stays lit');
  const tracks=g.children.filter(m=>m.isMesh&&Math.abs(m.geometry.parameters.height-.008)<1e-9);
  assert.equal(tracks.length,4,'two rails at the bottom, two at the top');assert(tracks.every(m=>m.material===s.m.track));
- const grooves=g.children.filter(m=>m.isMesh&&Math.abs(m.geometry.parameters.height-.001)<1e-9);assert.equal(grooves.length,4,'a wheel groove along each rail');assert(grooves.every(m=>m.material===s.m.dark));
+ const grooves=g.children.filter(m=>m.isMesh&&Math.abs(m.geometry.parameters.height-.001)<1e-9);assert.equal(grooves.length,4,'a wheel groove along each rail');assert.ok(grooves.every(m=>m.material===s.m.trackGroove),'grooves are mid grey, not black');
 });

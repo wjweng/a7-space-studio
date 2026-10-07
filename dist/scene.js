@@ -194,7 +194,10 @@ export class SpaceScene{
  makeMaterials(){const p=palettes[this.palette];if(!this.woodTexture){this.woodTexture=this.texture('wood');this.fabricTexture=this.texture('fabric');}this.m={};const mat=(color,roughness=.8,extra={})=>new T.MeshStandardMaterial({color,roughness,...extra});this.m.wall=mat(p.wall);this.m.wood=mat(p.wood,.6,{map:this.woodTexture});this.m.entryDoor=mat(ENTRY_DOOR,.5);this.m.floor=mat(p.floor,.55,{map:this.woodTexture});this.m.fabric=mat(p.fabric,.98,{map:this.fabricTexture});this.m.accent=mat(p.accent,.9,{map:this.fabricTexture});this.m.white=mat('#f4f1e9',.7);this.m.champagne=mat('#e6dac0',.5);this.m.gold=mat('#d9bf86',.4);this.m.tile=mat('#cecfc7',.35);this.m.stone=mat('#e4e0d7',.35);this.m.dark=mat('#27383a',.6);this.m.metal=mat('#929b98',.3,{metalness:.8});
 // Sliding-door tracks: matte aluminium. A metallic finish renders near black without an
 // environment map, and the leaves on two tracks bared more or less of it as they moved.
-this.m.track=mat('#c9ccca',.45);this.m.glass=mat('#b9d5da',.1,{transparent:true,opacity:.24,metalness:.1,depthWrite:false});this.m.glow=mat('#fff3b0',.25,{emissive:'#ffd36a',emissiveIntensity:1.5});this.m.lightWhite=mat('#f7fbff',.2,{emissive:'#dcecff',emissiveIntensity:1.9});this.m.lightNatural=mat('#fff4dc',.22,{emissive:'#ffe6af',emissiveIntensity:1.8});this.m.lightWarm=mat('#ffd7a0',.25,{emissive:'#ffb55d',emissiveIntensity:1.75});this.m.leaf=mat('#496649',.9);}
+this.m.track=mat('#c9ccca',.45);
+// The wheel groove and the gap between the rails: a mid grey, so the two rails read apart without a
+// black line where the front rail shows in front of the rear leaves of a shut four-leaf door.
+this.m.trackGroove=mat('#9a9e9c',.6);this.m.glass=mat('#b9d5da',.1,{transparent:true,opacity:.24,metalness:.1,depthWrite:false});this.m.glow=mat('#fff3b0',.25,{emissive:'#ffd36a',emissiveIntensity:1.5});this.m.lightWhite=mat('#f7fbff',.2,{emissive:'#dcecff',emissiveIntensity:1.9});this.m.lightNatural=mat('#fff4dc',.22,{emissive:'#ffe6af',emissiveIntensity:1.8});this.m.lightWarm=mat('#ffd7a0',.25,{emissive:'#ffb55d',emissiveIntensity:1.75});this.m.leaf=mat('#496649',.9);}
  box(parent,w,h,d,x,y,z,mat,round=0){if(mat==='wood'&&this.woodOverride)mat=this.woodOverride;if(mat==='fabric'&&this.fabricOverride)mat=this.fabricOverride;let geo=round?new RoundedBoxGeometry(w,h,d,3,Math.min(round,w/3,h/3,d/3)):new T.BoxGeometry(w,h,d);if(mat?.userData?.board)boardUV(geo,[(x*7.3+z*3.1+y*1.7)%1,(x*2.9+z*5.3)%1]);let mesh=new T.Mesh(geo,typeof mat==='string'?this.m[mat]:mat);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;parent.add(mesh);return mesh;}
  cyl(parent,r1,r2,h,x,y,z,mat){if(mat==='wood'&&this.woodOverride)mat=this.woodOverride;if(mat==='fabric'&&this.fabricOverride)mat=this.fabricOverride;let m=new T.Mesh(new T.CylinderGeometry(r1,r2,h,32),typeof mat==='string'?this.m[mat]:mat);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
  clearGroup(g){if(g===this.furniture&&this.lightObjects)this.lightObjects=[];g.traverse(o=>{o.geometry?.dispose();if(o.material?.userData?.fixtureLens)o.material.dispose()});g.clear();}
@@ -550,8 +553,8 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
    // Each track is two aluminium rails, one per row of leaves, with a dark gap between them and a
    // dark wheel groove along each; the face the leaves run on is up at the bottom, down at the top.
    for(const [face,dir]of[[openBottom+track,1],[openTop-track,-1]]){
-    for(const z of[frontZ,backZ]){box(innerW,track,FRONT_T+.001,cx,face-dir*track/2,z,'track');box(innerW,.001,.004,cx,face+dir*.0005,z,'dark');}
-    box(innerW,track*.5,.003,cx,face-dir*track*.75,(frontZ+backZ)/2,'dark');
+    for(const z of[frontZ,backZ]){box(innerW,track,FRONT_T+.001,cx,face-dir*track/2,z,'track');box(innerW,.001,.004,cx,face+dir*.0005,z,'trackGroove');}
+    box(innerW,track*.5,.003,cx,face-dir*track*.75,(frontZ+backZ)/2,'trackGroove');
    }
    const leafW=count===4?(innerW+2*lap)/4:(innerW+lap)/2,run=leafW-lap;
    const leaves=count===4?[[x1+leafW/2,frontZ,{1:run,2:0}],[cx-leafW/2,backZ,{1:0,2:-run}],[cx+leafW/2,backZ,{1:0,2:run}],[x2-leafW/2,frontZ,{1:-run,2:0}]]
