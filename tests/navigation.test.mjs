@@ -36,8 +36,8 @@ test('top view: clicking the same spot again selects the next item down, then wr
 test('ceiling items turn see-through without touching shared materials, and back',()=>{
   const s=Object.create(SpaceScene.prototype),shared=new T.MeshStandardMaterial,g=new T.Group,mesh=new T.Mesh(new T.BoxGeometry,shared);g.add(mesh);
   s.seeThrough(g,true);
-  assert.notEqual(mesh.material,shared);assert.equal(mesh.material.transparent,true);assert(mesh.material.opacity<.5);assert.equal(shared.transparent,false);
-  s.seeThrough(g,false);assert.equal(mesh.material,shared);
+  assert.ok(mesh.material!==shared,'a see-through copy');assert.equal(mesh.material.transparent,true);assert(mesh.material.opacity<.5);assert.equal(shared.transparent,false);
+  s.seeThrough(g,false);assert.ok(mesh.material===shared,'the shared material is back');
 });
 test('hiding ceiling items hides what is drawn but leaves a light\'s lamps on, and brings it back',()=>{
   const s=Object.create(SpaceScene.prototype),g=new T.Group,shade=new T.Mesh(new T.BoxGeometry,new T.MeshStandardMaterial),lamp=new T.SpotLight;g.add(shade,lamp);

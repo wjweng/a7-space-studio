@@ -216,20 +216,20 @@ test('cabinet finishes resolve cell, then cabinet-wide, then the cabinet finish'
  f.cabinetDesign={template:'custom',columns:[{id:'c',width:.8,bottom:0,cells:[{id:'a',height:.6,front:'drawers'},{id:'b',height:1.4,front:'left',finishes:{door:own,shelf:own}}]}]};
  s.makeFurniture(g,f);
  const [drawer,door]=s.actions.get('parts').parts,leaf=part=>part.pivot.children[0].material;
- assert.equal(leaf(drawer),s.finishMaterial(doors),'a drawer front is a door');
- assert.equal(leaf(door),s.finishMaterial(own),'a cell finish overrides all doors');
- assert.equal(drawer.pivot.children[2].material,s.finishMaterial(whole),'an unset drawer box follows the cabinet finish');
+ assert.ok(leaf(drawer)===s.finishMaterial(doors),'a drawer front is a door');
+ assert.ok(leaf(door)===s.finishMaterial(own),'a cell finish overrides all doors');
+ assert.ok(drawer.pivot.children[2].material===s.finishMaterial(whole),'an unset drawer box follows the cabinet finish');
  // Inside a closed cell the back and shelf show a darkened copy of their finish.
- const meshes=g.children.filter(m=>m.isMesh).map(m=>({geometry:m.geometry,position:m.position,material:[...(s.shadeCache||new Map)].find(([,dark])=>dark===m.material)?.[0]??m.material})),size=m=>m.geometry.parameters;
+ const meshes=g.children.filter(m=>m.isMesh).map(m=>({geometry:m.geometry,position:m.position,material:Array.isArray(m.material)?m.material[0]:[...(s.shadeCache||new Map)].find(([,dark])=>dark===m.material)?.[0]??m.material})),size=m=>m.geometry.parameters;
  const backsFound=meshes.filter(m=>Math.abs(size(m).depth-.018)<1e-9&&m.position.z<0);
  assert.equal(backsFound.length,2,'one back panel per cell');
  assert.ok(backsFound.every(m=>m.material===s.finishMaterial(backs)));
  const boards=meshes.filter(m=>Math.abs(size(m).height-.018)<1e-9&&Math.abs(size(m).depth-(.5-.018))<1e-9);
  const shelf=boards.find(m=>Math.abs(m.position.y-(.6+.009))<1e-6),bottom=boards.find(m=>Math.abs(m.position.y-.009)<1e-6);
- assert.equal(shelf.material,s.finishMaterial(own),'the board under a cell is its shelf');
- assert.equal(bottom.material,s.finishMaterial(whole),'the lowest board is body');
+ assert.ok(shelf.material===s.finishMaterial(own),'the board under a cell is its shelf');
+ assert.ok(bottom.material===s.finishMaterial(whole),'the lowest board is body');
  const side=meshes.find(m=>Math.abs(size(m).width-.018)<1e-9&&Math.abs(size(m).depth-.5)<1e-9);
- assert.equal(side.material,s.finishMaterial(whole));
+ assert.ok(side.material===s.finishMaterial(whole),'a side panel is body');
 });
 
 test('cabinet boards stay between the side panels and a rebuild keeps open parts open',()=>{
@@ -404,7 +404,8 @@ test('the bottom board stays lit and sliding tracks are matte, so the strip unde
  const s=fixture();s.m.track=new THREE.MeshStandardMaterial();const g=new THREE.Group;
  const f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'low',x:0,z:0,w:1.2,d:.4,h:2,rot:0,openCells:{},cabinetDesign:{template:'custom',columns:[{id:'c',width:1.2,bottom:0,cells:[{id:'all',height:2,front:'sliding4'}]}]}};
  s.makeFurniture(g,f);
- assert.equal(s.actions.get('low').shades.length,1,'only the back panel of a bottom cell is shaded');
+ const shades=s.actions.get('low').shades;assert.equal(shades.length,2,'the back panel and the floor board');
+ const floor=shades.find(x=>x.topOnly);assert.ok(floor&&Array.isArray(floor.dark)&&floor.dark.filter(m=>m===floor.shaded).length===1&&floor.dark[2]===floor.shaded,'only the floor board\'s top face (+y) is shaded, its front edge stays lit');
  const tracks=g.children.filter(m=>m.isMesh&&Math.abs(m.geometry.parameters.height-.008)<1e-9);
  assert.equal(tracks.length,4,'two rails at the bottom, two at the top');assert(tracks.every(m=>m.material===s.m.track));
  const grooves=g.children.filter(m=>m.isMesh&&Math.abs(m.geometry.parameters.height-.001)<1e-9);assert.equal(grooves.length,4,'a wheel groove along each rail');assert(grooves.every(m=>m.material===s.m.dark));

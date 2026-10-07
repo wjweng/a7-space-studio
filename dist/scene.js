@@ -291,7 +291,7 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
    // Lit as soon as the cell opens; dark again only once its door, drawer or leaves are nearly shut.
    const moving=(a.parts||[]).some(p=>p.id===shade.panel&&(p.kind==='slide'?Math.abs(p.pivot.position.x-p.base)>.01:(p.amount||0)>.05));
    const want=a.item.openCells?.[shade.cell]||moving?shade.lit:shade.dark;
-   if(want===shade.dark&&shade.dark.map!==shade.lit.map){shade.dark.map=shade.lit.map;shade.dark.needsUpdate=true;}
+   if(want===shade.dark&&shade.shaded.map!==shade.lit.map){shade.shaded.map=shade.lit.map;shade.shaded.needsUpdate=true;}
    if(shade.mesh.material!==want&&(shade.mesh.material===shade.lit||shade.mesh.material===shade.dark))shade.mesh.material=want;
   }
  }
@@ -580,7 +580,7 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
    const back=box(innerW,h,t,cx,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));if(front!=='open')shades.push({cell:id,mesh:back});
    const lowest=cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom;
    const shelfBack=shelfSetback(x-w/2,x+w/2,bottom);
-   if(!cell.noBase){const shelf=box(innerW,t,d-t-shelfBack,cx,bottom+t/2,t/2-shelfBack/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));if(front!=='open'&&!lowest)shades.push({cell:id,mesh:shelf});}
+   if(!cell.noBase){const shelf=box(innerW,t,d-t-shelfBack,cx,bottom+t/2,t/2-shelfBack/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));if(front!=='open')shades.push({cell:id,mesh:shelf,topOnly:lowest});}
    if(last)box(innerW,t,d-t,cx,bottom+h-t/2,t/2);
    // Hinged doors, and sliding doors shared by several cells, are drawn per front panel below.
    if(front==='open'||hingedFronts.includes(front)||slidingFronts.includes(front)&&doorGroupOf(f.cabinetDesign,id))continue;
@@ -635,7 +635,9 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   // a resize) does not replay the opening animation.
   for(const part of parts){part.amount=f.openCells?.[part.id]?1:0;if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+slideTravel(part,f.openCells?.[part.id]);}
   const panelOf=new Map(frontPanels(f).flatMap(panel=>panel.ids.map(id=>[id,panel.id])));
-  for(const shade of shades){shade.lit=shade.mesh.material;shade.dark=this.shadedMaterial(shade.lit);shade.panel=panelOf.get(shade.cell);}
+  // A column's floor board shows its front edge under sliding leaves, so only its top face is shaded
+  // (box faces: +x, -x, +y, -y, +z, -z).
+  for(const shade of shades){shade.lit=shade.mesh.material;shade.shaded=this.shadedMaterial(shade.lit);shade.dark=shade.topOnly?[shade.lit,shade.lit,shade.shaded,shade.lit,shade.lit,shade.lit]:shade.shaded;shade.panel=panelOf.get(shade.cell);}
   if(parts.length)this.actions.set(f.id,{type:'modularCabinet',item:f,parts,shades,amount:0});
   this.shadeCells({item:f,shades});
  }
