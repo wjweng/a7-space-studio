@@ -12,7 +12,7 @@ This repository is a buildless Three.js apartment editor. The deployable applica
 
 - `npm install` installs the pinned development dependency from `package-lock.json` when needed.
 - `node server.mjs` serves `dist/` at `http://127.0.0.1:4173` for local review.
-- `npm test` runs all Node test files with the built-in test runner.
+- `npm test` runs all Node test files with the built-in test runner, inside a 6 GB memory cgroup (`tools/test.sh`; see Testing Guidelines).
 
 There is no compilation step. Changes under `dist/` are source changes and deployment output. Cloudflare Pages publishes the `dist` directory.
 
