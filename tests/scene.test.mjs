@@ -393,11 +393,27 @@ test('the inside of a closed cell is shaded, and lit again while it is open',()=
  const f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'shade',x:0,z:0,w:.8,d:.5,h:2,rot:0,openCells:{},cabinetDesign:{template:'custom',columns:[{id:'c',width:.8,bottom:0,cells:[{id:'shelf',height:1,front:'open'},{id:'shut',height:1,front:'left'}]}]}};
  s.makeFurniture(g,f);const a=s.actions.get('shade');
  assert.equal(a.shades.length,2,'the closed cell\'s back panel and shelf');
- assert(a.shades.every(x=>x.mesh.material===x.dark&&x.dark.color.r<x.lit.color.r),'darker while closed');
+ assert(a.shades.every(x=>x.mesh.material===x.dark&&x.shaded.color.r<x.lit.color.r),'darker while closed');
  f.openCells={shut:1};s.shadeCells(a);assert(a.shades.every(x=>x.mesh.material===x.lit),'lit while open');
  const door=a.parts.find(p=>p.id==='shut');door.amount=.5;f.openCells={};s.shadeCells(a);assert(a.shades.every(x=>x.mesh.material===x.lit),'still lit while the door is closing');
  door.amount=.02;s.shadeCells(a);assert(a.shades.every(x=>x.mesh.material===x.dark),'dark once it is nearly shut');
  const openBack=g.children.find(m=>m.isMesh&&Math.abs(m.position.y-.5)<1e-6&&m.position.z<-.2);assert(openBack&&!a.shades.some(x=>x.mesh===openBack),'an open cell is never shaded');
+});
+
+test('only the faces inside a closed cell are shaded, never one seen from outside the cabinet',()=>{
+ // A raised cabinet with an open cell under a closed one: from outside one sees the top cell's back
+ // panel edge on the cabinet top, the bottom back panel edge from below, every back panel from behind,
+ // and the closed cell's shelf from the open cell below (box faces +x, -x, +y, -y, +z, -z).
+ const s=fixture(),g=new THREE.Group;
+ const f={...initialFurniture.find(f=>f.type==='wardrobe'),id:'faces',x:0,z:0,w:.8,d:.5,h:2,rot:0,openCells:{},cabinetDesign:{template:'custom',columns:[{id:'c',width:.8,bottom:.3,cells:[{id:'low',height:.6,front:'left'},{id:'mid',height:.5,front:'open'},{id:'top',height:.6,front:'left'}]}]}};
+ s.makeFurniture(g,f);const a=s.actions.get('faces');
+ const shaded=x=>[0,1,2,3,4,5].filter(i=>x.dark[i]===x.shaded);
+ const backs=a.shades.filter(x=>x.mesh.position.z<-.2),shelves=a.shades.filter(x=>x.mesh.position.z>-.2);
+ assert.equal(backs.length,2,'the two closed cells\' back panels');
+ assert(backs.every(x=>shaded(x).join()==='4'),'a back panel darkens only its front, not its edges or its back');
+ const topShelf=shelves.find(x=>x.cell==='top');
+ assert(topShelf&&shaded(topShelf).join()==='2,4','a shelf darkens its top and front edge, not its underside over the open cell');
+ assert(shelves.filter(x=>x.cell==='low').every(x=>shaded(x).join()==='2'),'the floor board darkens only its top');
 });
 
 test('the bottom board stays lit and sliding tracks are matte, so the strip under the leaves never changes colour',()=>{
@@ -406,7 +422,7 @@ test('the bottom board stays lit and sliding tracks are matte, so the strip unde
  s.makeFurniture(g,f);
  assert.equal(s.actions.get('low').shades.length,1,'behind sliding leaves only the back panel is shaded: the floor board shows in front of the track');
  const g2=new THREE.Group,hinged={...f,id:'hinged',cabinetDesign:{template:'custom',columns:[{id:'c',width:1.2,bottom:0,cells:[{id:'all',height:2,front:'double'}]}]}};s.makeFurniture(g2,hinged);
- const floor=s.actions.get('hinged').shades.find(x=>x.topOnly);
+ const floor=s.actions.get('hinged').shades.find(x=>x.faces.length===1&&x.faces[0]===2);
  assert.ok(floor&&Array.isArray(floor.dark)&&floor.dark.filter(m=>m===floor.shaded).length===1&&floor.dark[2]===floor.shaded,'behind a door only the floor board\'s top face (+y) is shaded');
  const tracks=g.children.filter(m=>m.isMesh&&Math.abs(m.geometry.parameters.height-.008)<1e-9);
  assert.equal(tracks.length,4,'two rails at the bottom, two at the top');assert(tracks.every(m=>m.material===s.m.track));

@@ -649,10 +649,10 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
    const innerW=w-insetL-insetR,cx=x+(insetL-insetR)/2;
    const back=box(innerW,h,t,cx,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));
    // A cell behind glass is lit like an open one.
-   const closed=front!=='open'&&!cell.glass;if(closed)shades.push({cell:id,mesh:back});
+   const closed=front!=='open'&&!cell.glass;if(closed)shades.push({cell:id,mesh:back,faces:[4]});
    const lowest=cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom;
    const shelfBack=shelfSetback(x-w/2,x+w/2,bottom);
-   if(!cell.noBase){const shelf=box(innerW,t,d-t-shelfBack,cx,bottom+t/2,t/2-shelfBack/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));if(closed&&!(lowest&&slidingFronts.includes(front)))shades.push({cell:id,mesh:shelf,topOnly:lowest});}
+   if(!cell.noBase){const shelf=box(innerW,t,d-t-shelfBack,cx,bottom+t/2,t/2-shelfBack/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));if(closed&&!(lowest&&slidingFronts.includes(front)))shades.push({cell:id,mesh:shelf,faces:lowest?[2]:[2,4]});}
    if(last)box(innerW,t,d-t,cx,bottom+h-t/2,t/2);
    // Hinged doors, and sliding doors shared by several cells, are drawn per front panel below.
    if(front==='open'||hingedFronts.includes(front)||slidingFronts.includes(front)&&doorGroupOf(f.cabinetDesign,id))continue;
@@ -708,9 +708,12 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   // a resize) does not replay the opening animation.
   for(const part of parts){part.amount=f.openCells?.[part.id]?1:0;if(part.kind==='door')part.pivot.rotation.y=-part.sign*part.amount*Math.PI/2;if(part.kind==='drawer')part.pivot.position.z=part.base+part.amount*part.travel;if(part.kind==='slide')part.pivot.position.x=part.base+slideTravel(part,f.openCells?.[part.id]);}
   const panelOf=new Map(frontPanels(f).flatMap(panel=>panel.ids.map(id=>[id,panel.id])));
-  // A column's floor board shows its front edge under sliding leaves, so only its top face is shaded
-  // (box faces: +x, -x, +y, -y, +z, -z).
-  for(const shade of shades){shade.lit=shade.mesh.material;shade.shaded=this.shadedMaterial(shade.lit);shade.dark=shade.topOnly?[shade.lit,shade.lit,shade.shaded,shade.lit,shade.lit,shade.lit]:shade.shaded;shade.panel=panelOf.get(shade.cell);}
+  // Only the faces inside the cell are shaded (box faces: +x, -x, +y, -y, +z, -z): a back panel's
+  // front, a shelf's top and front edge, a column's floor board's top (its front edge shows under
+  // sliding leaves). Shading the whole board darkened faces seen from outside: a top cell's back
+  // panel edge on the cabinet top, a raised cabinet's back panel edge from below, the back of a
+  // cabinet off the wall, and a shelf's underside seen from an open cell below.
+  for(const shade of shades){shade.lit=shade.mesh.material;shade.shaded=this.shadedMaterial(shade.lit);shade.dark=[0,1,2,3,4,5].map(i=>shade.faces.includes(i)?shade.shaded:shade.lit);shade.panel=panelOf.get(shade.cell);}
   if(parts.length)this.actions.set(f.id,{type:'modularCabinet',item:f,parts,shades,amount:0});
   this.shadeCells({item:f,shades});
  }
