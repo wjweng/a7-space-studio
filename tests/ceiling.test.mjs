@@ -58,3 +58,17 @@ test('a light may span beams of one height meeting end to end, not beams of two 
  const gap=[beam('a',1.0,1.0,.5),beam('b',4.15,5,.5)];
  assert(issues(light,[...gap,light]).some(m=>m.startsWith('與')),'a gap between beams is no mount');
 });
+
+test('a linear light clicked under a beam goes under it whole: turned along it and shortened to fit',async()=>{
+ const {fitUnderHost,issues,mountDrop}=await import('../dist/model.js');
+ const beam={id:'b',type:'beam',name:'樑',x:.26,z:4,w:2,d:.39,h:.5,rot:90};
+ const across={id:'l',type:'light',name:'線燈',x:.3,z:4,w:1.2,d:.04,h:.01,rot:0,lightKind:'linear'};
+ const fit=fitUnderHost(across,[beam,across]);
+ assert.equal(fit.rot%180,90,'turned along the beam');assert.equal(fit.w,1.2);
+ assert.deepEqual(issues(fit,[beam,fit]),[]);assert.equal(mountDrop(fit,[beam,fit]),.5);
+ const long=fitUnderHost({...across,w:3,z:4.9},[beam,across]);
+ assert.equal(long.w,2,'no longer than the beam');assert.deepEqual(issues(long,[beam,long]),[]);
+ const along={...across,rot:90,z:4.95},kept=fitUnderHost(along,[beam,along]);
+ assert.equal(kept.rot,90);assert(Math.abs(kept.z-(5-.6))<1e-9,'moved just far enough to stay under it');
+ assert.equal(fitUnderHost({...across,x:2},[beam,across]).x,2,'away from beams it is left alone');
+});
