@@ -47,6 +47,8 @@ test('a glass leaf is an aluminium frame round a pane that casts no shadow, and 
   const meshes=door.pivot.children,pane=meshes.find(m=>m.material.transparent);
   assert.equal(meshes.length,6,'four frame bars, the pane and the handle');
   assert(pane&&!pane.castShadow&&pane.material.depthWrite===false,'the pane lets light and the cell behind through');
+  assert(pane.receiveShadow,'walls still stop lamps in other rooms from lighting the pane');
+  assert(pane.material.isMeshLambertMaterial,'the pane takes no highlights, so the fill light leaves no white spot');
   assert(meshes.filter(m=>m.material.color.getHexString()==='336699').length===4,'the frame takes the chosen colour');
   assert(pane.material.map&&pane.geometry.attributes.uv.array.some(u=>u>10),'reeded flutes repeat across the pane');
   assert(a.shades.every(x=>x.cell!=='pane'),'nothing behind the glass is shaded');

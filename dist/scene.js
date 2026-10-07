@@ -510,12 +510,14 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
  // samples: tinted glass reads dark, frosted and fabric-laminated glass hide the cell behind,
  // and reeded glass draws its vertical flutes from a 1-D luminance ramp repeated every 1.5 cm
  // (glassLeaf scales the pane's UVs). Panes never write depth, so the cell behind still draws.
+ // Lambert, so no highlights: the daytime `fill` light, which no real lamp stands for, put a
+ // blurred white spot on glossy panes (worst on grey glass) that read as a smudge.
  glassMaterial(kind){
   const cache=this.glassMaterials??={};if(cache[kind])return cache[kind];
-  const spec={clear:['#dcebea',.16,.05],lowIron:['#f5fafa',.1,.05],grey:['#3f4647',.35,.08],bronze:['#5e4027',.35,.08],frosted:['#eef2f1',.74,.85],reeded:['#e9f1f0',.4,.2],fabric:['#efe7d8',.86,.9]}[kind]||['#dcebea',.16,.05];
+  const spec={clear:['#dcebea',.16],lowIron:['#f5fafa',.1],grey:['#3f4647',.35],bronze:['#5e4027',.35],frosted:['#eef2f1',.74],reeded:['#e9f1f0',.4],fabric:['#efe7d8',.86]}[kind]||['#dcebea',.16];
   const extra={};
   if(kind==='reeded'){const n=16,data=new Uint8Array(n*4);for(let i=0;i<n;i++){const v=Math.round(205+50*Math.cos(i/n*2*Math.PI));data.set([v,v,v,255],i*4);}const map=new T.DataTexture(data,n,1);map.wrapS=T.RepeatWrapping;map.magFilter=T.LinearFilter;map.colorSpace=T.SRGBColorSpace;map.needsUpdate=true;extra.map=map;}
-  return cache[kind]=new T.MeshStandardMaterial({color:spec[0],roughness:spec[2],metalness:0,transparent:true,opacity:spec[1],depthWrite:false,...extra});
+  return cache[kind]=new T.MeshLambertMaterial({color:spec[0],transparent:true,opacity:spec[1],depthWrite:false,...extra});
  }
  // Aluminium frames are matte paint, not metal: metalness renders near black without an environment map.
  frameMaterial(frame){
@@ -528,7 +530,9 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   const frame=this.frameMaterial(glass.frame),F=Math.min(.022,w*.2,h*.2);
   for(const side of[-1,1]){this.box(parent,w,F,FRONT_T,x,y+side*(h-F)/2,0,frame);this.box(parent,F,h-2*F,FRONT_T,x+side*(w-F)/2,y,0,frame);}
   const pw=w-2*F+.004,ph=h-2*F+.004,pane=this.box(parent,pw,ph,.005,x,y,0,this.glassMaterial(glass.kind));
-  pane.castShadow=pane.receiveShadow=false;
+  // It still receives shadows: walls stop a lamp's light only through shadows, and without them
+  // the bathroom lamp behind the entrance wall lit the entrance cabinet's glass.
+  pane.castShadow=false;
   if(glass.kind==='reeded'){const uv=pane.geometry.attributes.uv;for(let i=0;i<uv.count;i++)uv.setX(i,uv.getX(i)*pw/.015);uv.needsUpdate=true;}
   return pane;
  }
