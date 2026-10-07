@@ -271,7 +271,10 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
   // strip's footprint (half extents a, b around cu, cv) fading out over `reach`, clipped to bounds.
   const paint=(origin,u,v,nn,a,b,reach,bounds,strength)=>{
    const u1=Math.max(bounds[0],cu-a-reach),u2=Math.min(bounds[1],cu+a+reach),v1=Math.max(bounds[2],cv-b-reach),v2=Math.min(bounds[3],cv+b+reach);if(u2-u1<.005||v2-v1<.005)return;
-   const material=new T.MeshBasicMaterial({map:stripGlow(a,b,reach),color,transparent:true,opacity:0,blending:T.AdditiveBlending,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-8});material.userData.fixtureLens=true;material.userData.strength=strength;
+   // No polygon offset (a cove's has one): its slope-scaled pull grows at grazing angles, and a pool on
+   // a shelf seen nearly edge-on drew through the side panel beside it as a bright line. The plane
+   // sits 2 mm off its surface instead.
+   const material=new T.MeshBasicMaterial({map:stripGlow(a,b,reach),color,transparent:true,opacity:0,blending:T.AdditiveBlending,depthWrite:false});material.userData.fixtureLens=true;material.userData.strength=strength;
    const geo=new T.BufferGeometry(),corners=[[u1,v1],[u2,v1],[u2,v2],[u1,v2]],pos=[],uv=[];
    for(const [pu,pv]of corners){const p=[0,1,2].map(i=>origin[i]+u[i]*pu+v[i]*pv+nn[i]*.002);pos.push(p[0]-pose.centre[0],p[1]+lift,p[2]-pose.centre[2]);uv.push((pu-(cu-a-reach))/(2*(a+reach)),(pv-(cv-b-reach))/(2*(b+reach)));}
    geo.setAttribute('position',new T.Float32BufferAttribute(pos,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex([0,1,2,0,2,3]);

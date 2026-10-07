@@ -143,3 +143,13 @@ test('a light moved between a cabinet and the ceiling keeps the way it runs',()=
  const along=validateFurniture([cabinetLightOnSurface({...up,rot:90},surface([0,2.2,0],[0,1,0]),items)])[0];
  assert.equal(along.spin??0,0,'a ceiling light at 90° runs along this cabinet\'s width');
 });
+
+test('a strip glow has no polygon offset, which drew a pool on a shelf through the side panel beside it',()=>{
+ const s=Object.create(SpaceScene.prototype);
+ s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow','lightWhite','lightNatural','lightWarm'].map(k=>[k,new THREE.MeshStandardMaterial()]));
+ const items=[wardrobe()],f=on(items,[0,1,0],[0,-1,0]);
+ Object.assign(s,{actions:new Map,items:[...items,f],lightObjects:[]});
+ s.makeFurniture(new THREE.Group,f);
+ const glows=s.lightObjects.find(o=>o.f===f).glows;
+ assert.ok(glows.length>0&&glows.every(m=>!m.polygonOffset),'no polygon offset on any glow');
+});
