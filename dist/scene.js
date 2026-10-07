@@ -34,14 +34,15 @@ function fixtureLens(base,color){const lens=base.clone();lens.userData.fixtureLe
 // v runs away from the LED strip.
 const COVE_REACH=.9,COVE_OVERHANG=.3;
 const coveRamps={};
-// A strip light's glow: full over the strip's footprint (half extents a, b), fading to nothing over
-// `reach` around it (smooth, eased), as an alpha-free colour ramp for additive blending. Cached by
-// size in centimetres.
-const stripGlows=new Map;
+// A strip light's glow, as an alpha-free colour ramp for additive blending: light falling off with
+// distance d from the strip's footprint (half extents a, b) like r0²/(r0²+d²), with no flat
+// plateau, eased to nothing at `reach`. A plateau over the footprint with a short fade read as a
+// lit block. Cached by size in centimetres.
+const stripGlows=new Map,GLOW_CORE=.05;
 function stripGlow(a,b,reach){
  const key=[a,b,reach].map(v=>Math.round(v*100)).join(':');if(stripGlows.has(key))return stripGlows.get(key);
- const W=Math.max(16,Math.min(256,Math.round((a+reach)*2/.01))),H=Math.max(16,Math.min(128,Math.round((b+reach)*2/.01))),data=new Uint8Array(W*H*4);
- for(let j=0;j<H;j++)for(let i=0;i<W;i++){const x=Math.abs(((i+.5)/W-.5)*2*(a+reach)),y=Math.abs(((j+.5)/H-.5)*2*(b+reach)),dx=Math.max(0,x-a),dy=Math.max(0,y-b),k=Math.max(0,1-Math.hypot(dx,dy)/reach),v=Math.round(255*k*k*(3-2*k)),o=(j*W+i)*4;data[o]=data[o+1]=data[o+2]=v;data[o+3]=255;}
+ const W=Math.max(16,Math.min(256,Math.round((a+reach)*2/.01))),H=Math.max(16,Math.min(256,Math.round((b+reach)*2/.01))),data=new Uint8Array(W*H*4),r2=GLOW_CORE*GLOW_CORE,tail=r2/(r2+reach*reach);
+ for(let j=0;j<H;j++)for(let i=0;i<W;i++){const x=Math.abs(((i+.5)/W-.5)*2*(a+reach)),y=Math.abs(((j+.5)/H-.5)*2*(b+reach)),d=Math.hypot(Math.max(0,x-a),Math.max(0,y-b)),k=Math.max(0,(r2/(r2+d*d)-tail)/(1-tail)),v=Math.round(255*k),o=(j*W+i)*4;data[o]=data[o+1]=data[o+2]=v;data[o+3]=255;}
  const texture=new T.DataTexture(data,W,H,T.RGBAFormat);Object.assign(texture,{magFilter:T.LinearFilter,minFilter:T.LinearFilter,needsUpdate:true});
  stripGlows.set(key,texture);return texture;
 }
@@ -278,12 +279,12 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
    // The group sits at the strip's plan centre turned like the cabinet, so host axes are its axes.
    g.add(mesh);glows.push(material);
   };
-  paint(face.o,face.u,face.v,face.n,eu,ev,.14,[face.u1,face.u2,face.v1,face.v2],1);
+  paint(face.o,face.u,face.v,face.n,eu,ev,.4,[face.u1,face.u2,face.v1,face.v2],.7);
   if(f.lightMount==='under'){
    const opening=cellOpening(host,f.supportCell);
-   if(opening){const drop=face.o[1]-opening.bottom,reach=Math.min(.45,Math.max(.12,drop*.7));paint([0,opening.bottom,0],face.u,face.v,[0,1,0],eu,ev,reach,[face.u1,face.u2,face.v1,face.v2],.7);}
+   if(opening){const drop=face.o[1]-opening.bottom,reach=Math.min(.6,Math.max(.2,drop*1.2));paint([0,opening.bottom,0],face.u,face.v,[0,1,0],eu,ev,reach,[face.u1,face.u2,face.v1,face.v2],.5);}
   }
-  if(f.lightMount==='top'){const drop=HEIGHT-lift-host.h,reach=Math.min(.6,Math.max(.15,drop*.7));if(drop>.02)paint([0,HEIGHT-lift,0],face.u,face.v,[0,-1,0],eu,ev,reach,[-9,9,-9,9],.5);}
+  if(f.lightMount==='top'){const drop=HEIGHT-lift-host.h,reach=Math.min(.9,Math.max(.25,drop*.8));if(drop>.02)paint([0,HEIGHT-lift,0],face.u,face.v,[0,-1,0],eu,ev,reach,[-9,9,-9,9],.4);}
   if(!this.lightObjects)this.lightObjects=[];
   this.lightObjects.push({f,lens,strip:true,glows});
  }
@@ -616,7 +617,7 @@ const p=this.ground(e);if(!p)return null;const a=f.rot*Math.PI/180,c=Math.cos(a)
    const back=box(innerW,h,t,cx,y,-d/2+t/2,finish(cellFinish(f,cell,'back')));if(front!=='open')shades.push({cell:id,mesh:back});
    const lowest=cabinetColumns(f).find(c=>c.id===cell.columnId).bottom===bottom;
    const shelfBack=shelfSetback(x-w/2,x+w/2,bottom);
-   if(!cell.noBase){const shelf=box(innerW,t,d-t-shelfBack,cx,bottom+t/2,t/2-shelfBack/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));if(front!=='open')shades.push({cell:id,mesh:shelf,topOnly:lowest});}
+   if(!cell.noBase){const shelf=box(innerW,t,d-t-shelfBack,cx,bottom+t/2,t/2-shelfBack/2,lowest?'wood':finish(cellFinish(f,cell,'shelf')));if(front!=='open'&&!(lowest&&slidingFronts.includes(front)))shades.push({cell:id,mesh:shelf,topOnly:lowest});}
    if(last)box(innerW,t,d-t,cx,bottom+h-t/2,t/2);
    // Hinged doors, and sliding doors shared by several cells, are drawn per front panel below.
    if(front==='open'||hingedFronts.includes(front)||slidingFronts.includes(front)&&doorGroupOf(f.cabinetDesign,id))continue;
