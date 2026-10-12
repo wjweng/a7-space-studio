@@ -13,6 +13,7 @@ The owner asked that a linear light look the same on the ceiling as on a cabinet
   | 2 at 75% | 105.9→107.7, 102.4→98.9, 89.2→92.4, 118.3→118.4 | within 0.8 |
   | 2 at 75% + 1 at 100% | 116.3→119.3, 121.6→114.5, 102.4→105.5, 132.3→131.5 | within 1.2 |
 
+- To repeat the brightness measurement: `uv run --with playwright --with pillow python tools/walk-brightness.py <layout.json> [--ref f641979]`. The three layouts are in the Dropbox project folder, `linear-light-review/`. The script's view names are north, floor, south and across, the order of the figures above.
 - Glow placement, same browser: open ceiling ±40 cm around the strip; under a 39 cm beam cut to the beam's width; 28 cm from a beam's side it stops at the side; after `moveItem` to 34 cm from the north wall it stops at the wall. Walk-view captures by night show an even glow on both sides of the strip (before the polygon-offset fix the far half was missing), none in top or orbit view.
 - The frame after adding a linear light: about 4 s before, about 1 s after, which is what any frame takes in software rendering with shadows redrawn. A fit of the glow takes about 0.7 ms and a move about 4 ms.
 - Not checked on the owner's machine: how the even light reads without the pools and shadows the downlights gave.

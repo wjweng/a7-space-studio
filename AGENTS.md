@@ -13,6 +13,7 @@ This repository is a buildless Three.js apartment editor. The deployable applica
 - `npm install` installs the pinned development dependency from `package-lock.json` when needed.
 - `node server.mjs` serves `dist/` at `http://127.0.0.1:4173` for local review.
 - `npm test` runs all Node test files with the built-in test runner, inside a 6 GB memory cgroup (`tools/test.sh`; see Testing Guidelines).
+- `uv run --with playwright --with pillow python tools/walk-brightness.py <layout.json> [--ref <commit>] [--shots <dir>]` measures the mean brightness of four fixed walk views in headless Chromium, by night and by day; with `--ref` it serves `dist/scene.js` from that commit, to compare lighting before and after a change with the same layout. It starts `server.mjs` itself.
 
 There is no compilation step. Changes under `dist/` are source changes and deployment output. Cloudflare Pages publishes the `dist` directory.
 
