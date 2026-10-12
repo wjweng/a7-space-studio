@@ -139,6 +139,9 @@ test('flush ceiling lights aim a downlight at the floor while pendants keep a po
   assert(spots[0].target.position.y<1e-9,shape+' aims at the floor');assert(spots[0].angle<Math.PI/2,shape+' cannot reach the ceiling');}
  const pendant=new THREE.Group;s.makeFurniture(pendant,{...base,lightKind:'pendant'});
  assert.equal(pendant.children.filter(o=>o.isPointLight&&!o.isSpotLight).length,1);
+ for(const shape of['round','square']){const hung=new THREE.Group;s.makeFurniture(hung,{...base,lightKind:'pendant',shape});
+  assert(hung.children.filter(o=>o.isMesh).every(o=>!o.castShadow),shape+' pendant: its shade and lens surround the lamp, so they cast no shadow');
+  assert.equal(hung.children.find(o=>o.isPointLight).castShadow,true,'the lamp itself still does');}
 });
 test('switched-off lights drop out of shading',()=>{
  const s=Object.create(SpaceScene.prototype),lamp={type:'light',lightKind:'ceiling',lumens:1200,dimming:75,on:true,w:.24,d:.24},on={intensity:0,visible:true},off={intensity:0,visible:true};
