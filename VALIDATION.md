@@ -1,5 +1,22 @@
 # Validation and work history
 
+## Ceiling linear lights painted, not lamps — 2026-10-12
+
+The owner asked that a linear light look the same on the ceiling as on a cabinet and asked whether that would change the room's brightness. It would have: each ceiling linear light was up to three downlights. They are replaced by a painted glow plus a share of the room's soft light from above, calibrated against the old downlights.
+
+- `npm test`: 317 tests pass. The linear-light test in `tests/scene.test.mjs` now checks that the fitting has no lamp, the glow faces down just under the ceiling, spreads 40 cm on the open ceiling, stops at a wall and at a beam's side, is cut to a beam's underside, is not rebuilt while nothing moves, and that its output reaches `coveFill` by night and day and drops to zero when switched off.
+- Brightness, headless Chromium with software WebGL, the owner's `issue/A7-空間配置_16.json` with its ceiling linear lights replaced by one, two and three valid ones in the living room (the file's own four near the north beam are clashing leftovers inside a clashing beam), old `scene.js` against new, same four walk positions, mean brightness of the lower half of the frame (0–255):
+
+  | Lights | Night, old → new | Day, old → new |
+  | --- | --- | --- |
+  | 1 at 75% | 99.0→97.5, 88.9→85.1 (floor under it), 80.7→81.1, 104.8→106.8 | within 0.4 |
+  | 2 at 75% | 105.9→107.7, 102.4→98.9, 89.2→92.4, 118.3→118.4 | within 0.8 |
+  | 2 at 75% + 1 at 100% | 116.3→119.3, 121.6→114.5, 102.4→105.5, 132.3→131.5 | within 1.2 |
+
+- Glow placement, same browser: open ceiling ±40 cm around the strip; under a 39 cm beam cut to the beam's width; 28 cm from a beam's side it stops at the side; after `moveItem` to 34 cm from the north wall it stops at the wall. Walk-view captures by night show an even glow on both sides of the strip (before the polygon-offset fix the far half was missing), none in top or orbit view.
+- The frame after adding a linear light: about 4 s before, about 1 s after, which is what any frame takes in software rendering with shadows redrawn. A fit of the glow takes about 0.7 ms and a move about 4 ms.
+- Not checked on the owner's machine: how the even light reads without the pools and shadows the downlights gave.
+
 ## Share links, export and scheme copies — 2026-10-05
 
 From the owner's export `issue/A7-空間配置_12.json` (Dropbox) and a share link of it that would not open, in commits `98e941a` and `2f295a7`. At the end all **290 automated tests passed** (share 11, schemes 7), and the live site served both commits.

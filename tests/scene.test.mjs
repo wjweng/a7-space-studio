@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {readFileSync} from 'node:fs';
-import {SpaceScene,floorBoardRects,ceilingOccluders,beamVisiblePieces,beamGeometry,resizeCursor,ceilingBounce,linearLightCount} from '../dist/scene.js';
+import {SpaceScene,floorBoardRects,ceilingOccluders,beamVisiblePieces,beamGeometry,resizeCursor,ceilingBounce,stripFill} from '../dist/scene.js';
 import {initialFurniture,minimums,wallRects,overlaps,WALL_THICKNESS,HEIGHT} from '../dist/model.js';
 function fixture(){const s=Object.create(SpaceScene.prototype);s.m=Object.fromEntries(['wood','fabric','white','accent','dark','metal','stone','glass','leaf','glow','lightWhite','lightNatural','lightWarm'].map(k=>[k,new THREE.MeshStandardMaterial()]));s.actions=new Map;s.lightObjects=[];s.resizeHandles=new THREE.Group;s.collisionWalls=wallRects();s.items=[];s.invalidHelpers=new Map;s.invalidMarkers=new Map;s.foregroundDraft=null;return s;}
 test('every furniture type generates finite geometry at initial and minimum dimensions',()=>{const s=fixture();for(const f of initialFurniture)for(const dims of[[f.w,f.d,f.h],minimums[f.type]]){const g=new THREE.Group;s.makeFurniture(g,{...f,w:dims[0],d:dims[1],h:dims[2]});assert(g.children.length>0);g.traverse(o=>{if(o.geometry){const a=o.geometry.attributes.position.array;for(const n of a)assert(Number.isFinite(n),f.name);o.geometry.computeBoundingBox();assert(!o.geometry.boundingBox.isEmpty(),f.name);}});}});
@@ -95,17 +95,32 @@ test('moving a beam rebuilds its clipped geometry',()=>{
   s.moveItem(f);
   assert.deepEqual(calls,[f]);
 });
-test('a linear light is a flush ceiling bar lit by up to three downlights sharing its output',()=>{
- assert.deepEqual([.3,1.2,1.8,3.6].map(linearLightCount),[1,2,3,3]);
- const s=fixture(),g=new THREE.Group,f={...initialFurniture.find(item=>item.type==='light'),id:'linear',lightKind:'linear',w:1.8,d:.04,h:.03,lumens:1200,dimming:100};
- s.makeFurniture(g,f);
- const spots=g.children.filter(o=>o.isSpotLight);assert.equal(spots.length,3);assert.equal(g.children.filter(o=>o.isPointLight&&!o.isSpotLight).length,0);
- for(const spot of spots)assert(spot.target.position.y<spot.position.y-1&&Math.abs(spot.target.position.x-spot.position.x)<1e-9,'aims straight down');
- const bar=g.children.find(o=>o.isMesh&&o.material.userData.fixtureLens);bar.geometry.computeBoundingBox();
+test('a linear light is a flush ceiling bar with painted light and no lamp, lighting the room softly from above',()=>{
+ const s=fixture(),g=new THREE.Group,f={...initialFurniture.find(item=>item.type==='light'),id:'linear',lightKind:'linear',x:1.65,z:2.42,rot:0,w:1.2,d:.04,h:.03,lumens:1200,dimming:75,on:true};
+ s.items=[f];s.makeFurniture(g,f);
+ let lamps=0;g.traverse(o=>{if(o.isLight)lamps++;});assert.equal(lamps,0,'no lamp, so adding one never changes the number of lights');
+ const bar=g.children.find(o=>o.isMesh&&o.material.userData.fixtureLens&&!o.userData.glow);bar.geometry.computeBoundingBox();
  assert(Math.abs(bar.position.y+bar.geometry.boundingBox.max.y-HEIGHT)<1e-6,'bar sits flush with the ceiling');
- Object.assign(s,{hemi:{intensity:0},sun:{intensity:0},scene:{background:{set(){}}},night:true,lightsOn:true});s.updateLight();
- const total=spots.reduce((sum,p)=>sum+p.intensity,0),single={...f,lightKind:'ceiling',w:.24,d:.24},one={intensity:0,isSpotLight:true};s.lightObjects=[{f:single,point:one}];s.updateLight();
- assert(Math.abs(total-one.intensity)<1e-9,'splitting keeps the total output of a standard lamp');
+ const entry=s.lightObjects.find(o=>o.f===f);assert(entry.strip&&entry.ceiling&&!entry.point&&entry.glows.length===1);
+ const glow=g.children.find(o=>o.userData.glow);assert(glow.position.y<HEIGHT&&glow.position.y>HEIGHT-.01,'the glow lies just under the ceiling');
+ glow.geometry.computeVertexNormals();assert(glow.geometry.attributes.normal.getY(0)<-.99,'and faces down, unseen from above');
+ const [open]=entry.glowRects;assert.equal(entry.glowRects.length,1);
+ assert(Math.abs(open[0]+1)<.021&&Math.abs(open[1]-1)<.021&&Math.abs(open[2]+.42)<.021&&Math.abs(open[3]-.42)<.021,'on the open ceiling it spreads 40 cm around the strip');
+ assert.equal(glow.material.polygonOffset,true,'ahead of the ceiling, which has an offset of its own');
+ Object.assign(s,{hemi:{intensity:0},sun:{intensity:0},scene:{background:{set(){}}},night:true,lightsOn:true,bounce:{intensity:0},coveFill:new THREE.HemisphereLight(0,0,0)});s.updateLight();
+ assert(entry.glows[0].opacity>0&&entry.glows[0].visible);
+ assert(Math.abs(s.coveFill.intensity-stripFill([f]))<1e-9&&s.coveFill.intensity>0,'its output reaches the room as soft light from above');
+ assert(Math.abs(stripFill([f,f])-2*stripFill([f]))<1e-9&&stripFill(Array(40).fill(f))<=1.5,'in proportion to the lights that are on, up to a limit');
+ s.night=false;s.updateLight();assert(Math.abs(s.coveFill.intensity-stripFill([f])*.32)<1e-9,'by day it is scaled like the lamps');
+ f.on=false;s.updateLight();assert.equal(s.coveFill.intensity,0);assert(!entry.glows[0].visible);
+ // Beside the north wall the glow stops at the wall instead of showing outside.
+ f.z=.3;s.fitCeilingGlow(entry);assert(entry.glowRects[0][2]>-.3&&Math.abs(entry.glowRects[0][3]-.42)<.021,'cut at the wall, full width on the room side');
+ // Under a beam it is cut to the beam's underside; an underside has no polygon offset.
+ const beam={id:'b',type:'beam',name:'樑',x:1.65,z:2.42,w:1.6,d:.3,h:.4,rot:0};f.z=2.42;s.items=[beam,f];s.fitCeilingGlow(entry);
+ assert.deepEqual(entry.glowRects.map(r=>r.map(v=>Math.round(v*100))),[[-80,80,-15,15]]);assert.equal(glow.material.polygonOffset,false);
+ // Beside a beam it stops at the beam's side.
+ f.z=2.42+.15+.1;s.fitCeilingGlow(entry);assert(entry.glowRects[0][2]>-.1-.021&&entry.glowRects[0][2]<=-.02+1e-9,'does not run into the beam');
+ const same=glow.geometry;s.fitCeilingGlow(entry);assert(glow.geometry===same,'nothing is rebuilt while nothing has moved');
 });
 test('resize cursors point across the grabbed edge for any rotation',()=>{
  const f={rot:0};assert.equal(resizeCursor(f,'w'),'ew-resize');assert.equal(resizeCursor(f,'d'),'ns-resize');

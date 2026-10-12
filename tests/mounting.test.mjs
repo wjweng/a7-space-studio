@@ -154,7 +154,8 @@ test('light fixtures get a dark outline in top view only, and pendant lamps stay
   assert.equal(outline[0].visible,false,'hidden outside top view');
   s.mode='top';g.position.y=s.mountOffset(lamp);s.keepLampAtRealHeight(lamp,g);g.traverse(o=>{if(o.userData.topOnly)o.visible=s.mode==='top';});
   assert.equal(outline[0].visible,true);
-  const lampSource=s.lightObjects.filter(o=>o.f===lamp).map(o=>o.point);
+  // A linear light has no lamp: its light is painted (ceilingStrip).
+  const lampSource=s.lightObjects.filter(o=>o.f===lamp).map(o=>o.point).filter(Boolean);assert.equal(lampSource.length,lightKind==='linear'?0:1);
   for(const p of lampSource)assert.ok(g.position.y+p.position.y<HEIGHT-wideBeam.h+1e-6,lightKind+' lamp stays under the beam');
  }
 });
